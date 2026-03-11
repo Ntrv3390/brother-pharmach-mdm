@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.0.xsd">
+
+    <!-- ========================================================= -->
+    <!-- Create call log data table                               -->
+    <!-- ========================================================= -->
+    <changeSet id="calllog-create-data-table" author="calllog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="plugin_calllog_data"/>
+            </not>
+        </preConditions>
+
+        <sql>
+            CREATE TABLE plugin_calllog_data (
+                id SERIAL PRIMARY KEY,
+                deviceid INT NOT NULL,
+                phonenumber VARCHAR(50),
+                contactname VARCHAR(255),
+                calltype INT NOT NULL,
+                duration BIGINT NOT NULL DEFAULT 0,
+                calltimestamp BIGINT NOT NULL,
+                calldate VARCHAR(50),
+                createtime BIGINT,
+                customerid INT NOT NULL
+            );
+
+            CREATE INDEX idx_calllog_device
+                ON plugin_calllog_data (deviceid, customerid);
+
+            CREATE INDEX idx_calllog_timestamp
+                ON plugin_calllog_data (calltimestamp);
+
+            CREATE INDEX idx_calllog_customer
+                ON plugin_calllog_data (customerid);
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
+    <!-- Create settings table                                    -->
+    <!-- ========================================================= -->
+    <changeSet id="calllog-create-settings-table" author="calllog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="plugin_calllog_settings"/>
+            </not>
+        </preConditions>
+
+        <sql>
+            CREATE TABLE plugin_calllog_settings (
+                id SERIAL PRIMARY KEY,
+                customerid INT NOT NULL UNIQUE,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                retentiondays INT NOT NULL DEFAULT 90
+            );
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
+    <!-- Register plugin                                          -->
+    <!-- ========================================================= -->
+    <changeSet id="calllog-register-plugin" author="calllog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="plugins"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM plugins WHERE identifier = 'calllog'
+            </sqlCheck>
+        </preConditions>
+
+        <sql>
+            INSERT INTO plugins (
+                identifier,
+                name,
+                description,
+                javascriptmodulefile,
+                functionsviewtemplate,
+                settingsviewtemplate,
+                namelocalizationkey,
+                settingspermission,
+                functionspermission,
+                devicefunctionspermission,
+                disabled
+            )
+            VALUES (
+                'calllog',
+                'plugin.calllog.localization.plugin.name',
+                '',
+                'app/components/plugins/calllog/calllog.module.js',
+                'app/components/plugins/calllog/views/modal.html',
+                'app/components/plugins/calllog/views/settings.html',
+                'plugin.calllog.localization.plugin.name',
+                'plugin_calllog_access',
+                'plugin_calllog_access',
+                'plugin_calllog_access',
+                false
+            );
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
+    <!-- Create permission                                        -->
+    <!-- ========================================================= -->
+    <changeSet id="calllog-create-permission" author="calllog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="permissions"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM permissions WHERE name = 'plugin_calllog_access'
+            </sqlCheck>
+        </preConditions>
+
+        <sql>
+            INSERT INTO permissions (name, description)
+            VALUES ('plugin_calllog_access', 'Access to Call Log Plugin');
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
+    <!-- Grant permission to Super-Admin                          -->
+    <!-- ========================================================= -->
+    <changeSet id="calllog-grant-permission-superadmin" author="calllog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="userrolepermissions"/>
+        </preConditions>
+
+        <sql>
+            INSERT INTO userrolepermissions (roleid, permissionid)
+            SELECT ur.id, p.id
+            FROM userroles ur, permissions p
+            WHERE ur.name = 'Super-Admin'
+              AND p.name = 'plugin_calllog_access';
+        </sql>
+
+    </changeSet>
+
+</databaseChangeLog>

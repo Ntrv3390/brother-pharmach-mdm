@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hmdm.plugins.worktime.persistence.postgres.dao.mapper.PostgresWorkTimeMapper">
+
+    <resultMap id="globalPolicyResult"
+               type="com.hmdm.plugins.worktime.model.WorkTimePolicy">
+        <id property="id" column="id"/>
+        <result property="startTime" column="start_time"/>
+        <result property="endTime" column="end_time"/>
+        <result property="startDateTime" column="start_datetime"/>
+        <result property="endDateTime" column="end_datetime"/>
+        <result property="daysOfWeek" column="days_of_week"/>
+        <result property="allowedAppsDuringWork" column="allowed_apps_during_work"/>
+        <result property="allowedAppsOutsideWork" column="allowed_apps_outside_work"/>
+        <result property="enabled" column="enabled"/>
+        <result property="customerId" column="customer_id"/>
+    </resultMap>
+
+    <select id="getGlobalPolicy" resultMap="globalPolicyResult">
+        SELECT *
+        FROM worktime_global_policy
+        WHERE customer_id = #{customerId}
+        LIMIT 1
+    </select>
+
+    <insert id="insertGlobalPolicy">
+        INSERT INTO worktime_global_policy (
+            start_time,
+            end_time,
+            days_of_week,
+            allowed_apps_during_work,
+            allowed_apps_outside_work,
+            enabled,
+            customer_id
+        ) VALUES (
+            #{startTime},
+            #{endTime},
+            #{daysOfWeek},
+            #{allowedAppsDuringWork},
+            #{allowedAppsOutsideWork},
+            #{enabled},
+            #{customerId}
+        )
+    </insert>
+
+    <update id="updateGlobalPolicy">
+        UPDATE worktime_global_policy
+        SET
+            start_time = #{startTime},
+            end_time = #{endTime},
+            days_of_week = #{daysOfWeek},
+            allowed_apps_during_work = #{allowedAppsDuringWork},
+            allowed_apps_outside_work = #{allowedAppsOutsideWork},
+            enabled = #{enabled}
+                WHERE customer_id = #{customerId}
+    </update>
+
+    <!-- ========================================================= -->
+    <!-- Device overrides mapping & queries                       -->
+    <!-- ========================================================= -->
+
+    <resultMap id="deviceOverrideResult"
+               type="com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride">
+        <id property="id" column="id"/>
+        <result property="deviceId" column="device_id"/>
+        <result property="deviceName" column="device_name"/>
+        <result property="startTime" column="start_time"/>
+        <result property="endTime" column="end_time"/>
+        <result property="startDateTime" column="start_datetime"/>
+        <result property="endDateTime" column="end_datetime"/>
+        <result property="daysOfWeek" column="days_of_week"/>
+        <result property="allowedAppsDuringWork" column="allowed_apps_during_work"/>
+        <result property="allowedAppsOutsideWork" column="allowed_apps_outside_work"/>
+        <result property="enabled" column="enabled"/>
+        <result property="customerId" column="customer_id"/>
+        <result property="priority" column="priority"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="startBoundaryPushSent" column="start_boundary_push_sent"/>
+        <result property="endBoundaryPushSent" column="end_boundary_push_sent"/>
+    </resultMap>
+
+    <select id="getDeviceOverrides" resultMap="deviceOverrideResult">
+        SELECT uo.*, devices.number as device_name
+        FROM worktime_device_override uo
+        LEFT JOIN devices ON devices.id = uo.device_id
+        WHERE uo.customer_id = #{customerId}
+        ORDER BY uo.priority DESC NULLS LAST, uo.id
+    </select>
+
+    <select id="getDeviceOverride" resultMap="deviceOverrideResult">
+        SELECT uo.*, devices.number as device_name
+        FROM worktime_device_override uo
+        LEFT JOIN devices ON devices.id = uo.device_id
+        WHERE uo.customer_id = #{customerId} AND uo.device_id = #{deviceId}
+        LIMIT 1
+    </select>
+
+    <insert id="insertDeviceOverride" parameterType="com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO worktime_device_override (
+            device_id,
+            start_time,
+            end_time,
+            start_datetime,
+            end_datetime,
+            days_of_week,
+            allowed_apps_during_work,
+            allowed_apps_outside_work,
+            enabled,
+            priority,
+            customer_id,
+            created_at,
+            updated_at,
+            start_boundary_push_sent,
+            end_boundary_push_sent
+        ) VALUES (
+            #{deviceId},
+            #{startTime},
+            #{endTime},
+            #{startDateTime},
+            #{endDateTime},
+            #{daysOfWeek},
+            #{allowedAppsDuringWork},
+            #{allowedAppsOutsideWork},
+            #{enabled},
+            #{priority},
+            #{customerId},
+            now(),
+            now(),
+            #{startBoundaryPushSent},
+            #{endBoundaryPushSent}
+        )
+    </insert>
+
+    <update id="updateDeviceOverride" parameterType="com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride">
+        UPDATE worktime_device_override
+        SET
+            start_time = #{startTime},
+            end_time = #{endTime},
+            start_datetime = #{startDateTime},
+            end_datetime = #{endDateTime},
+            days_of_week = #{daysOfWeek},
+            allowed_apps_during_work = #{allowedAppsDuringWork},
+            allowed_apps_outside_work = #{allowedAppsOutsideWork},
+            enabled = #{enabled},
+            priority = #{priority},
+            start_boundary_push_sent = #{startBoundaryPushSent},
+            end_boundary_push_sent = #{endBoundaryPushSent},
+            updated_at = now()
+        WHERE customer_id = #{customerId} AND device_id = #{deviceId}
+    </update>
+
+    <update id="markExceptionStartPushSent">
+        UPDATE worktime_device_override
+        SET
+            start_boundary_push_sent = TRUE,
+            updated_at = now()
+        WHERE customer_id = #{customerId} AND device_id = #{deviceId}
+    </update>
+
+    <update id="markExceptionEndPushSent">
+        UPDATE worktime_device_override
+        SET
+            end_boundary_push_sent = TRUE,
+            updated_at = now()
+        WHERE customer_id = #{customerId} AND device_id = #{deviceId}
+    </update>
+
+    <delete id="deleteDeviceOverride">
+        DELETE FROM worktime_device_override
+        WHERE customer_id = #{customerId} AND device_id = #{deviceId}
+    </delete>
+
+    <select id="getAllDeviceOverrides" resultMap="deviceOverrideResult">
+        SELECT uo.*, devices.number as device_name
+        FROM worktime_device_override uo
+        LEFT JOIN devices ON devices.id = uo.device_id
+        ORDER BY uo.customer_id, uo.priority DESC NULLS LAST, uo.id
+    </select>
+
+</mapper>

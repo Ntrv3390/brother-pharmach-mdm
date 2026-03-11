@@ -1,0 +1,24 @@
+                                       Table "public.applicationversions"
+    Column     |          Type          | Collation | Nullable |                     Default                     
+---------------+------------------------+-----------+----------+-------------------------------------------------
+ id            | integer                |           | not null | nextval('applicationversions_id_seq'::regclass)
+ applicationid | integer                |           | not null | 
+ version       | character varying(50)  |           | not null | 
+ url           | character varying(500) |           |          | 
+ apkhash       | character varying(100) |           |          | 
+ split         | boolean                |           | not null | false
+ urlarmeabi    | text                   |           |          | 
+ urlarm64      | text                   |           |          | 
+ versioncode   | integer                |           | not null | 0
+Indexes:
+    "applicationversions_pr_key" PRIMARY KEY, btree (id)
+    "applicationversions_app_version_key" UNIQUE CONSTRAINT, btree (applicationid, version)
+    "applicationversionss_applicationid_idx" btree (applicationid)
+Foreign-key constraints:
+    "applicationversions_applicationid_fkey" FOREIGN KEY (applicationid) REFERENCES applications(id) ON DELETE CASCADE
+Referenced by:
+    TABLE "applications" CONSTRAINT "applications_latestversion_fkey" FOREIGN KEY (latestversion) REFERENCES applicationversions(id) ON DELETE SET NULL
+    TABLE "configurationapplications" CONSTRAINT "configurationapplications_applicationversionid_fkey" FOREIGN KEY (applicationversionid) REFERENCES applicationversions(id) ON DELETE RESTRICT
+    TABLE "configurations" CONSTRAINT "configurations_contentappid_fkey" FOREIGN KEY (contentappid) REFERENCES applicationversions(id) ON DELETE RESTRICT
+    TABLE "configurations" CONSTRAINT "configurations_mainappid_fkey" FOREIGN KEY (mainappid) REFERENCES applicationversions(id) ON DELETE RESTRICT
+

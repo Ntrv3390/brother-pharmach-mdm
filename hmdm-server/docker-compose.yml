@@ -1,0 +1,114 @@
+# ==============================================================================
+#  Brother Pharmach MDM – Docker Compose
+#  Usage: docker compose up -d
+# ==============================================================================
+
+services:
+  # ── PostgreSQL Database ─────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: hmdm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-hmdm}
+      POSTGRES_USER: ${DB_USER:-hmdm}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-hmdm}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - hmdm_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-hmdm} -d ${DB_NAME:-hmdm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ── hmdm-server (Tomcat 9) ──────────────────────────────────────────────────
+  hmdm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hmdm-server:latest
+    container_name: hmdm-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # ── Database ──
+      DB_HOST: postgres
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-hmdm}
+      DB_USER: ${DB_USER:-hmdm}
+      DB_PASSWORD: ${DB_PASSWORD:-hmdm}
+
+      # ── Application ──
+      # Set BASE_URL to the public URL clients will use:
+      #   e.g. http://your-server-ip:8080 or https://mdm.example.com
+      BASE_URL: ${BASE_URL:-http://localhost:8080}
+      BASE_DIRECTORY: /opt/hmdm
+      FILES_DIRECTORY: /opt/hmdm/files
+      PLUGINS_DIRECTORY: /opt/hmdm/plugins
+
+      # ── MQTT push notifications ──
+      # MQTT_SERVER_URI:  the address the embedded broker binds to (inside container).
+      #   Mobile devices need to reach host:31000, so leave as 0.0.0.0:31000
+      MQTT_SERVER_URI: 0.0.0.0:31000
+      MQTT_AUTH: ${MQTT_AUTH:-1}
+      MQTT_MESSAGE_DELAY: ${MQTT_MESSAGE_DELAY:-0}
+
+      # ── Security ──
+      HASH_SECRET: ${HASH_SECRET:-changeme-C3z9vi54}
+      SECURE_ENROLLMENT: ${SECURE_ENROLLMENT:-0}
+      JWT_SECRET: ${JWT_SECRET:-20c68f0d9185b1d18cf6add1e8b491fd89529a44}
+
+      # ── SMTP (optional – for password recovery) ──
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-25}
+      SMTP_SSL: ${SMTP_SSL:-0}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-0}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+
+    ports:
+      - "${HTTP_PORT:-8080}:8080" # Web panel + REST API
+      - "${MQTT_PORT:-31000}:31000" # MQTT push (Android devices connect here)
+
+    volumes:
+      - hmdm_files:/opt/hmdm/files
+      - hmdm_plugins:/opt/hmdm/plugins
+      - hmdm_logs:/opt/hmdm/logs
+
+    networks:
+      - hmdm_net
+
+    healthcheck:
+      test:
+        ["CMD-SHELL", "curl -sf http://localhost:8080/ > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+# ==============================================================================
+#  Named Volumes  (survive container restarts and upgrades)
+# ==============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  hmdm_files:
+    driver: local
+  hmdm_plugins:
+    driver: local
+  hmdm_logs:
+    driver: local
+
+# ==============================================================================
+#  Network
+# ==============================================================================
+networks:
+  hmdm_net:
+    driver: bridge

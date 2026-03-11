@@ -1,0 +1,1 @@
+ql -h localhost -U hmdm -d hmdm -c UPDATE\ applicationversions\ SET\ apkhash\ \=\ \'c50bd6addae0c45b8719118d4366095f\'\ WHERE\ id\ \=\ 10045\;

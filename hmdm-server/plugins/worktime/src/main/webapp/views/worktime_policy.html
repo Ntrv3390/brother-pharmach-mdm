@@ -1,0 +1,93 @@
+<div class="modal-header">
+    <h3 class="modal-title" localized>
+        {{policy.id ? 'worktime.policy.edit' : 'worktime.policy.new'}}
+    </h3>
+</div>
+<div class="modal-body">
+    <form name="form" class="form-horizontal">
+
+
+
+        <!-- NEW: PRIORITY -->
+        <div class="form-group">
+            <label class="col-sm-3 control-label">Priority</label>
+            <div class="col-sm-9">
+                <input type="number" class="form-control" ng-model="policy.priority" min="0" placeholder="0">
+                <p class="help-block">
+                    Higher number = higher priority when multiple policies apply.
+                </p>
+            </div>
+        </div>
+
+        <!-- NEW: TIMEZONE -->
+        <div class="form-group">
+            <label class="col-sm-3 control-label">Timezone</label>
+            <div class="col-sm-9">
+                <input type="text" class="form-control" ng-model="policy.timezone" placeholder="UTC or Europe/Bucharest">
+                <p class="help-block">
+                    Leave empty to use UTC.
+                </p>
+            </div>
+        </div>
+
+        <div class="form-group" ng-class="{'has-error': form.startTime.$invalid && form.startTime.$dirty}">
+            <label class="col-sm-3 control-label" localized>worktime.policy.start.time</label>
+            <div class="col-sm-9">
+                <input type="text" class="form-control" name="startTime" ng-model="policy.startTime" placeholder="HH:mm" pattern="\d{2}:\d{2}" required>
+            </div>
+        </div>
+
+        <div class="form-group" ng-class="{'has-error': form.endTime.$invalid && form.endTime.$dirty}">
+            <label class="col-sm-3 control-label" localized>worktime.policy.end.time</label>
+            <div class="col-sm-9">
+                <input type="text" class="form-control" name="endTime" ng-model="policy.endTime" placeholder="HH:mm" pattern="\d{2}:\d{2}" required>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="col-sm-3 control-label" localized>worktime.policy.days</label>
+            <div class="col-sm-9">
+                <div class="btn-group">
+                    <button type="button" class="btn btn-default" ng-repeat="day in days"
+                            ng-class="{'btn-primary': hasDay(day.id)}"
+                            ng-click="toggleDay(day.id)">
+                        {{day.label}}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="col-sm-3 control-label" localized>worktime.policy.allowed.work</label>
+            <div class="col-sm-9">
+                <textarea class="form-control" ng-model="policy.allowedAppsDuringWork"></textarea>
+                <p class="help-block" localized>worktime.hint.wildcard</p>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="col-sm-3 control-label" localized>worktime.policy.allowed.outside</label>
+            <div class="col-sm-9">
+                <textarea class="form-control" ng-model="policy.allowedAppsOutsideWork"></textarea>
+                <p class="help-block" localized>worktime.hint.wildcard</p>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="col-sm-3 control-label" localized>worktime.policy.groups</label>
+            <div class="col-sm-9">
+                <div class="checkbox" ng-repeat="g in availableGroups">
+                    <label>
+                        <input type="checkbox" ng-checked="hasGroup(g.id)" ng-click="toggleGroup(g.id)" /> {{g.name}}
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="alert alert-danger" ng-if="error">{{error}}</div>
+    </form>
+</div>
+<div class="modal-footer">
+    <button class="btn btn-primary" type="button" ng-click="save()" ng-disabled="form.$invalid" localized>button.save</button>
+    <button class="btn btn-warning" type="button" ng-click="cancel()" localized>button.cancel</button>
+</div>

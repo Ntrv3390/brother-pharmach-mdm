@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Log4j configuration for Brother Pharmach MDM Server running in Docker.
+  Writes to stdout (visible via `docker logs`) and rotating log files.
+  _BASE_DIRECTORY_ is replaced by entrypoint.sh at runtime.
+-->
+<!DOCTYPE log4j:configuration SYSTEM "log4j.dtd">
+<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/" debug="false">
+
+    <!-- Console appender – docker logs output -->
+    <appender name="stdout" class="org.apache.log4j.ConsoleAppender">
+        <layout class="org.apache.log4j.PatternLayout">
+            <param name="ConversionPattern" value="%d{yyyy-MM-dd HH:mm:ss} [%p] %-10c : %m%n"/>
+        </layout>
+    </appender>
+
+    <!-- Rolling file appender – persisted in named volume -->
+    <appender name="main-log-file" class="org.apache.log4j.DailyRollingFileAppender">
+        <param name="file" value="_BASE_DIRECTORY_/logs/hmdm.log"/>
+        <layout class="org.apache.log4j.PatternLayout">
+            <param name="ConversionPattern" value="%d{yyyy.MM.dd HH:mm:ss,SSS} %-5p  %m%n"/>
+        </layout>
+    </appender>
+
+    <!-- Audit log file -->
+    <appender name="audit-file" class="org.apache.log4j.DailyRollingFileAppender">
+        <param name="file" value="_BASE_DIRECTORY_/logs/audit.log"/>
+        <layout class="org.apache.log4j.PatternLayout">
+            <param name="ConversionPattern" value="%d{yyyy.MM.dd HH:mm:ss,SSS} %-5p  %m%n"/>
+        </layout>
+    </appender>
+
+    <!-- Audit logger -->
+    <logger name="AuditLogger" additivity="false">
+        <level value="DEBUG"/>
+        <appender-ref ref="audit-file"/>
+    </logger>
+
+    <!-- Suppress noisy ActiveMQ broker warnings -->
+    <logger name="org.apache.activemq.broker.region.RegionBroker">
+        <level value="ERROR"/>
+    </logger>
+
+    <!-- Root logger – INFO to both stdout and file -->
+    <root>
+        <level value="INFO"/>
+        <appender-ref ref="stdout"/>
+        <appender-ref ref="main-log-file"/>
+    </root>
+
+</log4j:configuration>

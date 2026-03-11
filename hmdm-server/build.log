@@ -1,0 +1,55 @@
+[[1;34mINFO[m] Scanning for projects...
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m-------------------< [0;36mcom.hmdm.plugin:worktime-core[0;1m >--------------------[m
+[[1;34mINFO[m] [1mBuilding Work Time Plugin for MDM Server - Core 0.1.0[m
+[[1;34mINFO[m] [1m--------------------------------[ jar ]---------------------------------[m
+[[1;33mWARNING[m] The POM for com.sun.xml.bind:jaxb-core:jar:2.2.11 is invalid, transitive dependencies (if any) will not be available, enable debug logging for more details
+[[1;33mWARNING[m] The POM for com.sun.xml.bind:jaxb-impl:jar:2.2.11 is invalid, transitive dependencies (if any) will not be available, enable debug logging for more details
+[[1;33mWARNING[m] The artifact org.slf4j:slf4j-log4j12:jar:2.0.16 has been relocated to org.slf4j:slf4j-reload4j:jar:2.0.16
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-clean-plugin:2.6.1:clean[m [1m(default-clean)[m @ [36mworktime-core[0;1m ---[m
+[[1;34mINFO[m] Deleting /home/mohammed/hmdm/hmdm-server/plugins/worktime/core/target
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-resources-plugin:2.6:resources[m [1m(default-resources)[m @ [36mworktime-core[0;1m ---[m
+[[1;33mWARNING[m] Using platform encoding (UTF-8 actually) to copy filtered resources, i.e. build is platform dependent!
+[[1;34mINFO[m] Copying 0 resource
+[[1;34mINFO[m] Copying 1 resource
+[[1;34mINFO[m] 
+[[1;34mINFO[m] [1m--- [0;32mmaven-compiler-plugin:3.8.1:compile[m [1m(default-compile)[m @ [36mworktime-core[0;1m ---[m
+[[1;34mINFO[m] Changes detected - recompiling the module!
+[[1;34mINFO[m] Compiling 15 source files to /home/mohammed/hmdm/hmdm-server/plugins/worktime/core/target/classes
+[[1;34mINFO[m] -------------------------------------------------------------
+[[1;31mERROR[m] COMPILATION ERROR : 
+[[1;34mINFO[m] -------------------------------------------------------------
+[[1;31mERROR[m] /home/mohammed/hmdm/hmdm-server/plugins/worktime/core/src/main/java/com/hmdm/plugins/worktime/rest/resource/WorkTimeResource.java:[18,29] package com.hmdm.notification does not exist
+[[1;31mERROR[m] /home/mohammed/hmdm/hmdm-server/plugins/worktime/core/src/main/java/com/hmdm/plugins/worktime/rest/resource/WorkTimeResource.java:[19,48] package com.hmdm.notification.persistence.domain does not exist
+[[1;31mERROR[m] /home/mohammed/hmdm/hmdm-server/plugins/worktime/core/src/main/java/com/hmdm/plugins/worktime/rest/resource/WorkTimeResource.java:[34,19] cannot find symbol
+  symbol:   class PushService
+  location: class com.hmdm.plugins.worktime.rest.resource.WorkTimeResource
+[[1;31mERROR[m] /home/mohammed/hmdm/hmdm-server/plugins/worktime/core/src/main/java/com/hmdm/plugins/worktime/rest/resource/WorkTimeResource.java:[37,92] cannot find symbol
+  symbol:   class PushService
+  location: class com.hmdm.plugins.worktime.rest.resource.WorkTimeResource
+[[1;34mINFO[m] 4 errors 
+[[1;34mINFO[m] -------------------------------------------------------------
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] [1;31mBUILD FAILURE[m
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;34mINFO[m] Total time:  1.812 s
+[[1;34mINFO[m] Finished at: 2026-02-15T08:12:05Z
+[[1;34mINFO[m] [1m------------------------------------------------------------------------[m
+[[1;31mERROR[m] Failed to execute goal [32morg.apache.maven.plugins:maven-compiler-plugin:3.8.1:compile[m [1m(default-compile)[m on project [36mworktime-core[m: [1;31mCompilation failure[m: Compilation failure: 
+[[1;31mERROR[m] /home/mohammed/hmdm/hmdm-server/plugins/worktime/core/src/main/java/com/hmdm/plugins/worktime/rest/resource/WorkTimeResource.java:[18,29] package com.hmdm.notification does not exist
+[[1;31mERROR[m] /home/mohammed/hmdm/hmdm-server/plugins/worktime/core/src/main/java/com/hmdm/plugins/worktime/rest/resource/WorkTimeResource.java:[19,48] package com.hmdm.notification.persistence.domain does not exist
+[[1;31mERROR[m] /home/mohammed/hmdm/hmdm-server/plugins/worktime/core/src/main/java/com/hmdm/plugins/worktime/rest/resource/WorkTimeResource.java:[34,19] cannot find symbol
+[[1;31mERROR[m]   symbol:   class PushService
+[[1;31mERROR[m]   location: class com.hmdm.plugins.worktime.rest.resource.WorkTimeResource
+[[1;31mERROR[m] /home/mohammed/hmdm/hmdm-server/plugins/worktime/core/src/main/java/com/hmdm/plugins/worktime/rest/resource/WorkTimeResource.java:[37,92] cannot find symbol
+[[1;31mERROR[m]   symbol:   class PushService
+[[1;31mERROR[m]   location: class com.hmdm.plugins.worktime.rest.resource.WorkTimeResource
+[[1;31mERROR[m] -> [1m[Help 1][m
+[[1;31mERROR[m] 
+[[1;31mERROR[m] To see the full stack trace of the errors, re-run Maven with the [1m-e[m switch.
+[[1;31mERROR[m] Re-run Maven using the [1m-X[m switch to enable full debug logging.
+[[1;31mERROR[m] 
+[[1;31mERROR[m] For more information about the errors and possible solutions, please read the following articles:
+[[1;31mERROR[m] [1m[Help 1][m http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

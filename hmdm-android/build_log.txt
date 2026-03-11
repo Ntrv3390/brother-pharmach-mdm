@@ -1,0 +1,107 @@
+Starting a Gradle Daemon, 3 stopped Daemons could not be reused, use --status for details
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preOpensourceReleaseBuild UP-TO-DATE
+> Task :app:generateOpensourceReleaseResValues
+> Task :app:dataBindingMergeDependencyArtifactsOpensourceRelease
+> Task :app:compileOpensourceReleaseAidl
+> Task :app:generateOpensourceReleaseResources
+> Task :app:dataBindingTriggerOpensourceRelease
+> Task :app:generateOpensourceReleaseBuildConfig
+> Task :app:javaPreCompileOpensourceRelease
+> Task :app:mapOpensourceReleaseSourceSetPaths
+> Task :app:checkOpensourceReleaseAarMetadata
+> Task :app:createOpensourceReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksOpensourceRelease
+> Task :app:processOpensourceReleaseMainManifest
+> Task :app:mergeOpensourceReleaseResources
+> Task :app:processOpensourceReleaseManifest
+> Task :app:dataBindingGenBaseClassesOpensourceRelease
+> Task :app:extractProguardFiles
+> Task :app:mergeOpensourceReleaseJniLibFolders
+> Task :app:mergeOpensourceReleaseNativeLibs NO-SOURCE
+> Task :app:stripOpensourceReleaseDebugSymbols NO-SOURCE
+> Task :app:extractOpensourceReleaseNativeSymbolTables NO-SOURCE
+> Task :app:mergeOpensourceReleaseNativeDebugMetadata NO-SOURCE
+> Task :app:desugarOpensourceReleaseFileDependencies
+> Task :app:mergeOpensourceReleaseArtProfile
+> Task :app:checkOpensourceReleaseDuplicateClasses
+> Task :app:mergeOpensourceReleaseShaders
+> Task :app:compileOpensourceReleaseShaders NO-SOURCE
+> Task :app:generateOpensourceReleaseAssets UP-TO-DATE
+> Task :app:mergeOpensourceReleaseAssets
+> Task :app:compressOpensourceReleaseAssets
+> Task :app:collectOpensourceReleaseDependencies
+> Task :app:sdkOpensourceReleaseDependencyData
+> Task :app:validateSigningOpensourceRelease
+> Task :app:writeOpensourceReleaseAppMetadata
+> Task :app:writeOpensourceReleaseSigningConfigVersions
+> Task :lib:preBuild UP-TO-DATE
+> Task :lib:preReleaseBuild UP-TO-DATE
+> Task :lib:mergeReleaseJniLibFolders
+> Task :lib:mergeReleaseNativeLibs NO-SOURCE
+> Task :lib:stripReleaseDebugSymbols NO-SOURCE
+> Task :lib:generateReleaseResValues
+> Task :lib:copyReleaseJniLibsProjectAndLocalJars
+> Task :lib:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :lib:generateReleaseResources
+> Task :lib:compileReleaseAidl
+> Task :lib:packageReleaseResources
+> Task :lib:javaPreCompileRelease
+> Task :lib:processReleaseManifest
+> Task :lib:mergeReleaseShaders
+> Task :lib:compileReleaseShaders NO-SOURCE
+> Task :lib:generateReleaseAssets UP-TO-DATE
+> Task :lib:packageReleaseAssets
+> Task :lib:prepareLintJarForPublish UP-TO-DATE
+> Task :lib:prepareReleaseArtProfile UP-TO-DATE
+> Task :lib:parseReleaseLocalResources
+> Task :lib:processReleaseJavaRes NO-SOURCE
+> Task :lib:writeReleaseAarMetadata
+> Task :lib:mapReleaseSourceSetPaths
+> Task :lib:generateReleaseRFile
+> Task :lib:mergeReleaseJavaResource
+> Task :lib:mergeReleaseResources
+> Task :lib:extractReleaseAnnotations
+
+> Task :lib:compileReleaseJavaWithJavac
+Note: /home/mohammed/hmdm/hmdm-android/lib/src/main/java/com/brother/pharmach/mdm/HeadwindMDM.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :lib:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :lib:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :lib:syncReleaseLibJars
+> Task :lib:bundleReleaseAar
+> Task :app:processOpensourceReleaseManifestForPackage
+> Task :lib:verifyReleaseResources
+> Task :lib:assembleRelease
+> Task :app:processOpensourceReleaseResources
+
+> Task :app:compileOpensourceReleaseJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :app:generateOpensourceReleaseLintVitalReportModel
+> Task :app:dexBuilderOpensourceRelease
+> Task :app:processOpensourceReleaseJavaRes
+> Task :app:optimizeOpensourceReleaseResources
+> Task :app:lintVitalAnalyzeOpensourceRelease
+> Task :app:lintVitalReportOpensourceRelease
+> Task :app:lintVitalOpensourceRelease
+> Task :app:mergeOpensourceReleaseJavaResource
+> Task :app:mergeDexOpensourceRelease
+> Task :app:compileOpensourceReleaseArtProfile
+> Task :app:packageOpensourceRelease
+> Task :app:createOpensourceReleaseApkListingFileRedirect
+> Task :app:assembleOpensourceRelease
+> Task :app:assembleRelease
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 47s
+67 actionable tasks: 62 executed, 5 up-to-date

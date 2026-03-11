@@ -1,0 +1,386 @@
+<div ng-controller="WorkTimePoliciesController" class="worktime-wrapper">
+  <style>
+    .worktime-wrapper {
+      margin-top: 25px;
+      font-family: "Segoe UI", Roboto, sans-serif;
+      color: #2c3e50;
+    }
+
+    .shadow-card {
+      border-radius: 14px;
+      border: none;
+      background: #ffffff;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+    }
+
+    .panel-heading {
+      background: #7a9ab9;
+      color: white;
+      border: none;
+      padding: 18px 25px;
+    }
+
+    .panel-title {
+      font-weight: 600;
+      font-size: 20px;
+    }
+
+    .panel-body {
+      padding: 30px;
+      background: #f7f9fc;
+    }
+
+    .section {
+      margin-bottom: 30px;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .section-title {
+      margin-bottom: 15px;
+      font-weight: 600;
+      font-size: 16px;
+      color: #2c3e50;
+    }
+
+    .nav-tabs {
+      border-bottom: none;
+      margin-bottom: 25px;
+    }
+
+    .nav-tabs > li > a {
+      border: none;
+      border-radius: 20px;
+      padding: 8px 18px;
+      margin-right: 8px;
+      background: #eef2f7;
+      color: #555;
+      font-weight: 500;
+    }
+
+    .nav-tabs > li.active > a {
+      background: #7a9ab9;
+      color: white !important;
+    }
+
+    .form-control {
+      border-radius: 10px;
+      border: 1px solid #e1e6ef;
+      height: 42px;
+    }
+
+    .form-control:focus {
+      border-color: #7a9ab9;
+      box-shadow: 0 0 0 2px rgba(122, 154, 185, 0.25);
+    }
+
+    .day-toggle-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .day-toggle {
+      min-width: 70px;
+      border-radius: 25px;
+      border: 1px solid #dce2ea;
+      background: #fff;
+      padding: 6px 14px;
+      font-weight: 500;
+    }
+
+    .active-day {
+      background: #7a9ab9;
+      border: none;
+      color: white;
+    }
+
+    .app-container {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #e3e8f0;
+      border-radius: 10px;
+      padding: 12px;
+      background: #f9fbff;
+    }
+
+    .app-item {
+      margin-bottom: 6px;
+      padding: 10px;
+      background: white;
+      border-radius: 8px;
+      display: block;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
+    }
+
+    .app-item:hover {
+      border-color: #7a9ab9;
+      background: #f1f5ff;
+    }
+
+    .app-item.text-muted {
+      opacity: 0.5;
+    }
+
+    .badge {
+      background: #7a9ab9;
+      font-weight: 500;
+      padding: 5px 8px;
+      border-radius: 10px;
+    }
+
+    .form-actions {
+      margin-top: 25px;
+      padding: 15px 20px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+      position: sticky;
+      bottom: 10px;
+    }
+
+    .btn {
+      border-radius: 20px;
+      padding: 8px 18px;
+      font-weight: 500;
+    }
+
+    .btn-success {
+      background: #7a9ab9;
+      border: none;
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #6a8aa8;
+    }
+
+    .status-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .status-item {
+      min-width: 220px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: #f1f5fb;
+      border: 1px solid #e1e6ef;
+      font-weight: 500;
+    }
+
+    .status-item .status-label {
+      color: #5c6b7a;
+      margin-right: 6px;
+    }
+
+    .status-on {
+      color: #7a9ab9;
+      font-weight: 600;
+    }
+
+    .status-off {
+      color: #d9534f;
+      font-weight: 600;
+    }
+  </style>
+
+  <div class="container-fluid">
+    <!-- Tabs -->
+    <ul class="nav nav-tabs">
+      <li class="active">
+        <a href="/#/plugin-worktime">Global Policy</a>
+      </li>
+      <li>
+        <a href="/#/plugin-worktime/devices">Device Exceptions</a>
+      </li>
+    </ul>
+
+    <div class="panel panel-default shadow-card">
+      <div class="panel-heading">
+        <h3 class="panel-title">
+          <i class="glyphicon glyphicon-time"></i>
+          Global Work Time Policy
+        </h3>
+      </div>
+
+      <div class="panel-body">
+        <div class="alert alert-success" ng-if="success">{{success}}</div>
+        <div class="alert alert-danger" ng-if="error">{{error}}</div>
+
+        <!-- Enable -->
+        <div class="section">
+          <label>
+            <input type="checkbox" ng-model="policy.enabled" />
+            Enable enforcement
+          </label>
+
+          <div class="status-grid" style="margin-top: 14px">
+            <div class="status-item">
+              <span class="status-label">Enable Enforcement:</span>
+              <span ng-if="policy.enabled" class="status-on">ON</span>
+              <span ng-if="!policy.enabled" class="status-off">OFF</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">Active Exceptions:</span>
+              <span ng-if="hasActiveExceptions" class="status-off"
+                >{{activeExceptionsCount}} Active</span
+              >
+              <span ng-if="!hasActiveExceptions" class="status-on"
+                >None</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <form ng-if="policy">
+          <!-- Time -->
+          <div class="section">
+            <h4 class="section-title">Working Hours</h4>
+            <div class="row">
+              <div class="col-sm-6">
+                <label>Start time</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  ng-model="policy.startTime"
+                  placeholder="HH:mm"
+                />
+              </div>
+              <div class="col-sm-6">
+                <label>End time</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  ng-model="policy.endTime"
+                  placeholder="HH:mm"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Days -->
+          <div class="section">
+            <h4 class="section-title">Working Days</h4>
+            <div class="day-toggle-group">
+              <button
+                type="button"
+                class="btn day-toggle"
+                ng-repeat="day in days"
+                ng-class="{'active-day': hasDay(day.id)}"
+                ng-click="toggleDay(day.id)"
+              >
+                {{day.label}}
+              </button>
+            </div>
+          </div>
+
+          <!-- Apps During Work -->
+          <div class="section">
+            <h4 class="section-title">
+              Allowed during work
+              <span class="badge"
+                >{{countSelected(selectedAppsDuringWork)}}</span
+              >
+            </h4>
+
+            <input
+              type="text"
+              class="form-control"
+              ng-model="duringWorkSearchText"
+              placeholder="Search apps..."
+              style="margin-bottom: 10px"
+            />
+
+            <div class="app-container">
+              <!-- All apps -->
+              <label class="app-item">
+                <input
+                  type="checkbox"
+                  ng-model="selectedAppsDuringWork['*']"
+                  ng-change="toggleAllAppsDuringWork()"
+                />
+                <strong> All Apps</strong>
+              </label>
+
+              <label
+                class="app-item"
+                ng-repeat="app in getFilteredAppsDuringWork()"
+                ng-class="{'text-muted': selectedAppsDuringWork['*']}"
+              >
+                <input
+                  type="checkbox"
+                  ng-model="selectedAppsDuringWork[app.pkg]"
+                  ng-change="toggleIndividualAppDuringWork(app.pkg)"
+                  ng-disabled="selectedAppsDuringWork['*']"
+                />
+                <strong>{{app.name || app.pkg}}</strong>
+                <br />
+                <small>{{app.pkg}}</small>
+              </label>
+            </div>
+          </div>
+
+          <!-- Apps Outside Work -->
+          <div class="section">
+            <h4 class="section-title">
+              Allowed outside work
+              <span class="badge"
+                >{{countSelected(selectedAppsOutsideWork)}}</span
+              >
+            </h4>
+
+            <input
+              type="text"
+              class="form-control"
+              ng-model="outsideWorkSearchText"
+              placeholder="Search apps..."
+              style="margin-bottom: 10px"
+            />
+
+            <div class="app-container">
+              <label class="app-item">
+                <input
+                  type="checkbox"
+                  ng-model="selectedAppsOutsideWork['*']"
+                  ng-change="toggleAllAppsOutsideWork()"
+                />
+                <strong> All Apps</strong>
+              </label>
+
+              <label
+                class="app-item"
+                ng-repeat="app in getFilteredAppsOutsideWork()"
+                ng-class="{'text-muted': selectedAppsOutsideWork['*']}"
+              >
+                <input
+                  type="checkbox"
+                  ng-model="selectedAppsOutsideWork[app.pkg]"
+                  ng-change="toggleIndividualAppOutsideWork(app.pkg)"
+                  ng-disabled="selectedAppsOutsideWork['*']"
+                />
+                <strong>{{app.name || app.pkg}}</strong>
+                <br />
+                <small>{{app.pkg}}</small>
+              </label>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="form-actions text-right">
+            <button type="button" class="btn btn-default" ng-click="refresh()">Reload</button>
+            <button type="button" class="btn btn-success" ng-click="save()" ng-disabled="isSaving">
+              {{isSaving ? 'Saving...' : 'Save Policy'}}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,1 @@
+ql -h localhost -U hmdm -d hmdm -c SELECT\ url\ FROM\ applicationversions\ LIMIT\ 5

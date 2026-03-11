@@ -1,0 +1,371 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.0.xsd">
+
+    <!-- ========================================================= -->
+    <!-- Drop old tables (if they exist)                          -->
+    <!-- ========================================================= -->
+    <changeSet id="worktime-drop-old-structures" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="work_time_policy_device_groups"/>
+        </preConditions>
+        <dropTable tableName="work_time_policy_device_groups"/>
+    </changeSet>
+
+    <changeSet id="worktime-drop-old-policies" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="work_time_policies"/>
+        </preConditions>
+        <dropTable tableName="work_time_policies"/>
+    </changeSet>
+
+    <!-- ========================================================= -->
+    <!-- New global policy table                                  -->
+    <!-- ========================================================= -->
+    <changeSet id="worktime-create-global-policy" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="worktime_global_policy"/>
+            </not>
+        </preConditions>
+
+        <createTable tableName="worktime_global_policy">
+            <column name="id" type="SERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="start_time" type="VARCHAR(5)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="end_time" type="VARCHAR(5)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="days_of_week" type="INT">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="allowed_apps_during_work" type="TEXT"/>
+            <column name="allowed_apps_outside_work" type="TEXT"/>
+
+            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true"/>
+            <column name="customer_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <!-- ========================================================= -->
+    <!-- Global override table                                    -->
+    <!-- ========================================================= -->
+    <changeSet id="worktime-create-global-override" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="worktime_global_override"/>
+            </not>
+        </preConditions>
+
+        <createTable tableName="worktime_global_override">
+            <column name="id" type="SERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="start_datetime" type="TIMESTAMP"/>
+            <column name="end_datetime" type="TIMESTAMP"/>
+
+            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true"/>
+            <column name="customer_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <!-- ========================================================= -->
+    <!-- Per-user override table                                  -->
+    <!-- ========================================================= -->
+    <changeSet id="worktime-create-user-override" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <or>
+                    <tableExists tableName="worktime_user_override"/>
+                    <tableExists tableName="worktime_device_override"/>
+                </or>
+            </not>
+        </preConditions>
+
+        <createTable tableName="worktime_user_override">
+            <column name="id" type="SERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="user_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="start_datetime" type="TIMESTAMP"/>
+            <column name="end_datetime" type="TIMESTAMP"/>
+
+            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true"/>
+            <column name="customer_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <!-- ========================================================= -->
+    <!-- Insert default global policy (if missing)                -->
+    <!-- ========================================================= -->
+    <changeSet id="worktime-insert-default-policy" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM worktime_global_policy WHERE id = 1
+            </sqlCheck>
+        </preConditions>
+
+        <insert tableName="worktime_global_policy">
+            <column name="id" valueNumeric="1"/>
+            <column name="start_time" value="09:00"/>
+            <column name="end_time" value="18:00"/>
+            <column name="days_of_week" valueNumeric="31"/>
+            <column name="allowed_apps_during_work" value=""/>
+            <column name="allowed_apps_outside_work" value="*"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="customer_id" valueNumeric="1"/>
+        </insert>
+    </changeSet>
+
+    <!-- ========================================================= -->
+    <!-- Upgrade user override structure (add fields + indexes)  -->
+    <!-- ========================================================= -->
+    <changeSet id="worktime-update-user-override-2026-02-07" author="worktime-plugin">
+        <preConditions onFail="CONTINUE">
+            <tableExists tableName="worktime_user_override"/>
+            <not>
+                <columnExists tableName="worktime_user_override" columnName="start_time"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="worktime_user_override">
+            <column name="start_time" type="VARCHAR(5)"/>
+            <column name="end_time" type="VARCHAR(5)"/>
+            <column name="days_of_week" type="VARCHAR(50)"/>
+            <column name="allowed_apps_during_work" type="TEXT"/>
+            <column name="allowed_apps_outside_work" type="TEXT"/>
+            <column name="priority" type="INT" defaultValueNumeric="0"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- Ensure exception datetime columns exist in older schemas -->
+    <changeSet id="worktime-user-override-datetime-2026-02-07" author="worktime-plugin">
+        <preConditions onFail="CONTINUE">
+            <tableExists tableName="worktime_user_override"/>
+            <not>
+                <columnExists tableName="worktime_user_override" columnName="start_datetime"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="worktime_user_override">
+            <column name="start_datetime" type="TIMESTAMP"/>
+            <column name="end_datetime" type="TIMESTAMP"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- Ensure unique constraint per customer/user -->
+    <changeSet id="worktime-user-override-unique-constraint-2026-02-07" author="worktime-plugin">
+        <preConditions onFail="CONTINUE">
+            <tableExists tableName="worktime_user_override"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_name = 'worktime_user_override' AND constraint_name = 'uk_worktime_user_customer' AND constraint_type = 'UNIQUE'
+            </sqlCheck>
+        </preConditions>
+        <addUniqueConstraint tableName="worktime_user_override" columnNames="customer_id,user_id" constraintName="uk_worktime_user_customer"/>
+    </changeSet>
+
+    <!-- Add indexes for performance -->
+    <changeSet id="worktime-user-override-index-customer-2026-02-07" author="worktime-plugin">
+        <preConditions onFail="CONTINUE">
+            <tableExists tableName="worktime_user_override"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM pg_indexes WHERE tablename = 'worktime_user_override' AND indexname = 'idx_worktime_user_customer'
+            </sqlCheck>
+        </preConditions>
+        <createIndex indexName="idx_worktime_user_customer" tableName="worktime_user_override">
+            <column name="customer_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="worktime-user-override-index-userid-2026-02-07" author="worktime-plugin">
+        <preConditions onFail="CONTINUE">
+            <tableExists tableName="worktime_user_override"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM pg_indexes WHERE tablename = 'worktime_user_override' AND indexname = 'idx_worktime_user_userid'
+            </sqlCheck>
+        </preConditions>
+        <createIndex indexName="idx_worktime_user_userid" tableName="worktime_user_override">
+            <column name="user_id"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- Ensure sequence/default for id in older schemas -->
+    <changeSet id="worktime-user-override-id-seq-2026-02-07" author="worktime-plugin" failOnError="false">
+        <preConditions onFail="CONTINUE">
+            <tableExists tableName="worktime_user_override"/>
+            <not>
+                <sequenceExists sequenceName="worktime_user_override_id_seq"/>
+            </not>
+        </preConditions>
+        <createSequence sequenceName="worktime_user_override_id_seq"/>
+    </changeSet>
+
+    <changeSet id="worktime-user-override-id-default-2026-02-07" author="worktime-plugin">
+        <preConditions onFail="CONTINUE">
+            <tableExists tableName="worktime_user_override"/>
+            <not>
+                <columnExists tableName="worktime_user_override" columnName="id"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="worktime_user_override">
+            <column name="id" type="SERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="worktime-user-override-id-default-ensure-2026-02-07" author="worktime-plugin">
+        <preConditions onFail="CONTINUE">
+            <tableExists tableName="worktime_user_override"/>
+            <columnExists tableName="worktime_user_override" columnName="id"/>
+        </preConditions>
+        <addDefaultValue tableName="worktime_user_override"
+                         columnName="id"
+                         defaultValueComputed="nextval('worktime_user_override_id_seq'::regclass)"/>
+    </changeSet>
+
+    <!-- Fix incorrect plugin view template path -->
+    <changeSet id="worktime-update-plugin-template-path-2026-02-11" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="plugins"/>
+        </preConditions>
+        <update tableName="plugins">
+            <column name="functionsviewtemplate" value="app/components/plugins/worktime/views/worktime_policies.html"/>
+            <where>identifier = 'worktime'</where>
+        </update>
+    </changeSet>
+
+    <!-- ========================================================= -->
+    <!-- Rename user override to device override                  -->
+    <!-- ========================================================= -->
+    <changeSet id="worktime-rename-user-to-device-override" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_user_override"/>
+            <not>
+                <tableExists tableName="worktime_device_override"/>
+            </not>
+        </preConditions>
+        <renameTable oldTableName="worktime_user_override" newTableName="worktime_device_override"/>
+    </changeSet>
+
+    <changeSet id="worktime-rename-user-id-to-device-id" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_device_override"/>
+            <columnExists tableName="worktime_device_override" columnName="user_id"/>
+        </preConditions>
+        <!-- Truncate first since IDs are incompatible -->
+        <sql>TRUNCATE TABLE worktime_device_override</sql>
+        <renameColumn tableName="worktime_device_override" oldColumnName="user_id" newColumnName="device_id" columnDataType="INT"/>
+    </changeSet>
+
+
+    <changeSet id="worktime-plugin-registration-init" author="mohammed" context="common">
+         <preConditions onFail="MARK_RAN">
+            <not>
+                <sqlCheck expectedResult="1">SELECT COUNT(*) FROM plugins WHERE identifier = 'worktime'</sqlCheck>
+            </not>
+        </preConditions>
+        <sql>
+            INSERT INTO permissions (name, description) VALUES ('plugin_worktime_access', 'Access to Work Time plugin');
+            INSERT INTO userRolePermissions (roleId, permissionId) VALUES (1, currval('permissions_id_seq'));
+            INSERT INTO userRolePermissions (roleId, permissionId) VALUES (2, currval('permissions_id_seq'));
+
+            INSERT INTO plugins (
+                identifier, name, description,
+                javascriptModuleFile,
+                functionsViewTemplate,
+                settingsViewTemplate,
+                namelocalizationkey,
+                settingsPermission, functionsPermission, deviceFunctionsPermission
+            ) VALUES (
+                'worktime', 'Work Time', 'Manage working hours',
+                'app/components/plugins/worktime/worktime.module.js',
+                'app/components/plugins/worktime/views/worktime_policies.html',
+                'app/components/plugins/worktime/views/worktime_devices.html',
+                'plugin.worktime.localization.key.name',
+                'plugin_worktime_access', 'plugin_worktime_access', 'plugin_worktime_access'
+            );
+        </sql>
+    </changeSet>
+
+    <changeSet id="worktime-global-policy-unique-customer-2026-02-17" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_global_policy"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*)
+                FROM information_schema.table_constraints
+                WHERE table_name = 'worktime_global_policy'
+                  AND constraint_name = 'uk_worktime_global_policy_customer'
+                  AND constraint_type = 'UNIQUE'
+            </sqlCheck>
+        </preConditions>
+        <addUniqueConstraint tableName="worktime_global_policy"
+                             columnNames="customer_id"
+                             constraintName="uk_worktime_global_policy_customer"/>
+    </changeSet>
+
+    <changeSet id="worktime-global-policy-customer-index-2026-02-17" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_global_policy"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM pg_indexes
+                WHERE tablename = 'worktime_global_policy'
+                  AND indexname = 'idx_worktime_global_policy_customer'
+            </sqlCheck>
+        </preConditions>
+        <createIndex indexName="idx_worktime_global_policy_customer" tableName="worktime_global_policy">
+            <column name="customer_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="worktime-device-override-boundary-push-flags-2026-02-18" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_device_override"/>
+            <not>
+                <columnExists tableName="worktime_device_override" columnName="start_boundary_push_sent"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="worktime_device_override">
+            <column name="start_boundary_push_sent" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="end_boundary_push_sent" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <sql>
+            UPDATE worktime_device_override
+            SET
+                start_boundary_push_sent = CASE
+                    WHEN enabled = TRUE THEN TRUE
+                    ELSE FALSE
+                END,
+                end_boundary_push_sent = CASE
+                    WHEN enabled = TRUE THEN TRUE
+                    ELSE FALSE
+                END
+        </sql>
+    </changeSet>
+</databaseChangeLog>

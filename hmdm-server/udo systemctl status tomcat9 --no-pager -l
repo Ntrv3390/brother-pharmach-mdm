@@ -1,0 +1,9 @@
+                 id                  |     author     |                                                      filename                                                       |        dateexecuted        
+-------------------------------------+----------------+---------------------------------------------------------------------------------------------------------------------+----------------------------
+ calllog-grant-permission-superadmin | calllog-plugin | jar:file:/opt/tomcat9/webapps/ROOT/WEB-INF/lib/calllog-postgres-0.1.0.jar!/liquibase/calllog.postgres.changelog.xml | 2026-02-19 04:22:23.712766
+ calllog-create-permission           | calllog-plugin | jar:file:/opt/tomcat9/webapps/ROOT/WEB-INF/lib/calllog-postgres-0.1.0.jar!/liquibase/calllog.postgres.changelog.xml | 2026-02-19 04:22:23.699139
+ calllog-register-plugin             | calllog-plugin | jar:file:/opt/tomcat9/webapps/ROOT/WEB-INF/lib/calllog-postgres-0.1.0.jar!/liquibase/calllog.postgres.changelog.xml | 2026-02-19 04:22:23.693711
+ calllog-create-settings-table       | calllog-plugin | jar:file:/opt/tomcat9/webapps/ROOT/WEB-INF/lib/calllog-postgres-0.1.0.jar!/liquibase/calllog.postgres.changelog.xml | 2026-02-19 04:22:23.686916
+ calllog-create-data-table           | calllog-plugin | jar:file:/opt/tomcat9/webapps/ROOT/WEB-INF/lib/calllog-postgres-0.1.0.jar!/liquibase/calllog.postgres.changelog.xml | 2026-02-19 04:22:23.660487
+(5 rows)
+
