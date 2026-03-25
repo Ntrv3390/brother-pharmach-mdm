@@ -1,5 +1,5 @@
-tunnel: 8639472e-93fc-479f-9616-923ad4d1914a
-credentials-file: /etc/cloudflared/8639472e-93fc-479f-9616-923ad4d1914a.json
+tunnel: 770942dc-9e06-4101-ac07-bd030e1870b9
+credentials-file: /etc/cloudflared/770942dc-9e06-4101-ac07-bd030e1870b9.json
 
 ingress:
   - hostname: brothers-mdm.com

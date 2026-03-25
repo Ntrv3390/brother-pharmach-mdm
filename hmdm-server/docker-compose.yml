@@ -103,7 +103,7 @@ services:
     command: tunnel --config /etc/cloudflared/config.yml run
     volumes:
       - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
-      - ./cloudflared/8639472e-93fc-479f-9616-923ad4d1914a.json:/etc/cloudflared/8639472e-93fc-479f-9616-923ad4d1914a.json:ro
+      - ./cloudflared/770942dc-9e06-4101-ac07-bd030e1870b9.json:/etc/cloudflared/770942dc-9e06-4101-ac07-bd030e1870b9.json:ro
     networks:
       - hmdm_net
 
