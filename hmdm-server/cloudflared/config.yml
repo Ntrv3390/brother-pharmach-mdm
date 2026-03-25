@@ -1,0 +1,4 @@
+ingress:
+  - hostname: brothers-mdm.com
+    service: http://hmdm:8080
+  - service: http_status:404

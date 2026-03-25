@@ -1,0 +1,89 @@
+FINAL DEPLOYMENT STEPS (CLIENT SERVER)
+
+Goal
+- Run one Docker Compose stack and make these services come up correctly:
+  - PostgreSQL
+  - HMDM server
+  - Cloudflared tunnel
+- Public URL should open automatically after docker compose up -d --build.
+
+Prerequisites (on client server)
+1. Docker Engine + Docker Compose plugin installed.
+2. Domain is on Cloudflare.
+3. Cloudflare Tunnel is created in Zero Trust and tunnel token is available.
+4. DNS record exists:
+   - Type: CNAME
+   - Name: brothers-mdm.com
+   - Target: _<YOUR_TUNNELID>.cfargotunnel.com
+   - Proxy status: Proxied
+   - Keep only one CNAME for brothers-mdm.com (no duplicates).
+
+Step 1: Copy project and go to server folder
+- Commands:
+  cd /path/to/brother-pharmach-mdm/hmdm-server
+
+Step 2: Create environment file
+- Commands:
+  cp .env.example .env
+
+- Edit .env and set at least:
+  DB_PASSWORD=<strong_password>
+  HASH_SECRET=<random_long_secret>
+  JWT_SECRET=<random_long_secret>
+  BASE_URL=https://brothers-mdm.com
+  CLOUDFLARED_TUNNEL_TOKEN=eyJhIjoiMTk1ZDcwNWZlMzI5YTQ3MzZkMTczMzQ1MDAwYmI3NGIiLCJ0IjoiNzcwOTQyZGMtOWUwNi00MTAxLWFjMDctYmQwMzBlMTg3MGI5IiwicyI6Ik9UY3paV00zTUdVdE4yTXlZUzAwTkdVekxUazFNamN0WkRabE0yVmhOREExTVRZMSJ9
+
+Step 3: Verify cloudflared ingress config
+- File: cloudflared/config.yml
+- Required content pattern:
+  ingress:
+    - hostname: brothers-mdm.com
+      service: http://hmdm:8080
+    - service: http_status:404
+
+Step 4: Start deployment
+- Commands:
+  docker compose pull
+  docker compose up -d --build
+
+Step 5: Verify services are healthy
+- Commands:
+  docker compose ps
+  docker compose logs --tail=80 hmdm
+  docker compose logs --tail=80 cloudflared
+
+- Expected:
+  - hmdm-server: healthy
+  - cloudflared logs contain "Registered tunnel connection"
+
+Step 6: Verify URL
+- Commands:
+  curl -I https://brothers-mdm.com
+
+- Expected:
+  - HTTP/1.1 200 OK
+
+Auto-start after reboot
+- Compose services already use restart: unless-stopped, so containers restart automatically when Docker starts.
+- Ensure Docker starts on boot.
+
+Linux server:
+- Commands:
+  sudo systemctl enable docker
+  sudo systemctl start docker
+
+Windows Server (Docker Desktop):
+- Enable Docker Desktop start at login and keep existing containers with restart policy.
+
+Operational update command (future releases)
+- Commands:
+  cd /path/to/brother-pharmach-mdm/hmdm-server
+  docker compose up -d --build
+
+Quick troubleshoot
+1. If URL shows 530/1033:
+   - DNS CNAME target does not match active tunnel ID, or duplicate DNS records exist.
+2. If URL shows 503:
+   - cloudflared is running without ingress rules or wrong hostname in cloudflared/config.yml.
+3. If docker compose fails to start cloudflared:
+   - CLOUDFLARED_TUNNEL_TOKEN is missing or invalid in .env.
