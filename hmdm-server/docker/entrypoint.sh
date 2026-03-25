@@ -18,7 +18,7 @@ BASE_DIRECTORY="${BASE_DIRECTORY:-/opt/hmdm}"
 FILES_DIRECTORY="${FILES_DIRECTORY:-${BASE_DIRECTORY}/files}"
 PLUGINS_DIRECTORY="${PLUGINS_DIRECTORY:-${BASE_DIRECTORY}/plugins}"
 
-BASE_URL="${BASE_URL:-http://localhost:8080}"
+BASE_URL="${BASE_URL:-https://brothers-mdm.com}"
 USAGE_SCENARIO="${USAGE_SCENARIO:-private}"
 SECURE_ENROLLMENT="${SECURE_ENROLLMENT:-0}"
 HASH_SECRET="${HASH_SECRET:-changeme-C3z9vi54}"
@@ -52,7 +52,10 @@ SMTP_FROM="${SMTP_FROM:-}"
 JWT_SECRET="${JWT_SECRET:-20c68f0d9185b1d18cf6add1e8b491fd89529a44}"
 JWT_VALIDITY="${JWT_VALIDITY:-86400}"
 JWT_VALIDITY_REMEMBER="${JWT_VALIDITY_REMEMBER:-2592000}"
+SQL_INIT_SCRIPT_PATH="${SQL_INIT_SCRIPT_PATH:-/opt/hmdm-setup/hmdm_init.en.sql}"
 
+# Keep the one-time DB init marker inside a persisted volume path.
+DB_INIT_MARKER="${FILES_DIRECTORY}/.db_initialized"
 INSTALL_FLAG="${BASE_DIRECTORY}/hmdm_install_flag"
 LOG4J_CONFIG="file://${BASE_DIRECTORY}/log4j-hmdm.xml"
 
@@ -120,7 +123,7 @@ cat > "${CONTEXT_DIR}/ROOT.xml" << EOF
     <Parameter name="initialization.completion.signal.file" value="${INSTALL_FLAG}"/>
     <Parameter name="plugin.photo.enable.places"      value="0"/>
     <Parameter name="plugin.audit.display.forwarded.ip" value="0"/>
-    <Parameter name="sql.init.script.path"            value=""/>
+    <Parameter name="sql.init.script.path"            value="${SQL_INIT_SCRIPT_PATH}"/>
 
     <!-- SMTP (password recovery) -->
     <Parameter name="smtp.host"      value="${SMTP_HOST}"/>
@@ -151,32 +154,57 @@ echo "==> [hmdm] PostgreSQL is ready."
 # ---------------------------------------------------------------------------
 # First-run database initialisation
 # ---------------------------------------------------------------------------
-if [ ! -f "${BASE_DIRECTORY}/.db_initialized" ]; then
-    echo "==> [hmdm] First run detected – initialising database..."
-
-    # Substitute vars into the SQL init script
-    ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
-    CLIENT_VERSION="5.19"
-    CLIENT_APK="hmdm-${CLIENT_VERSION}-os.apk"
-
-    TEMP_SQL="/tmp/hmdm_init_$$.sql"
-    sed "s|_HMDM_BASE_|${BASE_DIRECTORY}|g; \
-         s|_HMDM_VERSION_|${CLIENT_VERSION}|g; \
-         s|_HMDM_APK_|${CLIENT_APK}|g; \
-         s|_ADMIN_EMAIL_|${ADMIN_EMAIL}|g" \
-        /opt/hmdm-setup/hmdm_init.en.sql > "${TEMP_SQL}"
-
-    PGPASSWORD="${DB_PASSWORD}" psql \
+if [ ! -f "${DB_INIT_MARKER}" ]; then
+    DB_ALREADY_INITIALIZED="0"
+    if PGPASSWORD="${DB_PASSWORD}" psql \
         -h "${DB_HOST}" \
         -p "${DB_PORT}" \
         -U "${DB_USER}" \
         -d "${DB_NAME}" \
-        -f "${TEMP_SQL}" > /dev/null 2>&1 && \
-        echo "==> [hmdm] Database initialised successfully." || \
-        echo "==> [hmdm] WARNING: DB init script returned errors (may be safe if DB was already seeded)."
+        -t -A \
+        -c "SELECT CASE WHEN to_regclass('public.databasechangelog') IS NOT NULL AND EXISTS (SELECT 1 FROM public.databasechangelog) THEN '1' ELSE '0' END" \
+        > /tmp/hmdm_db_probe.txt 2>/dev/null; then
+        DB_ALREADY_INITIALIZED="$(tr -d '[:space:]' < /tmp/hmdm_db_probe.txt)"
+    fi
 
-    rm -f "${TEMP_SQL}"
-    touch "${BASE_DIRECTORY}/.db_initialized"
+    if [ "${DB_ALREADY_INITIALIZED}" = "1" ]; then
+        echo "==> [hmdm] Existing DB detected (databasechangelog has rows), skipping seed SQL."
+        touch "${DB_INIT_MARKER}"
+    else
+        echo "==> [hmdm] First run detected – initialising database..."
+
+        if [ ! -f "${SQL_INIT_SCRIPT_PATH}" ]; then
+            echo "==> [hmdm] ERROR: SQL init script not found at ${SQL_INIT_SCRIPT_PATH}"
+        else
+            # Substitute vars into the SQL init script
+            ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
+            CLIENT_VERSION="5.19"
+            CLIENT_APK="hmdm-${CLIENT_VERSION}-os.apk"
+
+            TEMP_SQL="/tmp/hmdm_init_$$.sql"
+            TEMP_SQL_LOG="/tmp/hmdm_init_$$.log"
+            sed "s|_HMDM_BASE_|${BASE_DIRECTORY}|g; \
+                 s|_HMDM_VERSION_|${CLIENT_VERSION}|g; \
+                 s|_HMDM_APK_|${CLIENT_APK}|g; \
+                 s|_ADMIN_EMAIL_|${ADMIN_EMAIL}|g" \
+                "${SQL_INIT_SCRIPT_PATH}" > "${TEMP_SQL}"
+
+            if PGPASSWORD="${DB_PASSWORD}" psql \
+                -h "${DB_HOST}" \
+                -p "${DB_PORT}" \
+                -U "${DB_USER}" \
+                -d "${DB_NAME}" \
+                -v ON_ERROR_STOP=1 \
+                -f "${TEMP_SQL}" > "${TEMP_SQL_LOG}" 2>&1; then
+                echo "==> [hmdm] Database initialised successfully."
+                touch "${DB_INIT_MARKER}"
+            else
+                echo "==> [hmdm] ERROR: DB init script failed. See ${TEMP_SQL_LOG} inside the container."
+            fi
+
+            rm -f "${TEMP_SQL}"
+        fi
+    fi
 else
     echo "==> [hmdm] Database already initialised, skipping."
 fi
