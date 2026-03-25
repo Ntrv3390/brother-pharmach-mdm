@@ -1,3 +1,6 @@
+tunnel: 8639472e-93fc-479f-9616-923ad4d1914a
+credentials-file: /etc/cloudflared/8639472e-93fc-479f-9616-923ad4d1914a.json
+
 ingress:
   - hostname: brothers-mdm.com
     service: http://hmdm:8080

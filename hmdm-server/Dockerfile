@@ -1,7 +1,7 @@
 # =============================================================================
 # Stage 1: Build – compile all Maven modules and produce launcher.war
 # =============================================================================
-FROM maven:3.8.8-eclipse-temurin-8 AS builder
+FROM maven:3.8.8-eclipse-temurin-11 AS builder
 
 WORKDIR /build
 
@@ -37,9 +37,9 @@ RUN mvn dependency:go-offline -B --fail-never || true
 # Copy full source
 COPY . .
 
-# Generate a build.properties with placeholder values for Maven filtering.
+# Gener
 # The real runtime values come from environment variables at startup (entrypoint.sh).
-# These placeholder values are only used so the build succeeds.
+# These placeholder values are only used so the build succeedate a build.properties with placeholder values for Maven filtering.s.
 RUN cat > server/build.properties << 'EOF'
 jdbc.url=jdbc:postgresql://placeholder:5432/hmdm
 jdbc.driver=org.postgresql.Driver
@@ -81,12 +81,13 @@ jwt.validityrememberme=2592000
 EOF
 
 # Build (skip tests to speed up)
-RUN mvn install -DskipTests -B
+RUN rm -rf /root/.m2/repository/io/github/classgraph
+RUN mvn install -DskipTests -U -B
 
 # =============================================================================
-# Stage 2: Runtime – Tomcat 9 + JRE 8
+# Stage 2: Runtime – Tomcat 9 + JRE 11
 # =============================================================================
-FROM tomcat:9.0-jre8
+FROM tomcat:9.0-jre11
 
 LABEL maintainer="Brother Pharmach DevOps" \
       description="Brother Pharmach MDM Server (Headwind MDM fork)" \

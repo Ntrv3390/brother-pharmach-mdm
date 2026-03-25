@@ -93,6 +93,20 @@ services:
       retries: 5
       start_period: 90s
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: hmdm-cloudflared
+    restart: unless-stopped
+    depends_on:
+      hmdm:
+        condition: service_healthy
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+      - ./cloudflared/8639472e-93fc-479f-9616-923ad4d1914a.json:/etc/cloudflared/8639472e-93fc-479f-9616-923ad4d1914a.json:ro
+    networks:
+      - hmdm_net
+
 # ==============================================================================
 #  Named Volumes  (survive container restarts and upgrades)
 # ==============================================================================
