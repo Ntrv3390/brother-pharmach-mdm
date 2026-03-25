@@ -1,7 +1,0 @@
-tunnel: 770942dc-9e06-4101-ac07-bd030e1870b9
-credentials-file: /etc/cloudflared/770942dc-9e06-4101-ac07-bd030e1870b9.json
-
-ingress:
-  - hostname: brothers-mdm.com
-    service: http://hmdm:8080
-  - service: http_status:404

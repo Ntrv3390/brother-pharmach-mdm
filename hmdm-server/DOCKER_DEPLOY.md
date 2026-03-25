@@ -70,6 +70,16 @@ JWT_SECRET=a4f2c1e8b3d7e0fa1234567890abcdef12345678
 
 ### 4. Build and Start
 
+If you use Cloudflare Tunnel, run the helper script so the panel and tunnel start together:
+
+```powershell
+bash ./build_and_start_with_tunnel.sh
+```
+
+This script validates that `CLOUDFLARE_TUNNEL_TOKEN` is set and then runs Docker Compose with build.
+
+You can still run Docker Compose directly:
+
 ```powershell
 docker compose up -d --build
 ```

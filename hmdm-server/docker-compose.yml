@@ -46,7 +46,7 @@ services:
       # ── Application ──
       # Set BASE_URL to the public URL clients will use:
       #   e.g. http://your-server-ip:8080 or https://mdm.example.com
-      BASE_URL: ${BASE_URL:-http://localhost:8080}
+      BASE_URL: ${BASE_URL:-https://brothers-mdm.com}
       BASE_DIRECTORY: /opt/hmdm
       FILES_DIRECTORY: /opt/hmdm/files
       PLUGINS_DIRECTORY: /opt/hmdm/plugins
@@ -100,10 +100,7 @@ services:
     depends_on:
       hmdm:
         condition: service_healthy
-    command: tunnel --config /etc/cloudflared/config.yml run
-    volumes:
-      - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
-      - ./cloudflared/770942dc-9e06-4101-ac07-bd030e1870b9.json:/etc/cloudflared/770942dc-9e06-4101-ac07-bd030e1870b9.json:ro
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     networks:
       - hmdm_net
 
