@@ -100,7 +100,7 @@ services:
     depends_on:
       hmdm:
         condition: service_healthy
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate --url http://hmdm:8080 run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     networks:
       - hmdm_net
 
