@@ -5,8 +5,6 @@ target
 *.iml
 .idea
 
-.env
-
 # node modules for grunt
 server/webtarget/node
 **/node_modules
