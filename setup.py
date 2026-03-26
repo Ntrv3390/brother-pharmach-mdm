@@ -181,13 +181,143 @@ def run_compose_stream(args, cwd: Path) -> int:
     return proc.wait()
 
 
+def run_compose_capture(args, cwd: Path, log_command: bool = True) -> tuple:
+    cmd = ["docker", "compose"] + args
+    if log_command:
+        append_log("$ " + " ".join(cmd))
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        append_log("ERROR: docker command not found")
+        return 127, ""
+
+    output = (proc.stdout or "") + (proc.stderr or "")
+    out = output.strip()
+    if out:
+        for line in out.splitlines():
+            append_log(line)
+    return proc.returncode, out
+
+
+def sql_ident(value: str) -> str:
+    return '"' + value.replace('"', '""') + '"'
+
+
+def sql_lit(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def db_admin_exec(values: dict, sql: str, database: str = "postgres") -> tuple:
+    admin_user = values["DB_ADMIN_USER"]
+    admin_password = values["DB_ADMIN_PASSWORD"]
+    cmd = [
+        "docker", "compose", "exec", "-T",
+        "-e", f"PGPASSWORD={admin_password}",
+        "postgres",
+        "psql",
+        "-v", "ON_ERROR_STOP=1",
+        "-U", admin_user,
+        "-d", database,
+        "-c", sql,
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=str(SERVER_DIR),
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        append_log("ERROR: docker command not found")
+        return 127, ""
+
+    output = (proc.stdout or "") + (proc.stderr or "")
+    out = output.strip()
+    if out:
+        for line in out.splitlines():
+            append_log(line)
+    return proc.returncode, out
+
+
+def ensure_db_prerequisites(values: dict) -> bool:
+    append_log("Preparing PostgreSQL prerequisites (database/user)...")
+
+    db_name = values["DB_NAME"]
+    db_user = values["DB_USER"]
+    db_password = values["DB_PASSWORD"]
+
+    append_log("Checking PostgreSQL admin credentials...")
+    rc, _ = db_admin_exec(values, "SELECT 1;")
+    if rc != 0:
+        set_error(
+            "PostgreSQL admin login failed. Please provide a DB admin user/password "
+            "with CREATEROLE and CREATEDB privileges."
+        )
+        return False
+
+    append_log(f"Ensuring DB role '{db_user}' exists...")
+    role_sql = (
+        "DO $$ "
+        "BEGIN "
+        f"IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {sql_lit(db_user)}) THEN "
+        f"CREATE ROLE {sql_ident(db_user)} LOGIN PASSWORD {sql_lit(db_password)}; "
+        "ELSE "
+        f"ALTER ROLE {sql_ident(db_user)} WITH LOGIN PASSWORD {sql_lit(db_password)}; "
+        "END IF; "
+        "END $$;"
+    )
+    rc, _ = db_admin_exec(values, role_sql)
+    if rc != 0:
+        set_error("Failed to create/update DB role. Ensure admin user has CREATEROLE privilege.")
+        return False
+
+    append_log(f"Ensuring database '{db_name}' exists...")
+    exists_sql = f"SELECT 1 FROM pg_database WHERE datname = {sql_lit(db_name)};"
+    rc, out = db_admin_exec(values, exists_sql)
+    if rc != 0:
+        set_error("Failed to check database existence.")
+        return False
+
+    if "1" not in out:
+        create_db_sql = f"CREATE DATABASE {sql_ident(db_name)} OWNER {sql_ident(db_user)};"
+        rc, _ = db_admin_exec(values, create_db_sql)
+        if rc != 0:
+            set_error("Failed to create database. Ensure admin user has CREATEDB privilege.")
+            return False
+        append_log(f"Database '{db_name}' created.")
+    else:
+        append_log(f"Database '{db_name}' already exists.")
+
+    grant_db_sql = f"GRANT ALL PRIVILEGES ON DATABASE {sql_ident(db_name)} TO {sql_ident(db_user)};"
+    rc, _ = db_admin_exec(values, grant_db_sql)
+    if rc != 0:
+        set_error("Failed to grant database privileges to application user.")
+        return False
+
+    schema_sql = (
+        f"ALTER SCHEMA public OWNER TO {sql_ident(db_user)}; "
+        f"GRANT ALL ON SCHEMA public TO {sql_ident(db_user)};"
+    )
+    rc, _ = db_admin_exec(values, schema_sql, database=db_name)
+    if rc != 0:
+        append_log("WARNING: Could not update public schema owner/permissions; continuing.")
+
+    append_log("PostgreSQL prerequisites are ready.")
+    return True
+
+
 def wait_http_local(http_port: str, timeout_sec: int = 180) -> bool:
     url = f"http://localhost:{http_port}/"
     deadline = time.time() + timeout_sec
     while time.time() < deadline:
         try:
             with urllib.request.urlopen(url, timeout=5) as r:
-                if r.status < 500:
+                if 200 <= r.status < 400:
                     return True
         except Exception:
             pass
@@ -200,7 +330,7 @@ def wait_https_public(base_url: str, timeout_sec: int = 240) -> bool:
     while time.time() < deadline:
         try:
             with urllib.request.urlopen(base_url, timeout=8) as r:
-                if r.status < 500:
+                if 200 <= r.status < 400:
                     return True
         except Exception:
             pass
@@ -209,7 +339,15 @@ def wait_https_public(base_url: str, timeout_sec: int = 240) -> bool:
 
 
 def validate_form(v: dict) -> str:
-    required = ["BASE_URL", "ADMIN_EMAIL", "DB_PASSWORD"]
+    required = [
+        "BASE_URL",
+        "ADMIN_EMAIL",
+        "DB_NAME",
+        "DB_USER",
+        "DB_PASSWORD",
+        "DB_ADMIN_USER",
+        "DB_ADMIN_PASSWORD",
+    ]
     for key in required:
         if not v.get(key, "").strip():
             return f"{key} is required"
@@ -249,6 +387,15 @@ def compose_worker(values: dict):
 
     use_tunnel = bool(values.get("CLOUDFLARE_TUNNEL_TOKEN", "").strip())
     profile_args = ["--profile", "tunnel"] if use_tunnel else []
+
+    set_phase("db-prerequisites")
+    append_log("Starting PostgreSQL container for DB pre-checks...")
+    rc = run_compose_stream(["up", "-d", "postgres"], SERVER_DIR)
+    if rc != 0:
+        set_error(f"docker compose up -d postgres failed (exit {rc})")
+        return
+    if not ensure_db_prerequisites(values):
+        return
 
     set_phase("building")
     append_log("Starting Docker build (Android APK + server)...")
@@ -302,6 +449,8 @@ def parse_form_data(body: bytes) -> dict:
         "DB_USER": g("DB_USER", existing.get("DB_USER", "hmdm")),
         "DB_PASSWORD": g("DB_PASSWORD", existing.get("DB_PASSWORD", "")),
         "DB_PORT": g("DB_PORT", existing.get("DB_PORT", "5432")),
+        "DB_ADMIN_USER": g("DB_ADMIN_USER", existing.get("DB_ADMIN_USER", "")),
+        "DB_ADMIN_PASSWORD": g("DB_ADMIN_PASSWORD", existing.get("DB_ADMIN_PASSWORD", "")),
         "HASH_SECRET": g("HASH_SECRET", existing.get("HASH_SECRET", secrets.token_urlsafe(24))),
         "JWT_SECRET": g("JWT_SECRET", existing.get("JWT_SECRET", secrets.token_hex(20))),
         "SECURE_ENROLLMENT": g("SECURE_ENROLLMENT", existing.get("SECURE_ENROLLMENT", "0")),
@@ -389,11 +538,14 @@ button {{ padding: .7rem 1.2rem; }}
 </fieldset>
 
 <fieldset><legend>Database</legend>
+<p class="note">Use an existing PostgreSQL admin account (CREATEDB + CREATEROLE) for one-time setup. The installer will create/update the app DB user and DB if missing.</p>
 <div class=\"grid\">
-<div><label>DB_NAME</label><input name=\"DB_NAME\" value=\"{val('DB_NAME','hmdm')}\" /></div>
-<div><label>DB_USER</label><input name=\"DB_USER\" value=\"{val('DB_USER','hmdm')}\" /></div>
-<div><label>DB_PASSWORD *</label><input type=\"password\" name=\"DB_PASSWORD\" value=\"{val('DB_PASSWORD','')}\" required /></div>
-<div><label>DB_PORT</label><input name=\"DB_PORT\" value=\"{val('DB_PORT','5432')}\" /></div>
+<div><label>DB_ADMIN_USER *</label><input name="DB_ADMIN_USER" value="{val('DB_ADMIN_USER','')}" required /></div>
+<div><label>DB_ADMIN_PASSWORD *</label><input type="password" name="DB_ADMIN_PASSWORD" value="" required /></div>
+<div><label>APP_DB_NAME *</label><input name="DB_NAME" value="{val('DB_NAME','hmdm')}" required /></div>
+<div><label>APP_DB_USER *</label><input name="DB_USER" value="{val('DB_USER','hmdm')}" required /></div>
+<div><label>APP_DB_PASSWORD *</label><input type="password" name="DB_PASSWORD" value="{val('DB_PASSWORD','')}" required /></div>
+<div><label>DB_PORT</label><input name="DB_PORT" value="{val('DB_PORT','5432')}" /></div>
 </div>
 </fieldset>
 
