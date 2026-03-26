@@ -191,63 +191,65 @@ echo "==> [hmdm] PostgreSQL is ready."
 # ---------------------------------------------------------------------------
 # First-run database initialisation
 # ---------------------------------------------------------------------------
-if [ ! -f "${DB_INIT_MARKER}" ]; then
-    DB_ALREADY_INITIALIZED="0"
-    if PGPASSWORD="${DB_PASSWORD}" psql \
-        -h "${DB_HOST}" \
-        -p "${DB_PORT}" \
-        -U "${DB_USER}" \
-        -d "${DB_NAME}" \
-        -t -A \
-        -c "SELECT CASE WHEN to_regclass('public.databasechangelog') IS NOT NULL AND EXISTS (SELECT 1 FROM public.databasechangelog) THEN '1' ELSE '0' END" \
-        > /tmp/hmdm_db_probe.txt 2>/dev/null; then
-        DB_ALREADY_INITIALIZED="$(tr -d '[:space:]' < /tmp/hmdm_db_probe.txt)"
-    fi
+# Always probe actual DB state. Marker file is only an optimization hint and
+# must not prevent init when DB is empty/new.
+DB_ALREADY_INITIALIZED="0"
+if PGPASSWORD="${DB_PASSWORD}" psql \
+    -h "${DB_HOST}" \
+    -p "${DB_PORT}" \
+    -U "${DB_USER}" \
+    -d "${DB_NAME}" \
+    -t -A \
+    -c "SELECT CASE WHEN to_regclass('public.databasechangelog') IS NOT NULL AND EXISTS (SELECT 1 FROM public.databasechangelog) THEN '1' ELSE '0' END" \
+    > /tmp/hmdm_db_probe.txt 2>/dev/null; then
+    DB_ALREADY_INITIALIZED="$(tr -d '[:space:]' < /tmp/hmdm_db_probe.txt)"
+fi
 
-    if [ "${DB_ALREADY_INITIALIZED}" = "1" ]; then
-        echo "==> [hmdm] Existing DB detected (databasechangelog has rows), skipping seed SQL."
-        touch "${DB_INIT_MARKER}"
+if [ "${DB_ALREADY_INITIALIZED}" = "1" ]; then
+    echo "==> [hmdm] Existing DB detected (databasechangelog has rows), skipping seed SQL."
+    touch "${DB_INIT_MARKER}"
+else
+    if [ -f "${DB_INIT_MARKER}" ]; then
+        echo "==> [hmdm] DB marker exists but database is empty/uninitialized. Running seed SQL."
     else
         echo "==> [hmdm] First run detected – initialising database..."
-
-        if [ ! -f "${SQL_INIT_SCRIPT_PATH}" ]; then
-            echo "==> [hmdm] ERROR: SQL init script not found at ${SQL_INIT_SCRIPT_PATH}"
-        else
-            # Extract version from APK filename or use default
-            CLIENT_VERSION="6.31"
-            ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
-
-            TEMP_SQL="/tmp/hmdm_init_$$.sql"
-            TEMP_SQL_LOG="/tmp/hmdm_init_$$.log"
-
-            # Substitute placeholders in the SQL init script
-            # _HMDM_VERSION_ → app version string
-            # _HMDM_APK_URL_ → full download URL of the APK on this server
-            # _ADMIN_EMAIL_  → admin email
-            sed "s|_HMDM_VERSION_|${CLIENT_VERSION}|g; \
-                 s|_HMDM_APK_URL_|${APK_URL}|g; \
-                 s|_ADMIN_EMAIL_|${ADMIN_EMAIL}|g" \
-                "${SQL_INIT_SCRIPT_PATH}" > "${TEMP_SQL}"
-
-            if PGPASSWORD="${DB_PASSWORD}" psql \
-                -h "${DB_HOST}" \
-                -p "${DB_PORT}" \
-                -U "${DB_USER}" \
-                -d "${DB_NAME}" \
-                -v ON_ERROR_STOP=1 \
-                -f "${TEMP_SQL}" > "${TEMP_SQL_LOG}" 2>&1; then
-                echo "==> [hmdm] Database initialised successfully."
-                touch "${DB_INIT_MARKER}"
-            else
-                echo "==> [hmdm] ERROR: DB init script failed. See ${TEMP_SQL_LOG} inside the container."
-                cat "${TEMP_SQL_LOG}" || true
-            fi
-
-            rm -f "${TEMP_SQL}"
-        fi
     fi
-else
-    echo "==> [hmdm] Database already initialised, skipping seed."
+
+    if [ ! -f "${SQL_INIT_SCRIPT_PATH}" ]; then
+        echo "==> [hmdm] ERROR: SQL init script not found at ${SQL_INIT_SCRIPT_PATH}"
+    else
+        # Extract version from APK filename or use default
+        CLIENT_VERSION="6.31"
+        ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
+
+        TEMP_SQL="/tmp/hmdm_init_$$.sql"
+        TEMP_SQL_LOG="/tmp/hmdm_init_$$.log"
+
+        # Substitute placeholders in the SQL init script
+        # _HMDM_VERSION_ → app version string
+        # _HMDM_APK_URL_ → full download URL of the APK on this server
+        # _ADMIN_EMAIL_  → admin email
+        sed "s|_HMDM_VERSION_|${CLIENT_VERSION}|g; \
+             s|_HMDM_APK_URL_|${APK_URL}|g; \
+             s|_ADMIN_EMAIL_|${ADMIN_EMAIL}|g" \
+            "${SQL_INIT_SCRIPT_PATH}" > "${TEMP_SQL}"
+
+        if PGPASSWORD="${DB_PASSWORD}" psql \
+            -h "${DB_HOST}" \
+            -p "${DB_PORT}" \
+            -U "${DB_USER}" \
+            -d "${DB_NAME}" \
+            -v ON_ERROR_STOP=1 \
+            -f "${TEMP_SQL}" > "${TEMP_SQL_LOG}" 2>&1; then
+            echo "==> [hmdm] Database initialised successfully."
+            touch "${DB_INIT_MARKER}"
+        else
+            echo "==> [hmdm] ERROR: DB init script failed. See ${TEMP_SQL_LOG} inside the container."
+            cat "${TEMP_SQL_LOG}" || true
+        fi
+
+        rm -f "${TEMP_SQL}"
+    fi
 fi
 
 # ---------------------------------------------------------------------------
