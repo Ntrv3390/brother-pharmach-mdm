@@ -41,7 +41,7 @@ SETUP_STATE_FILE = SERVER_DIR / ".setup_completed.json"
 
 HOST = "127.0.0.1"
 PORT = 8765
-APP_VERSION = "setup-ui-1.1"
+APP_VERSION = "v1.0.4"
 
 STATE_LOCK = threading.Lock()
 STATE = {
@@ -374,9 +374,9 @@ button {{ padding: .7rem 1.2rem; }}
 </style>
 </head>
 <body>
-<h2>Brother Pharmach MDM - First-time Setup</h2>
+<h2>Brother Pharmach MDM - Setup</h2>
 <p class=\"note\">Version: {APP_VERSION}</p>
-<p class=\"note\">Fill values once, submit, and wait for health checks. QR will use your own APK URL only.</p>
+<p class=\"note\">Fill values once, submit, and wait for health checks.</p>
 
 <form id=\"setupForm\">
 <fieldset><legend>Server</legend>
