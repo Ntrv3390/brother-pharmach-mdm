@@ -226,8 +226,39 @@ def db_admin_exec(
         "-e", f"PGPASSWORD={admin_password}",
         "postgres",
         "psql",
+        "-h", "127.0.0.1",
+        "-p", values.get("DB_PORT", "5432"),
         "-v", "ON_ERROR_STOP=1",
         "-U", admin_user,
+        "-d", database,
+        "-c", sql,
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=str(SERVER_DIR),
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        append_log("ERROR: docker command not found")
+        return 127, ""
+
+    output = (proc.stdout or "") + (proc.stderr or "")
+    out = output.strip()
+    if out:
+        for line in out.splitlines():
+            append_log(line)
+    return proc.returncode, out
+
+
+def db_local_postgres_exec(sql: str, database: str = "postgres") -> tuple:
+    cmd = [
+        "docker", "compose", "exec", "-T",
+        "postgres",
+        "psql",
+        "-v", "ON_ERROR_STOP=1",
+        "-U", "postgres",
         "-d", database,
         "-c", sql,
     ]
@@ -298,8 +329,50 @@ def resolve_admin_credentials(values: dict) -> tuple:
     return None, None
 
 
+def wait_postgres_ready(values: dict, timeout_sec: int = 90) -> bool:
+    append_log("Waiting for PostgreSQL to accept connections...")
+    deadline = time.time() + timeout_sec
+    user = values.get("DB_USER", "postgres")
+    db_name = values.get("DB_NAME", "postgres")
+    port = values.get("DB_PORT", "5432")
+
+    while time.time() < deadline:
+        cmd = [
+            "docker", "compose", "exec", "-T",
+            "postgres",
+            "pg_isready",
+            "-h", "127.0.0.1",
+            "-p", port,
+            "-U", user,
+            "-d", db_name,
+        ]
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(SERVER_DIR),
+                capture_output=True,
+                text=True,
+            )
+        except FileNotFoundError:
+            append_log("ERROR: docker command not found")
+            return False
+
+        if proc.returncode == 0:
+            append_log("PostgreSQL is ready.")
+            return True
+
+        time.sleep(2)
+
+    append_log("ERROR: PostgreSQL was not ready before timeout.")
+    return False
+
+
 def ensure_db_prerequisites(values: dict) -> bool:
     append_log("Preparing PostgreSQL prerequisites (database/user)...")
+
+    if not wait_postgres_ready(values):
+        set_error("PostgreSQL container started, but the database is not ready yet. Please retry in a few seconds.")
+        return False
 
     db_name = values["DB_NAME"]
     db_user = values["DB_USER"]
@@ -310,11 +383,28 @@ def ensure_db_prerequisites(values: dict) -> bool:
     append_log("Checking PostgreSQL admin credentials...")
     admin_user, admin_password = resolve_admin_credentials(values)
     if not admin_user:
-        set_error(
-            "PostgreSQL admin login failed. Provide an existing admin account with "
-            "CREATEROLE and CREATEDB privileges."
+        append_log("Admin login failed. Trying local postgres bootstrap inside the container...")
+        bootstrap_sql = (
+            "DO $$ "
+            "BEGIN "
+            f"IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {sql_lit(requested_admin_user)}) THEN "
+            f"CREATE ROLE {sql_ident(requested_admin_user)} LOGIN CREATEDB CREATEROLE PASSWORD {sql_lit(requested_admin_password)}; "
+            "ELSE "
+            f"ALTER ROLE {sql_ident(requested_admin_user)} WITH LOGIN CREATEDB CREATEROLE PASSWORD {sql_lit(requested_admin_password)}; "
+            "END IF; "
+            "END $$;"
         )
-        return False
+        rc, _ = db_local_postgres_exec(bootstrap_sql)
+        if rc == 0:
+            append_log(f"Bootstrap succeeded. Using requested admin user '{requested_admin_user}'.")
+            admin_user = requested_admin_user
+            admin_password = requested_admin_password
+        else:
+            set_error(
+                "PostgreSQL admin login failed and bootstrap could not create the requested admin role. "
+                "Provide an existing admin account with CREATEROLE and CREATEDB privileges."
+            )
+            return False
 
     if admin_user != requested_admin_user:
         append_log(f"Requested admin user '{requested_admin_user}' was not available. Creating/updating it...")

@@ -431,46 +431,10 @@ SELECT pg_catalog.setval('public.plugin_devicelog_settings_rules_id_seq', 1, tru
 
 
 -- Register Work Time Plugin
-INSERT INTO permissions (name, description) VALUES ('plugin_worktime_access', 'Access to Work Time plugin');
-INSERT INTO userRolePermissions (roleId, permissionId) VALUES (1, currval('permissions_id_seq'));
-INSERT INTO userRolePermissions (roleId, permissionId) VALUES (2, currval('permissions_id_seq'));
-
-INSERT INTO plugins (
-    identifier, name, description,
-    javascriptModuleFile,
-    functionsViewTemplate,
-    settingsViewTemplate,
-    namelocalizationkey,
-    settingsPermission, functionsPermission, deviceFunctionsPermission
-) VALUES (
-    'worktime', 'Work Time', 'Manage working hours',
-    'app/components/plugins/worktime/worktime.module.js',
-    'app/components/plugins/worktime/views/worktime_policies.html',
-    'app/components/plugins/worktime/views/worktime_devices.html',
-    'plugin.worktime.localization.key.name',
-    'plugin_worktime_access', 'plugin_worktime_access', 'plugin_worktime_access'
-);
+-- NOTE: Work Time plugin is provisioned by Liquibase. Do not insert here.
 
 -- Register Call Log Plugin
-INSERT INTO permissions (name, description) VALUES ('plugin_calllog_access', 'Access to Call Log Plugin');
-INSERT INTO userRolePermissions (roleId, permissionId) VALUES (1, currval('permissions_id_seq'));
-INSERT INTO userRolePermissions (roleId, permissionId) VALUES (2, currval('permissions_id_seq'));
-
-INSERT INTO plugins (
-    identifier, name, description,
-    javascriptModuleFile,
-    functionsViewTemplate,
-    settingsViewTemplate,
-    namelocalizationkey,
-    settingsPermission, functionsPermission, deviceFunctionsPermission
-) VALUES (
-    'calllog', 'Call Log', 'Track device call logs',
-    'app/components/plugins/calllog/calllog.module.js',
-    'app/components/plugins/calllog/views/modal.html',
-    'app/components/plugins/calllog/views/settings.html',
-    'plugin.calllog.localization.plugin.name',
-    'plugin_calllog_access', 'plugin_calllog_access', 'plugin_calllog_access'
-);
+-- NOTE: Call Log plugin registration is handled by plugin migrations.
 
 -- Call Log plugin tables
 CREATE TABLE IF NOT EXISTS plugin_calllog_data (

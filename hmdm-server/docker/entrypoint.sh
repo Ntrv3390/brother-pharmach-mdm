@@ -106,22 +106,41 @@ APK_URL="${BASE_URL}/files/${APK_NAME}"
 echo "==> [hmdm] APK download URL: ${APK_URL}"
 
 # ---------------------------------------------------------------------------
-# Pre-process init SQL: substitute runtime placeholders so the Java app's
-# ExecuteInitSqlTask runs the correct values after Liquibase completes.
-# We do NOT run psql here – tables don't exist yet; Liquibase creates them
-# when Tomcat starts, and the app runs this file once the schema is ready.
+# Wait for PostgreSQL before deciding whether we should run init SQL.
+# We only run init SQL for an empty database (no Liquibase history table yet).
+# ---------------------------------------------------------------------------
+echo "==> [hmdm] Waiting for PostgreSQL at ${DB_HOST}:${DB_PORT}..."
+until pg_isready -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -q; do
+    echo "    PostgreSQL not ready yet, retrying in 3s..."
+    sleep 3
+done
+echo "==> [hmdm] PostgreSQL is ready."
+
+DB_HAS_SCHEMA="$(PGPASSWORD="${DB_PASSWORD}" psql \
+    -h "${DB_HOST}" \
+    -p "${DB_PORT}" \
+    -U "${DB_USER}" \
+    -d "${DB_NAME}" \
+    -tA \
+    -c "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='databasechangelog');" 2>/dev/null | tr -d '[:space:]')"
+
+# ---------------------------------------------------------------------------
+# Pre-process init SQL placeholders only for an empty database.
 # ---------------------------------------------------------------------------
 CLIENT_VERSION="${CLIENT_VERSION:-6.31}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
 
-if [ -f "${SQL_INIT_SCRIPT_PATH}" ]; then
+if [ "${DB_HAS_SCHEMA}" = "t" ] || [ "${DB_HAS_SCHEMA}" = "true" ]; then
+    echo "==> [hmdm] Existing database detected; skipping init SQL execution."
+    SQL_INIT_SCRIPT_PATH=""
+elif [ -f "${SQL_INIT_SCRIPT_PATH}" ]; then
     PROCESSED_SQL="/tmp/hmdm_init_processed.sql"
     sed "s|_HMDM_VERSION_|${CLIENT_VERSION}|g; \
          s|_HMDM_APK_URL_|${APK_URL}|g; \
          s|_ADMIN_EMAIL_|${ADMIN_EMAIL}|g" \
         "${SQL_INIT_SCRIPT_PATH}" > "${PROCESSED_SQL}"
     SQL_INIT_SCRIPT_PATH="${PROCESSED_SQL}"
-    echo "==> [hmdm] Init SQL pre-processed at ${PROCESSED_SQL} (version=${CLIENT_VERSION}, email=${ADMIN_EMAIL})"
+    echo "==> [hmdm] Empty database detected. Init SQL prepared at ${PROCESSED_SQL} (version=${CLIENT_VERSION}, email=${ADMIN_EMAIL})"
 else
     echo "==> [hmdm] WARNING: Init SQL not found at ${SQL_INIT_SCRIPT_PATH} – skipping pre-processing."
 fi
@@ -198,16 +217,6 @@ cat > "${CONTEXT_DIR}/ROOT.xml" << EOF
     <Parameter name="jwt.validityrememberme"  value="${JWT_VALIDITY_REMEMBER}"/>
 </Context>
 EOF
-
-# ---------------------------------------------------------------------------
-# Wait for PostgreSQL to be ready
-# ---------------------------------------------------------------------------
-echo "==> [hmdm] Waiting for PostgreSQL at ${DB_HOST}:${DB_PORT}..."
-until pg_isready -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -q; do
-    echo "    PostgreSQL not ready yet, retrying in 3s..."
-    sleep 3
-done
-echo "==> [hmdm] PostgreSQL is ready."
 
 # ---------------------------------------------------------------------------
 # Always update the APK URL + hash in the database (keeps DB in sync with
