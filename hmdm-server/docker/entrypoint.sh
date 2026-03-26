@@ -106,6 +106,27 @@ APK_URL="${BASE_URL}/files/${APK_NAME}"
 echo "==> [hmdm] APK download URL: ${APK_URL}"
 
 # ---------------------------------------------------------------------------
+# Pre-process init SQL: substitute runtime placeholders so the Java app's
+# ExecuteInitSqlTask runs the correct values after Liquibase completes.
+# We do NOT run psql here – tables don't exist yet; Liquibase creates them
+# when Tomcat starts, and the app runs this file once the schema is ready.
+# ---------------------------------------------------------------------------
+CLIENT_VERSION="${CLIENT_VERSION:-6.31}"
+ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
+
+if [ -f "${SQL_INIT_SCRIPT_PATH}" ]; then
+    PROCESSED_SQL="/tmp/hmdm_init_processed.sql"
+    sed "s|_HMDM_VERSION_|${CLIENT_VERSION}|g; \
+         s|_HMDM_APK_URL_|${APK_URL}|g; \
+         s|_ADMIN_EMAIL_|${ADMIN_EMAIL}|g" \
+        "${SQL_INIT_SCRIPT_PATH}" > "${PROCESSED_SQL}"
+    SQL_INIT_SCRIPT_PATH="${PROCESSED_SQL}"
+    echo "==> [hmdm] Init SQL pre-processed at ${PROCESSED_SQL} (version=${CLIENT_VERSION}, email=${ADMIN_EMAIL})"
+else
+    echo "==> [hmdm] WARNING: Init SQL not found at ${SQL_INIT_SCRIPT_PATH} – skipping pre-processing."
+fi
+
+# ---------------------------------------------------------------------------
 # Write log4j config (points to stdout + log files)
 # ---------------------------------------------------------------------------
 cp /opt/hmdm-setup/log4j-hmdm.xml "${BASE_DIRECTORY}/log4j-hmdm.xml"
@@ -187,70 +208,6 @@ until pg_isready -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -q; do
     sleep 3
 done
 echo "==> [hmdm] PostgreSQL is ready."
-
-# ---------------------------------------------------------------------------
-# First-run database initialisation
-# ---------------------------------------------------------------------------
-# Always probe actual DB state. Marker file is only an optimization hint and
-# must not prevent init when DB is empty/new.
-DB_ALREADY_INITIALIZED="0"
-if PGPASSWORD="${DB_PASSWORD}" psql \
-    -h "${DB_HOST}" \
-    -p "${DB_PORT}" \
-    -U "${DB_USER}" \
-    -d "${DB_NAME}" \
-    -t -A \
-    -c "SELECT CASE WHEN to_regclass('public.databasechangelog') IS NOT NULL AND EXISTS (SELECT 1 FROM public.databasechangelog) THEN '1' ELSE '0' END" \
-    > /tmp/hmdm_db_probe.txt 2>/dev/null; then
-    DB_ALREADY_INITIALIZED="$(tr -d '[:space:]' < /tmp/hmdm_db_probe.txt)"
-fi
-
-if [ "${DB_ALREADY_INITIALIZED}" = "1" ]; then
-    echo "==> [hmdm] Existing DB detected (databasechangelog has rows), skipping seed SQL."
-    touch "${DB_INIT_MARKER}"
-else
-    if [ -f "${DB_INIT_MARKER}" ]; then
-        echo "==> [hmdm] DB marker exists but database is empty/uninitialized. Running seed SQL."
-    else
-        echo "==> [hmdm] First run detected – initialising database..."
-    fi
-
-    if [ ! -f "${SQL_INIT_SCRIPT_PATH}" ]; then
-        echo "==> [hmdm] ERROR: SQL init script not found at ${SQL_INIT_SCRIPT_PATH}"
-    else
-        # Extract version from APK filename or use default
-        CLIENT_VERSION="6.31"
-        ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
-
-        TEMP_SQL="/tmp/hmdm_init_$$.sql"
-        TEMP_SQL_LOG="/tmp/hmdm_init_$$.log"
-
-        # Substitute placeholders in the SQL init script
-        # _HMDM_VERSION_ → app version string
-        # _HMDM_APK_URL_ → full download URL of the APK on this server
-        # _ADMIN_EMAIL_  → admin email
-        sed "s|_HMDM_VERSION_|${CLIENT_VERSION}|g; \
-             s|_HMDM_APK_URL_|${APK_URL}|g; \
-             s|_ADMIN_EMAIL_|${ADMIN_EMAIL}|g" \
-            "${SQL_INIT_SCRIPT_PATH}" > "${TEMP_SQL}"
-
-        if PGPASSWORD="${DB_PASSWORD}" psql \
-            -h "${DB_HOST}" \
-            -p "${DB_PORT}" \
-            -U "${DB_USER}" \
-            -d "${DB_NAME}" \
-            -v ON_ERROR_STOP=1 \
-            -f "${TEMP_SQL}" > "${TEMP_SQL_LOG}" 2>&1; then
-            echo "==> [hmdm] Database initialised successfully."
-            touch "${DB_INIT_MARKER}"
-        else
-            echo "==> [hmdm] ERROR: DB init script failed. See ${TEMP_SQL_LOG} inside the container."
-            cat "${TEMP_SQL_LOG}" || true
-        fi
-
-        rm -f "${TEMP_SQL}"
-    fi
-fi
 
 # ---------------------------------------------------------------------------
 # Always update the APK URL + hash in the database (keeps DB in sync with
