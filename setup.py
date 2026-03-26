@@ -212,9 +212,15 @@ def sql_lit(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def db_admin_exec(values: dict, sql: str, database: str = "postgres") -> tuple:
-    admin_user = values["DB_ADMIN_USER"]
-    admin_password = values["DB_ADMIN_PASSWORD"]
+def db_admin_exec(
+    values: dict,
+    sql: str,
+    database: str = "postgres",
+    admin_user: str = None,
+    admin_password: str = None,
+) -> tuple:
+    admin_user = admin_user if admin_user is not None else values["DB_ADMIN_USER"]
+    admin_password = admin_password if admin_password is not None else values["DB_ADMIN_PASSWORD"]
     cmd = [
         "docker", "compose", "exec", "-T",
         "-e", f"PGPASSWORD={admin_password}",
@@ -244,21 +250,94 @@ def db_admin_exec(values: dict, sql: str, database: str = "postgres") -> tuple:
     return proc.returncode, out
 
 
+def resolve_admin_credentials(values: dict) -> tuple:
+    existing = load_env(ENV_FILE)
+    candidates = [
+        (values.get("DB_ADMIN_USER", ""), values.get("DB_ADMIN_PASSWORD", ""), "form admin"),
+        (values.get("DB_USER", ""), values.get("DB_PASSWORD", ""), "form app user"),
+        (existing.get("DB_USER", ""), existing.get("DB_PASSWORD", ""), "existing .env app user"),
+        ("hmdm", "hmdm", "legacy default"),
+        ("postgres", "postgres", "postgres default"),
+    ]
+
+    seen = set()
+    for user, pwd, label in candidates:
+        key = (user, pwd)
+        if not user or not pwd or key in seen:
+            continue
+        seen.add(key)
+
+        rc, out = db_admin_exec(
+            values,
+            "SELECT rolcreaterole::int, rolcreatedb::int, rolsuper::int FROM pg_roles WHERE rolname = current_user;",
+            admin_user=user,
+            admin_password=pwd,
+        )
+        if rc != 0:
+            continue
+
+        lines = [ln.strip() for ln in out.splitlines() if ln.strip() and "|" in ln]
+        if not lines:
+            continue
+
+        parts = [p.strip() for p in lines[-1].split("|")]
+        if len(parts) != 3:
+            continue
+
+        try:
+            can_createrole = int(parts[0]) == 1
+            can_createdb = int(parts[1]) == 1
+            is_super = int(parts[2]) == 1
+        except ValueError:
+            continue
+
+        if is_super or (can_createrole and can_createdb):
+            append_log(f"Using PostgreSQL admin credentials from {label}: '{user}'")
+            return user, pwd
+
+    return None, None
+
+
 def ensure_db_prerequisites(values: dict) -> bool:
     append_log("Preparing PostgreSQL prerequisites (database/user)...")
 
     db_name = values["DB_NAME"]
     db_user = values["DB_USER"]
     db_password = values["DB_PASSWORD"]
+    requested_admin_user = values["DB_ADMIN_USER"]
+    requested_admin_password = values["DB_ADMIN_PASSWORD"]
 
     append_log("Checking PostgreSQL admin credentials...")
-    rc, _ = db_admin_exec(values, "SELECT 1;")
-    if rc != 0:
+    admin_user, admin_password = resolve_admin_credentials(values)
+    if not admin_user:
         set_error(
-            "PostgreSQL admin login failed. Please provide a DB admin user/password "
-            "with CREATEROLE and CREATEDB privileges."
+            "PostgreSQL admin login failed. Provide an existing admin account with "
+            "CREATEROLE and CREATEDB privileges."
         )
         return False
+
+    if admin_user != requested_admin_user:
+        append_log(f"Requested admin user '{requested_admin_user}' was not available. Creating/updating it...")
+        admin_role_sql = (
+            "DO $$ "
+            "BEGIN "
+            f"IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {sql_lit(requested_admin_user)}) THEN "
+            f"CREATE ROLE {sql_ident(requested_admin_user)} LOGIN CREATEDB CREATEROLE PASSWORD {sql_lit(requested_admin_password)}; "
+            "ELSE "
+            f"ALTER ROLE {sql_ident(requested_admin_user)} WITH LOGIN CREATEDB CREATEROLE PASSWORD {sql_lit(requested_admin_password)}; "
+            "END IF; "
+            "END $$;"
+        )
+        rc, _ = db_admin_exec(values, admin_role_sql, admin_user=admin_user, admin_password=admin_password)
+        if rc == 0:
+            append_log(f"Admin role '{requested_admin_user}' is ready and will be used.")
+            admin_user = requested_admin_user
+            admin_password = requested_admin_password
+        else:
+            append_log(
+                f"WARNING: Could not create requested admin role '{requested_admin_user}'. "
+                f"Continuing with '{admin_user}'."
+            )
 
     append_log(f"Ensuring DB role '{db_user}' exists...")
     role_sql = (
@@ -271,21 +350,21 @@ def ensure_db_prerequisites(values: dict) -> bool:
         "END IF; "
         "END $$;"
     )
-    rc, _ = db_admin_exec(values, role_sql)
+    rc, _ = db_admin_exec(values, role_sql, admin_user=admin_user, admin_password=admin_password)
     if rc != 0:
         set_error("Failed to create/update DB role. Ensure admin user has CREATEROLE privilege.")
         return False
 
     append_log(f"Ensuring database '{db_name}' exists...")
     exists_sql = f"SELECT 1 FROM pg_database WHERE datname = {sql_lit(db_name)};"
-    rc, out = db_admin_exec(values, exists_sql)
+    rc, out = db_admin_exec(values, exists_sql, admin_user=admin_user, admin_password=admin_password)
     if rc != 0:
         set_error("Failed to check database existence.")
         return False
 
     if "1" not in out:
         create_db_sql = f"CREATE DATABASE {sql_ident(db_name)} OWNER {sql_ident(db_user)};"
-        rc, _ = db_admin_exec(values, create_db_sql)
+        rc, _ = db_admin_exec(values, create_db_sql, admin_user=admin_user, admin_password=admin_password)
         if rc != 0:
             set_error("Failed to create database. Ensure admin user has CREATEDB privilege.")
             return False
@@ -294,7 +373,7 @@ def ensure_db_prerequisites(values: dict) -> bool:
         append_log(f"Database '{db_name}' already exists.")
 
     grant_db_sql = f"GRANT ALL PRIVILEGES ON DATABASE {sql_ident(db_name)} TO {sql_ident(db_user)};"
-    rc, _ = db_admin_exec(values, grant_db_sql)
+    rc, _ = db_admin_exec(values, grant_db_sql, admin_user=admin_user, admin_password=admin_password)
     if rc != 0:
         set_error("Failed to grant database privileges to application user.")
         return False
@@ -303,7 +382,7 @@ def ensure_db_prerequisites(values: dict) -> bool:
         f"ALTER SCHEMA public OWNER TO {sql_ident(db_user)}; "
         f"GRANT ALL ON SCHEMA public TO {sql_ident(db_user)};"
     )
-    rc, _ = db_admin_exec(values, schema_sql, database=db_name)
+    rc, _ = db_admin_exec(values, schema_sql, database=db_name, admin_user=admin_user, admin_password=admin_password)
     if rc != 0:
         append_log("WARNING: Could not update public schema owner/permissions; continuing.")
 
