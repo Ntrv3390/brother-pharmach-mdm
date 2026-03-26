@@ -1,0 +1,36 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts (rebuilt inside Docker)
+hmdm-android/app/build/
+hmdm-android/.gradle/
+hmdm-android/build/
+hmdm-server/server/target/
+hmdm-server/**/target/
+
+# IDE files
+.idea/
+*.iml
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker compose files (not needed in build context)
+hmdm-server/docker-compose.yml
+hmdm-server/.env
+
+# Setup wizard (host-side only, not needed inside the image)
+setup.py
+
+# Documentation and scripts not needed in image
+*.md
+DEPLOYMENT_PLAN.md
+hmdm-server/hmdm_install.sh
+
+# Pre-built APKs at root (we build fresh inside Docker)
+*.apk
+*.aab

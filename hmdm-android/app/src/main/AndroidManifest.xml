@@ -116,7 +116,6 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
     <application
-        android:testOnly="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/white_app_name"
         android:supportsRtl="true"

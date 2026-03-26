@@ -1,45 +1,89 @@
 # =============================================================================
-# Stage 1: Build – compile all Maven modules and produce launcher.war
+# Stage 1: Android APK Build
+# Builds the Brother Pharmach MDM Android launcher APK using the Android SDK.
 # =============================================================================
-FROM maven:3.8.8-eclipse-temurin-11 AS builder
+FROM eclipse-temurin:17-jdk AS android-builder
+
+# Install Android SDK Command-line Tools
+ENV ANDROID_HOME=/opt/android-sdk
+ENV PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/34.0.0
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget unzip curl python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download Android SDK command-line tools
+RUN mkdir -p ${ANDROID_HOME}/cmdline-tools && \
+    wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdtools.zip && \
+    unzip -q /tmp/cmdtools.zip -d /tmp/cmdtools-extracted && \
+    mv /tmp/cmdtools-extracted/cmdline-tools ${ANDROID_HOME}/cmdline-tools/latest && \
+    rm -rf /tmp/cmdtools.zip /tmp/cmdtools-extracted
+
+# Accept SDK licenses and install required components
+RUN yes | sdkmanager --licenses > /dev/null 2>&1 || true && \
+    sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+WORKDIR /android-build
+
+# Copy Android project and keystore
+COPY hmdm-android/ ./
+COPY brother-pharmach-release.jks ./
+
+# Copy the keystore into build context (keystore is already inside hmdm-android/)
+# We remove the org.gradle.java.home property because the Docker image uses a different Java path.
+RUN sed -i '/org.gradle.java.home/d' gradle.properties || true
+
+# Make gradlew executable and build the release APK
+RUN chmod +x gradlew && \
+    ./gradlew assembleOpensourceRelease --no-daemon --stacktrace -Dorg.gradle.jvmargs="-Xmx2g -Xms512m"
+
+# Compute SHA-256 (URL-safe Base64) hash used by QR code and store to file
+RUN APK_PATH="app/build/outputs/apk/opensource/release/app-opensource-release.apk" && \
+    python3 -c "import hashlib,base64,sys; print(base64.urlsafe_b64encode(hashlib.sha256(open(sys.argv[1],'rb').read()).digest()).decode())" \
+        "${APK_PATH}" > /android-build/apk_hash.txt && \
+    echo "APK SHA-256 (URL-safe Base64): $(cat /android-build/apk_hash.txt)"
+
+# =============================================================================
+# Stage 2: Server Build — compile all Maven modules and produce launcher.war
+# =============================================================================
+FROM maven:3.8.8-eclipse-temurin-11 AS server-builder
 
 WORKDIR /build
 
 # Copy POM files first for better layer caching
-COPY pom.xml .
-COPY common/pom.xml             common/
-COPY jwt/pom.xml                jwt/
-COPY notification/pom.xml       notification/
-COPY plugins/pom.xml            plugins/
+COPY hmdm-server/pom.xml .
+COPY hmdm-server/common/pom.xml             common/
+COPY hmdm-server/jwt/pom.xml                jwt/
+COPY hmdm-server/notification/pom.xml       notification/
+COPY hmdm-server/plugins/pom.xml            plugins/
 
-# Resolve plugin sub-module POMs (sub-modules are nested inside parent plugin dirs)
-COPY plugins/devicelog/pom.xml          plugins/devicelog/
-COPY plugins/devicelog/core/pom.xml     plugins/devicelog/core/
-COPY plugins/devicelog/postgres/pom.xml plugins/devicelog/postgres/
-COPY plugins/deviceinfo/pom.xml         plugins/deviceinfo/
-COPY plugins/audit/pom.xml              plugins/audit/
-COPY plugins/messaging/pom.xml          plugins/messaging/
-COPY plugins/xtra/pom.xml               plugins/xtra/
-COPY plugins/worktime/pom.xml           plugins/worktime/
-COPY plugins/worktime/core/pom.xml      plugins/worktime/core/
-COPY plugins/worktime/postgres/pom.xml  plugins/worktime/postgres/
-COPY plugins/calllog/pom.xml            plugins/calllog/
-COPY plugins/calllog/core/pom.xml       plugins/calllog/core/
-COPY plugins/calllog/postgres/pom.xml   plugins/calllog/postgres/
-COPY plugins/push/pom.xml               plugins/push/
-COPY plugins/platform/pom.xml           plugins/platform/
-COPY swagger/ui/pom.xml                 swagger/ui/
-COPY server/pom.xml                     server/
+# Resolve plugin sub-module POMs
+COPY hmdm-server/plugins/devicelog/pom.xml          plugins/devicelog/
+COPY hmdm-server/plugins/devicelog/core/pom.xml     plugins/devicelog/core/
+COPY hmdm-server/plugins/devicelog/postgres/pom.xml plugins/devicelog/postgres/
+COPY hmdm-server/plugins/deviceinfo/pom.xml         plugins/deviceinfo/
+COPY hmdm-server/plugins/audit/pom.xml              plugins/audit/
+COPY hmdm-server/plugins/messaging/pom.xml          plugins/messaging/
+COPY hmdm-server/plugins/xtra/pom.xml               plugins/xtra/
+COPY hmdm-server/plugins/worktime/pom.xml           plugins/worktime/
+COPY hmdm-server/plugins/worktime/core/pom.xml      plugins/worktime/core/
+COPY hmdm-server/plugins/worktime/postgres/pom.xml  plugins/worktime/postgres/
+COPY hmdm-server/plugins/calllog/pom.xml            plugins/calllog/
+COPY hmdm-server/plugins/calllog/core/pom.xml       plugins/calllog/core/
+COPY hmdm-server/plugins/calllog/postgres/pom.xml   plugins/calllog/postgres/
+COPY hmdm-server/plugins/push/pom.xml               plugins/push/
+COPY hmdm-server/plugins/platform/pom.xml           plugins/platform/
+COPY hmdm-server/swagger/ui/pom.xml                 swagger/ui/
+COPY hmdm-server/server/pom.xml                     server/
 
 # Pre-download dependencies (cached as a layer unless POMs change)
 RUN mvn dependency:go-offline -B --fail-never || true
 
-# Copy full source
-COPY . .
+# Copy full server source
+COPY hmdm-server/ .
 
-# Gener
+# Generate build.properties with placeholder values for Maven filtering.
 # The real runtime values come from environment variables at startup (entrypoint.sh).
-# These placeholder values are only used so the build succeedate a build.properties with placeholder values for Maven filtering.s.
 RUN cat > server/build.properties << 'EOF'
 jdbc.url=jdbc:postgresql://placeholder:5432/hmdm
 jdbc.driver=org.postgresql.Driver
@@ -85,33 +129,42 @@ RUN rm -rf /root/.m2/repository/io/github/classgraph
 RUN mvn install -DskipTests -U -B
 
 # =============================================================================
-# Stage 2: Runtime – Tomcat 9 + JRE 11
+# Stage 3: Runtime — Tomcat 9 + JRE 11
 # =============================================================================
 FROM tomcat:9.0-jre11
 
 LABEL maintainer="Brother Pharmach DevOps" \
       description="Brother Pharmach MDM Server (Headwind MDM fork)" \
-      version="0.1.0"
+      version="1.0.0"
 
-# Install aapt (required for APK analysis) and postgresql-client (pg_isready)
+# Install aapt (APK analysis) + postgresql-client (pg_isready) + python3 (hash)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-        aapt \
-        postgresql-client \
+    aapt \
+    postgresql-client \
+    python3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Remove default Tomcat webapps to keep image clean
+# Remove default Tomcat webapps
 RUN rm -rf /usr/local/tomcat/webapps/*
 
-# Copy the built WAR
-COPY --from=builder /build/server/target/launcher.war /usr/local/tomcat/webapps/ROOT.war
+# Copy the built WAR (from server-builder stage)
+COPY --from=server-builder /build/server/target/launcher.war /usr/local/tomcat/webapps/ROOT.war
 
-# Copy SQL init script for first-run database seeding
-COPY --from=builder /build/install/sql/hmdm_init.en.sql /opt/hmdm-setup/hmdm_init.en.sql
+# Copy SQL init script
+COPY --from=server-builder /build/install/sql/hmdm_init.en.sql /opt/hmdm-setup/hmdm_init.en.sql
+
+# Copy the freshly built Brother Pharmach MDM APK (from android-builder stage)
+COPY --from=android-builder \
+    /android-build/app/build/outputs/apk/opensource/release/app-opensource-release.apk \
+    /opt/hmdm-setup/brother-pharmach-mdm.apk
+
+# Copy precomputed APK hash file (used by entrypoint to seed/update DB)
+COPY --from=android-builder /android-build/apk_hash.txt /opt/hmdm-setup/apk_hash.txt
 
 # Copy Docker support scripts
-COPY docker/entrypoint.sh       /docker-entrypoint.sh
-COPY docker/log4j-hmdm.xml      /opt/hmdm-setup/log4j-hmdm.xml
+COPY hmdm-server/docker/entrypoint.sh  /docker-entrypoint.sh
+COPY hmdm-server/docker/log4j-hmdm.xml /opt/hmdm-setup/log4j-hmdm.xml
 
 # Create base directories and ensure correct permissions
 RUN mkdir -p /opt/hmdm/files /opt/hmdm/plugins /opt/hmdm/logs \
@@ -121,6 +174,7 @@ RUN mkdir -p /opt/hmdm/files /opt/hmdm/plugins /opt/hmdm/logs \
 # Create a non-root system user for Tomcat
 RUN groupadd --system hmdm && useradd --system --gid hmdm --no-create-home hmdm \
     && chown -R hmdm:hmdm /opt/hmdm \
+    && chown -R hmdm:hmdm /opt/hmdm-setup \
     && chown -R hmdm:hmdm /usr/local/tomcat/logs \
     && chown -R hmdm:hmdm /usr/local/tomcat/work \
     && chown -R hmdm:hmdm /usr/local/tomcat/temp \

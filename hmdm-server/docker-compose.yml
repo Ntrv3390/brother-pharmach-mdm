@@ -27,8 +27,8 @@ services:
   # ── hmdm-server (Tomcat 9) ──────────────────────────────────────────────────
   hmdm:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: hmdm-server/Dockerfile
     image: hmdm-server:latest
     container_name: hmdm-server
     restart: unless-stopped
@@ -97,6 +97,9 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: hmdm-cloudflared
     restart: unless-stopped
+    # Only started when CLOUDFLARE_TUNNEL_TOKEN is set.
+    # setup.py passes --profile tunnel automatically when the token is present.
+    profiles: [tunnel]
     depends_on:
       hmdm:
         condition: service_healthy
