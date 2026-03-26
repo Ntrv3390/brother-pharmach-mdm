@@ -27,9 +27,8 @@ WORKDIR /android-build
 
 # Copy Android project and keystore
 COPY hmdm-android/ ./
-COPY brother-pharmach-release.jks ./
 
-# Copy the keystore into build context (keystore is already inside hmdm-android/)
+# Keep the keystore bundled in hmdm-android/; do not overwrite it from repository root.
 # We remove the org.gradle.java.home property because the Docker image uses a different Java path.
 RUN sed -i '/org.gradle.java.home/d' gradle.properties || true
 
