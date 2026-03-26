@@ -41,6 +41,7 @@ SETUP_STATE_FILE = SERVER_DIR / ".setup_completed.json"
 
 HOST = "127.0.0.1"
 PORT = 8765
+APP_VERSION = "setup-ui-1.1"
 
 STATE_LOCK = threading.Lock()
 STATE = {
@@ -331,7 +332,7 @@ def render_page() -> str:
 <html>
 <head>
 <meta charset=\"utf-8\" />
-<title>Brother Pharmach MDM - Setup Complete</title>
+    <title>Brother Pharmach MDM - Setup Complete ({APP_VERSION})</title>
 <style>
 body {{ font-family: sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }}
 .card {{ border: 1px solid #ddd; border-radius: 8px; padding: 1rem; }}
@@ -340,7 +341,8 @@ body {{ font-family: sans-serif; max-width: 760px; margin: 2rem auto; padding: 0
 </style>
 </head>
 <body>
-<h2>Setup already completed</h2>
+    <h2>Setup already completed</h2>
+    <p class=\"small\">Version: {APP_VERSION}</p>
 <div class=\"card\">
 <p>This setup is one-time only and has already been completed.</p>
 <p><a class=\"btn\" href=\"{done_url}\" target=\"_blank\" rel=\"noopener\">Continue to Admin Panel</a></p>
@@ -356,7 +358,7 @@ body {{ font-family: sans-serif; max-width: 760px; margin: 2rem auto; padding: 0
 <html>
 <head>
 <meta charset=\"utf-8\" />
-<title>Brother Pharmach MDM - First Setup</title>
+<title>Brother Pharmach MDM - First Setup ({APP_VERSION})</title>
 <style>
 body {{ font-family: sans-serif; max-width: 900px; margin: 1rem auto; padding: 0 1rem; }}
 .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }}
@@ -373,6 +375,7 @@ button {{ padding: .7rem 1.2rem; }}
 </head>
 <body>
 <h2>Brother Pharmach MDM - First-time Setup</h2>
+<p class=\"note\">Version: {APP_VERSION}</p>
 <p class=\"note\">Fill values once, submit, and wait for health checks. QR will use your own APK URL only.</p>
 
 <form id=\"setupForm\">
@@ -454,7 +457,7 @@ async function pollStatus() {{
     const resp = await fetch('/status');
     const data = await resp.json();
     statusEl.textContent = 'Status: ' + data.phase + (data.error ? ' | ERROR: ' + data.error : '');
-    logsEl.textContent = data.logs.join('\n');
+    logsEl.textContent = data.logs.join('\\n');
     logsEl.scrollTop = logsEl.scrollHeight;
 
     if (data.done) {{
@@ -481,6 +484,9 @@ class SetupHandler(BaseHTTPRequestHandler):
         raw = json.dumps(payload).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
@@ -489,6 +495,9 @@ class SetupHandler(BaseHTTPRequestHandler):
         raw = body.encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
