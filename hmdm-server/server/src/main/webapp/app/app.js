@@ -74,11 +74,22 @@ angular.module('headwind-kiosk',
 
     })
     .constant("localizeText", function (locale, key) {
-        var value = document.localization[locale][key];
-        if (!value) {
-//            console.error('Message key ', key, ' is missing from I18N resource bundle for locale ', locale);
+        var bundles = document.localization || {};
+        var localeBundle = bundles[locale] || {};
+        var englishBundle = bundles['en_US'] || {};
+
+        var value = localeBundle[key] || englishBundle[key];
+        if (value) {
+            return value;
         }
-        return value ? value : key;
+
+        // Always return an English-like readable text instead of a raw i18n key.
+        var fallback = (key || '').toString().replace(/[._]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (fallback) {
+            return fallback.charAt(0).toUpperCase() + fallback.slice(1);
+        }
+
+        return 'Text is unavailable';
     })
     .config(['$provide', function ($provide) {
         $provide.decorator('$state', ['$delegate', '$window',

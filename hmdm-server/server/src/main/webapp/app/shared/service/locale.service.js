@@ -42,22 +42,23 @@ angular.module('headwind-kiosk')
                 return localizeText(locale, key);
             },
             localizeServerResponse: function (response) {
-                var key = response.message;
-                var value = document.localization[locale][key];
-                if (value) {
-                    if (response.data) {
-                        for (var p in response.data) {
-                            if (response.data.hasOwnProperty(p)) {
-                                value = value.replace('${' + p + '}', response.data[p]);
-                            }
+                var key = (response && response.message) ? response.message : 'error.internal.server';
+                var value = localizeText(locale, key);
+
+                if (response && response.data && value) {
+                    for (var p in response.data) {
+                        if (response.data.hasOwnProperty(p)) {
+                            value = value.replace('${' + p + '}', response.data[p]);
                         }
                     }
-
-                    return value;
-                } else {
-                    console.error('Message key ', key, ' is missing from I18N resource bundle for locale ', locale);
-                    return document.localization[locale]['error.internal.server'];
                 }
+
+                if (value && value !== 'Text is unavailable') {
+                    return value;
+                }
+
+                var genericFallback = localizeText(ENGLISH, 'error.internal.server');
+                return genericFallback && genericFallback !== 'Text is unavailable' ? genericFallback : 'Internal server error';
             },
             getLocale: function () {
                 return locale;
