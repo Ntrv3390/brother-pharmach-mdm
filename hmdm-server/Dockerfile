@@ -33,7 +33,9 @@ COPY hmdm-android/ ./
 RUN sed -i '/org.gradle.java.home/d' gradle.properties || true
 
 # Make gradlew executable and build the release APK
-RUN chmod +x gradlew && \
+# Strip Windows CRLF line endings (gradlew checked out on Windows has \r in shebang,
+# which causes Linux to report "./gradlew: not found" with exit code 127)
+RUN sed -i 's/\r$//' gradlew && chmod +x gradlew && \
     ./gradlew assembleOpensourceRelease --no-daemon --stacktrace -Dorg.gradle.jvmargs="-Xmx2g -Xms512m"
 
 # Compute SHA-256 (URL-safe Base64) hash used by QR code and store to file
