@@ -33,7 +33,7 @@ android {
     compileSdkVersion 34
     defaultConfig {
         applicationId "com.brother.pharmach.mdm.launcher"
-        minSdkVersion 16
+        minSdkVersion 21
         targetSdkVersion 34
         versionCode 15310
         versionName "6.31"
