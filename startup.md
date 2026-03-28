@@ -1,18 +1,11 @@
-# Brother Pharmach MDM - Windows Startup Guide
-
-This guide is for a **Windows server** where the full project folder is already copied.
-
-Goal:
-- Build Android APK + server in Docker
-- Start database + server + tunnel
-- Use your own APK URL in QR code (not h-mdm.com)
+# Brother Pharmach MDM
 
 ## 1. What to install on Windows
 
 Install these first:
 - Docker Desktop (latest)
 - Python 3.10 or newer
-- Git (optional, only if you pull updates)
+- Git 
 
 After installing:
 - Open Docker Desktop and wait until it says Docker is running.
@@ -46,9 +39,9 @@ This will:
 ## 4. Fill setup form correctly
 
 Important values:
-- `BASE_URL`: your public URL (example: `https://brothers-mdm.com`)
+- `BASE_URL`: your public URL (`https://brothers-mdm.com`)
 - `DB_PASSWORD`: strong password
-- `CLOUDFLARE_TUNNEL_TOKEN`: optional (needed if using cloudflared tunnel)
+- `CLOUDFLARE_TUNNEL_TOKEN`: keep it as it is
 
 Then click **Start Setup**.
 
@@ -68,9 +61,7 @@ After setup:
 - APK is copied to server files directory
 - DB is updated with local APK URL and APK hash
 - QR code uses your URL:
-  - `https://your-domain/files/brother-pharmach-mdm.apk`
-
-So device will not download from h-mdm.com.
+  - `https://brothes-mdm.com/files/brother-pharmach-mdm.apk`
 
 ## 7. One-time setup rule
 
