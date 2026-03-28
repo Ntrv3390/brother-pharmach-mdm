@@ -130,7 +130,8 @@ RUN mvn install -DskipTests -U -B
 # =============================================================================
 # Stage 3: Runtime — Tomcat 9 + JRE 11
 # =============================================================================
-FROM tomcat:9.0-jre11
+# FROM tomcat:9.0-jre11
+FROM tomcat:9.0
 
 LABEL maintainer="Brother Pharmach DevOps" \
       description="Brother Pharmach MDM Server (Headwind MDM fork)" \
