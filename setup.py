@@ -480,7 +480,7 @@ def ensure_db_prerequisites(values: dict) -> bool:
     return True
 
 
-def wait_http_local(http_port: str, timeout_sec: int = 180) -> bool:
+def wait_http_local(http_port: str, timeout_sec: int = 600) -> bool:
     url = f"http://localhost:{http_port}/"
     deadline = time.time() + timeout_sec
     while time.time() < deadline:
@@ -576,6 +576,11 @@ def compose_worker(values: dict):
     set_phase("starting")
     append_log("Starting containers...")
     rc = run_compose_stream(profile_args + ["up", "-d"], SERVER_DIR)
+    if rc != 0 and use_tunnel:
+        append_log(
+            "WARNING: Tunnel profile startup failed. Retrying core services without tunnel profile..."
+        )
+        rc = run_compose_stream(["up", "-d"], SERVER_DIR)
     if rc != 0:
         set_error(f"docker compose up -d failed (exit {rc})")
         return

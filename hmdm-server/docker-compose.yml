@@ -90,8 +90,9 @@ services:
         ["CMD-SHELL", "curl -sf http://localhost:8080/ > /dev/null || exit 1"]
       interval: 30s
       timeout: 15s
-      retries: 10
-      start_period: 240s
+      retries: 20
+      # First boot can be slow on client servers (Liquibase/plugin initialization).
+      start_period: 600s
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -102,7 +103,9 @@ services:
     profiles: [tunnel]
     depends_on:
       hmdm:
-        condition: service_healthy
+        # Avoid blocking startup on slow first-boot health checks.
+        # cloudflared can reconnect while hmdm finishes initialization.
+        condition: service_started
     command: tunnel --no-autoupdate --url http://hmdm:8080 run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     networks:
       - hmdm_net
