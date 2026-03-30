@@ -1,53 +1,303 @@
 <!-- Localization completed -->
-<div ng-if="!isIE" class="auth-shell">
-    <div class="auth-background"></div>
-    <div class="auth-orb auth-orb-1"></div>
-    <div class="auth-orb auth-orb-2"></div>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
 
-    <div class="auth-card panel panel-default login" ng-class='{"panel-danger": errorMessage, "panel-success": successMessage}'>
-        <div class="auth-brand" ng-if="rebranding">
-            <img src="rest/public/logo" alt="Logo">
+    .bp-auth-page,
+    .bp-auth-page * {
+        box-sizing: border-box;
+        font-family: "Outfit", "Segoe UI", sans-serif;
+    }
+
+    .bp-auth-page {
+        min-height: 100vh;
+        padding: 30px 16px 72px;
+        position: relative;
+        overflow: hidden;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(16, 138, 255, 0.2) 0%, transparent 42%),
+            radial-gradient(circle at 100% 100%, rgba(8, 196, 151, 0.2) 0%, transparent 40%),
+            linear-gradient(120deg, #f5f9ff 0%, #edf7f2 100%);
+    }
+
+    .bp-auth-wrap {
+        max-width: 1020px;
+        margin: 24px auto 0;
+        border-radius: 26px;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: 1.1fr 1fr;
+        box-shadow: 0 22px 60px rgba(18, 34, 63, 0.2);
+        background: #ffffff;
+        animation: bpAuthEnter 320ms ease;
+    }
+
+    .bp-auth-brand {
+        position: relative;
+        padding: 40px;
+        color: #e9f4ff;
+        background: linear-gradient(155deg, #052f5f 0%, #0065b8 50%, #14a085 100%);
+    }
+
+    .bp-auth-brand::after {
+        content: "";
+        position: absolute;
+        width: 260px;
+        height: 260px;
+        border-radius: 999px;
+        right: -120px;
+        top: -90px;
+        background: rgba(255, 255, 255, 0.13);
+    }
+
+    .bp-auth-brand-logo {
+        max-width: 240px;
+        max-height: 96px;
+        width: auto;
+        height: auto;
+        margin-bottom: 18px;
+        position: relative;
+        z-index: 1;
+        filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.18));
+    }
+
+    .bp-auth-brand-title {
+        margin: 0;
+        font-size: 34px;
+        font-weight: 800;
+        letter-spacing: 0.4px;
+        line-height: 1.08;
+        position: relative;
+        z-index: 1;
+    }
+
+    .bp-auth-brand-copy {
+        margin-top: 14px;
+        color: rgba(232, 246, 255, 0.88);
+        font-size: 16px;
+        max-width: 300px;
+        line-height: 1.45;
+        position: relative;
+        z-index: 1;
+    }
+
+    .bp-auth-brand-meta {
+        margin-top: 26px;
+        font-size: 13px;
+        color: rgba(233, 245, 255, 0.82);
+        position: relative;
+        z-index: 1;
+    }
+
+    .bp-auth-form {
+        padding: 38px 36px 34px;
+        background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+    }
+
+    .bp-auth-heading {
+        margin: 0;
+        color: #122849;
+        font-size: 30px;
+        font-weight: 800;
+        letter-spacing: 0.2px;
+    }
+
+    .bp-auth-subheading {
+        margin: 8px 0 18px;
+        color: #60748f;
+        font-size: 15px;
+    }
+
+    .bp-auth-message {
+        border-radius: 12px;
+        padding: 11px 14px;
+        margin-bottom: 12px;
+        font-weight: 500;
+    }
+
+    .bp-auth-message-error {
+        background: #ffe8e9;
+        color: #9f1f2e;
+    }
+
+    .bp-auth-message-success {
+        background: #e8f8ee;
+        color: #1f7a44;
+    }
+
+    .bp-auth-form .form-group {
+        margin-bottom: 15px;
+    }
+
+    .bp-auth-form label {
+        display: block;
+        margin-bottom: 7px;
+        color: #1f3555;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .bp-auth-input {
+        width: 100%;
+        height: 46px;
+        border: 1px solid #cad7e8;
+        border-radius: 12px;
+        font-size: 15px;
+        padding: 11px 14px;
+        box-shadow: none;
+        transition: all 160ms ease;
+    }
+
+    .bp-auth-input:focus {
+        border-color: #1680ed;
+        box-shadow: 0 0 0 3px rgba(22, 128, 237, 0.16);
+        outline: none;
+    }
+
+    .bp-auth-links {
+        margin: 4px 0 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        color: #5f7490;
+        font-size: 13px;
+    }
+
+    .bp-auth-links .action-link {
+        color: #006bd1;
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    .bp-auth-links .action-link:hover {
+        color: #024f99;
+        text-decoration: underline;
+    }
+
+    .bp-auth-submit {
+        width: 100%;
+        height: 48px;
+        border: none;
+        border-radius: 12px;
+        font-size: 15px;
+        font-weight: 700;
+        color: #fff;
+        background: linear-gradient(135deg, #0a74f2 0%, #06b37f 100%);
+        transition: transform 120ms ease, box-shadow 180ms ease;
+    }
+
+    .bp-auth-submit:hover,
+    .bp-auth-submit:focus {
+        color: #fff;
+        transform: translateY(-1px);
+        box-shadow: 0 12px 24px rgba(10, 116, 242, 0.28);
+    }
+
+    .bp-auth-submit[disabled],
+    .bp-auth-submit[disabled]:hover {
+        opacity: 0.6;
+        transform: none;
+        box-shadow: none;
+        cursor: not-allowed;
+    }
+
+    .bp-auth-page .login-footer {
+        position: fixed;
+        bottom: 8px;
+        left: 0;
+        width: 100%;
+        border-top: none;
+        color: #5c6f88;
+        font-weight: 500;
+    }
+
+    @keyframes bpAuthEnter {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @media (max-width: 900px) {
+        .bp-auth-wrap {
+            grid-template-columns: 1fr;
+        }
+
+        .bp-auth-brand {
+            padding: 28px 26px;
+        }
+
+        .bp-auth-brand-logo {
+            max-height: 74px;
+            max-width: 200px;
+            margin-bottom: 12px;
+        }
+
+        .bp-auth-brand-title {
+            font-size: 28px;
+        }
+
+        .bp-auth-form {
+            padding: 28px 22px;
+        }
+
+        .bp-auth-heading {
+            font-size: 26px;
+        }
+    }
+</style>
+
+<div ng-if="!isIE" class="bp-auth-page">
+    <div class="bp-auth-wrap" ng-class='{"panel-danger": errorMessage, "panel-success": successMessage}'>
+        <div class="bp-auth-brand">
+            <img ng-if="rebranding" class="bp-auth-brand-logo" src="rest/public/logo" alt="Logo">
+            <h1 class="bp-auth-brand-title">Brother Pharmach MDM</h1>
+            <div class="bp-auth-brand-copy">Unified control for devices, apps, and secure workflows across your organization.</div>
+            <div class="bp-auth-brand-meta">Enterprise mobility platform</div>
         </div>
 
-        <div class="auth-title" localized>login.submit</div>
-        <div class="auth-subtitle">Secure access to your device management panel</div>
+        <div class="bp-auth-form">
+            <h2 class="bp-auth-heading">Welcome back</h2>
+            <div class="bp-auth-subheading">Sign in to continue to the admin console</div>
 
-        <div class='auth-message panel-heading' ng-if='errorMessage'>{{errorMessage}}</div>
-        <div class='auth-message success panel-heading' ng-if='successMessage'>{{successMessage}}</div>
+            <div class='bp-auth-message bp-auth-message-error' ng-if='errorMessage'>{{errorMessage}}</div>
+            <div class='bp-auth-message bp-auth-message-success' ng-if='successMessage'>{{successMessage}}</div>
 
-        <div class='panel-body auth-body'>
             <form name='loginForm' ng-submit='onLogin()'>
                 <div class='form-group'>
                     <label for='username' localized>login.username</label>
-                    <input type='text' class='form-control auth-input' id='username'
+                    <input type='text' class='form-control bp-auth-input' id='username'
                            ng-model='login.username' localized-placeholder="login.username.placeholder"
                            required/>
                 </div>
                 <div class='form-group'>
                     <label for='password' localized>login.password</label>
-                    <input type='password' class='form-control auth-input' id='password'
+                    <input type='password' class='form-control bp-auth-input' id='password'
                            ng-model='login.password' localized-placeholder='login.password.placeholder'
                            required/>
                 </div>
 
-                <div class="auth-links">
+                <div class="bp-auth-links">
                     <div ng-if="canRecover"><a class="action-link" ng-click="recoverPassword()" localized>login.password.recovery</a></div>
                     <div ng-if="rebranding.signupLink"><span localized>login.no.account</span> <a class="action-link" href="{{rebranding.signupLink}}" localized>login.signup</a></div>
                     <div ng-if="!rebranding.signupLink && canSignup"><span localized>login.no.account</span> <a class="action-link" ng-click="signup()" localized>login.signup</a></div>
                 </div>
 
-                <button type='submit' class='btn btn-default auth-submit'
+                <button type='submit' class='btn btn-default bp-auth-submit'
                         ng-disabled='loginForm.$invalid' localized>login.submit</button>
             </form>
         </div>
+    </div>
+
+    <div class="login-footer" ng-if="rebranding">
+        Copyright {{rebranding.vendorName}}
     </div>
 </div>
 
 <div class='content-wrapper width-1000' ng-if="isIE">
     <div localized>ie.browser.notice.1</div>
     <div ng-bind-html="ieBrowserNotice2"></div>
-</div>
-
-<div class="login-footer" ng-if="rebranding && !isIE">
-    Copyright {{rebranding.vendorName}}
 </div>
