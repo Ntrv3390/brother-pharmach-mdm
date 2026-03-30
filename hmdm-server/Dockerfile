@@ -169,8 +169,11 @@ COPY hmdm-server/docker/entrypoint.sh  /docker-entrypoint.sh
 COPY hmdm-server/docker/log4j-hmdm.xml /opt/hmdm-setup/log4j-hmdm.xml
 
 # Create base directories and ensure correct permissions
+# Strip Windows CRLF line endings from entrypoint script (checked out on Windows has \r in shebang,
+# which causes Linux to report "no such file or directory" when trying to execute)
 RUN mkdir -p /opt/hmdm/files /opt/hmdm/plugins /opt/hmdm/logs \
              /usr/local/tomcat/conf/Catalina/localhost \
+    && sed -i 's/\r$//' /docker-entrypoint.sh \
     && chmod +x /docker-entrypoint.sh
 
 # Create a non-root system user for Tomcat
