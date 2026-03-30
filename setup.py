@@ -204,6 +204,53 @@ def run_compose_capture(args, cwd: Path, log_command: bool = True) -> tuple:
     return proc.returncode, out
 
 
+def to_bool(value: str) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def remove_project_images() -> bool:
+    append_log("Removing project-related Docker images...")
+
+    rc, out = run_compose_capture(["--profile", "tunnel", "images", "-q"], SERVER_DIR)
+    refs = set()
+    if rc == 0 and out:
+        for line in out.splitlines():
+            line = line.strip()
+            if line:
+                refs.add(line)
+
+    refs.update({
+        "hmdm-server:latest",
+        "postgres:15-alpine",
+        "cloudflare/cloudflared:latest",
+    })
+
+    all_ok = True
+    for ref in sorted(refs):
+        cmd = ["docker", "image", "rm", "-f", ref]
+        append_log("$ " + " ".join(cmd))
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(SERVER_DIR),
+                capture_output=True,
+                text=True,
+            )
+        except FileNotFoundError:
+            append_log("ERROR: docker command not found")
+            return False
+
+        output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+        if output:
+            for line in output.splitlines():
+                append_log(line)
+
+        if proc.returncode != 0 and "No such image" not in output and "reference does not exist" not in output:
+            all_ok = False
+
+    return all_ok
+
+
 def sql_ident(value: str) -> str:
     return '"' + value.replace('"', '""') + '"'
 
@@ -532,6 +579,9 @@ def validate_form(v: dict) -> str:
         except ValueError:
             return f"{p} must be a valid integer"
 
+    if not v.get("CLOUDFLARE_TUNNEL_TOKEN", "").strip():
+        return "CLOUDFLARE_TUNNEL_TOKEN is required so cloudflared can start automatically"
+
     return ""
 
 
@@ -554,12 +604,24 @@ def compose_worker(values: dict):
         append_log("ERROR: Docker is unavailable")
         return
 
-    use_tunnel = bool(values.get("CLOUDFLARE_TUNNEL_TOKEN", "").strip())
-    profile_args = ["--profile", "tunnel"] if use_tunnel else []
+    force_rebuild = to_bool(values.get("RESET_FROM_SCRATCH", "0"))
+    profile_args = ["--profile", "tunnel"]
+
+    if force_rebuild:
+        set_phase("cleanup")
+        append_log("Force rebuild is ON: removing containers, volumes (including DB), and images...")
+        rc = run_compose_stream(profile_args + ["down", "--volumes", "--remove-orphans"], SERVER_DIR)
+        if rc != 0:
+            set_error(f"docker compose down --volumes failed (exit {rc})")
+            return
+        if not remove_project_images():
+            set_error("Failed to remove one or more Docker images during force rebuild.")
+            return
+        append_log("Cleanup completed. Starting from scratch.")
 
     set_phase("db-prerequisites")
     append_log("Starting PostgreSQL container for DB pre-checks...")
-    rc = run_compose_stream(["up", "-d", "postgres"], SERVER_DIR)
+    rc = run_compose_stream(profile_args + ["up", "-d", "postgres"], SERVER_DIR)
     if rc != 0:
         set_error(f"docker compose up -d postgres failed (exit {rc})")
         return
@@ -568,19 +630,17 @@ def compose_worker(values: dict):
 
     set_phase("building")
     append_log("Starting Docker build (Android APK + server)...")
-    rc = run_compose_stream(profile_args + ["build"], SERVER_DIR)
+    build_args = profile_args + ["build"]
+    if force_rebuild:
+        build_args.extend(["--no-cache", "--pull"])
+    rc = run_compose_stream(build_args, SERVER_DIR)
     if rc != 0:
         set_error(f"docker compose build failed (exit {rc})")
         return
 
     set_phase("starting")
-    append_log("Starting containers...")
-    rc = run_compose_stream(profile_args + ["up", "-d"], SERVER_DIR)
-    if rc != 0 and use_tunnel:
-        append_log(
-            "WARNING: Tunnel profile startup failed. Retrying core services without tunnel profile..."
-        )
-        rc = run_compose_stream(["up", "-d"], SERVER_DIR)
+    append_log("Starting required containers (postgres, hmdm-server, cloudflared)...")
+    rc = run_compose_stream(profile_args + ["up", "-d", "postgres", "hmdm", "cloudflared"], SERVER_DIR)
     if rc != 0:
         set_error(f"docker compose up -d failed (exit {rc})")
         return
@@ -638,6 +698,7 @@ def parse_form_data(body: bytes) -> dict:
         "SMTP_PASSWORD": g("SMTP_PASSWORD", existing.get("SMTP_PASSWORD", "")),
         "SMTP_FROM": g("SMTP_FROM", existing.get("SMTP_FROM", "")),
         "CLOUDFLARE_TUNNEL_TOKEN": g("CLOUDFLARE_TUNNEL_TOKEN", existing.get("CLOUDFLARE_TUNNEL_TOKEN", "")),
+        "RESET_FROM_SCRATCH": "1" if g("RESET_FROM_SCRATCH", "") else "0",
     }
     return values
 
@@ -648,31 +709,13 @@ def render_page() -> str:
 
     base_url = html.escape(existing.get("BASE_URL", "https://brothers-mdm.com"))
     admin_email = html.escape(existing.get("ADMIN_EMAIL", "admin@example.com"))
-
+    previous_setup_note = ""
     if done.get("completed"):
-        done_url = html.escape(done.get("base_url", existing.get("BASE_URL", "https://brothers-mdm.com")))
-        return f"""<!doctype html>
-<html>
-<head>
-<meta charset=\"utf-8\" />
-    <title>Brother Pharmach MDM - Setup Complete ({APP_VERSION})</title>
-<style>
-body {{ font-family: sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }}
-.card {{ border: 1px solid #ddd; border-radius: 8px; padding: 1rem; }}
-.btn {{ display: inline-block; padding: .7rem 1rem; border: 1px solid #333; border-radius: 6px; text-decoration: none; }}
-.small {{ color: #666; font-size: 0.9rem; }}
-</style>
-</head>
-<body>
-    <h2>Setup already completed</h2>
-    <p class=\"small\">Version: {APP_VERSION}</p>
-<div class=\"card\">
-<p>This setup is one-time only and has already been completed.</p>
-<p><a class=\"btn\" href=\"{done_url}\" target=\"_blank\" rel=\"noopener\">Continue to Admin Panel</a></p>
-<p class=\"small\">To rerun setup manually, delete: {SETUP_STATE_FILE}</p>
-</div>
-</body>
-</html>"""
+        previous_setup_note = (
+            '<p class="note">Previous setup detected for URL: '
+            + html.escape(done.get("base_url", ""))
+            + '. You can run setup again.</p>'
+        )
 
     def val(name: str, default: str) -> str:
         return html.escape(existing.get(name, default))
@@ -700,6 +743,7 @@ button {{ padding: .7rem 1.2rem; }}
 <h2>Brother Pharmach MDM - Setup</h2>
 <p class=\"note\">Version: {APP_VERSION}</p>
 <p class=\"note\">Fill values once, submit, and wait for health checks.</p>
+{previous_setup_note}
 
 <form id=\"setupForm\">
 <fieldset><legend>Server</legend>
@@ -742,7 +786,14 @@ button {{ padding: .7rem 1.2rem; }}
 <div><label>SMTP_USERNAME</label><input name=\"SMTP_USERNAME\" value=\"{val('SMTP_USERNAME','')}\" /></div>
 <div><label>SMTP_PASSWORD</label><input type=\"password\" name=\"SMTP_PASSWORD\" value=\"{val('SMTP_PASSWORD','')}\" /></div>
 <div><label>SMTP_FROM</label><input name=\"SMTP_FROM\" value=\"{val('SMTP_FROM','')}\" /></div>
-<div><label>CLOUDFLARE_TUNNEL_TOKEN (optional)</label><input name=\"CLOUDFLARE_TUNNEL_TOKEN\" value=\"{val('CLOUDFLARE_TUNNEL_TOKEN','')}\" /></div>
+<div><label>CLOUDFLARE_TUNNEL_TOKEN *</label><input name=\"CLOUDFLARE_TUNNEL_TOKEN\" value=\"{val('CLOUDFLARE_TUNNEL_TOKEN','')}\" required /></div>
+</div>
+</fieldset>
+
+<fieldset><legend>Build Mode</legend>
+<p class=\"note\">Leave unchecked for normal setup. Enable only when you want a full reset and rebuild.</p>
+<div>
+<label><input type=\"checkbox\" name=\"RESET_FROM_SCRATCH\" value=\"1\" /> Rebuild from scratch (remove project containers/images, clear DB volume, then rebuild everything)</label>
 </div>
 </fieldset>
 
@@ -855,11 +906,6 @@ class SetupHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path != "/start":
             self._send_json({"ok": False, "error": "Not found"}, code=404)
-            return
-
-        done = read_setup_done()
-        if done.get("completed"):
-            self._send_json({"ok": False, "error": "Setup already completed (once-only)."}, code=409)
             return
 
         with STATE_LOCK:
