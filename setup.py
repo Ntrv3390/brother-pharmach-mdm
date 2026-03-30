@@ -251,6 +251,29 @@ def remove_project_images() -> bool:
     return all_ok
 
 
+def prune_docker_builder_cache() -> bool:
+    append_log("Pruning Docker builder cache...")
+    cmd = ["docker", "builder", "prune", "-af"]
+    append_log("$ " + " ".join(cmd))
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=str(SERVER_DIR),
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        append_log("ERROR: docker command not found")
+        return False
+
+    output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+    if output:
+        for line in output.splitlines():
+            append_log(line)
+
+    return proc.returncode == 0
+
+
 def sql_ident(value: str) -> str:
     return '"' + value.replace('"', '""') + '"'
 
@@ -609,13 +632,16 @@ def compose_worker(values: dict):
 
     if force_rebuild:
         set_phase("cleanup")
-        append_log("Force rebuild is ON: removing containers, volumes (including DB), and images...")
+        append_log("Force rebuild is ON: removing containers, volumes (including DB), images, and build cache...")
         rc = run_compose_stream(profile_args + ["down", "--volumes", "--remove-orphans"], SERVER_DIR)
         if rc != 0:
             set_error(f"docker compose down --volumes failed (exit {rc})")
             return
         if not remove_project_images():
             set_error("Failed to remove one or more Docker images during force rebuild.")
+            return
+        if not prune_docker_builder_cache():
+            set_error("Failed to prune Docker builder cache during force rebuild.")
             return
         append_log("Cleanup completed. Starting from scratch.")
 
