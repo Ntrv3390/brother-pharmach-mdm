@@ -1,8 +1,8 @@
 if (!document.localization) document.localization = [];
 
 document.localization["en_US"] = {
-  "login.username": "Username or email",
-  "login.username.placeholder": "Enter your username or email",
+  "login.username": "Username",
+  "login.username.placeholder": "Enter your username",
   "login.password": "Password:",
   "login.password.placeholder": "Enter password",
   "login.submit": "Login",
