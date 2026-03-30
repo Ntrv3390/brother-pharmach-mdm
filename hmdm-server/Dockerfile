@@ -1,6 +1,6 @@
 # =============================================================================
 # Stage 1: Android APK Build
-# Builds the Brother Pharmach MDM Android launcher APK using the Android SDK.
+# Builds the Brother Pharmamach MDM Android launcher APK using the Android SDK.
 # =============================================================================
 FROM eclipse-temurin:17-jdk AS android-builder
 
@@ -139,8 +139,8 @@ RUN mvn install -DskipTests -U -B
 # FROM tomcat:9.0-jre11
 FROM tomcat:9.0
 
-LABEL maintainer="Brother Pharmach DevOps" \
-      description="Brother Pharmach MDM Server (Headwind MDM fork)" \
+LABEL maintainer="Brother Pharmamach DevOps" \
+      description="Brother Pharmamach MDM Server (Headwind MDM fork)" \
       version="1.0.0"
 
 # Install aapt (APK analysis) + postgresql-client (pg_isready) + python3 (hash)
@@ -160,7 +160,7 @@ COPY --from=server-builder /build/server/target/launcher.war /usr/local/tomcat/w
 # Copy SQL init script
 COPY --from=server-builder /build/install/sql/hmdm_init.en.sql /opt/hmdm-setup/hmdm_init.en.sql
 
-# Copy the freshly built Brother Pharmach MDM APK (from android-builder stage)
+# Copy the freshly built Brother Pharmamach MDM APK (from android-builder stage)
 COPY --from=android-builder \
     /android-build/app/build/outputs/apk/opensource/release/app-opensource-release.apk \
     /opt/hmdm-setup/brother-pharmach-mdm.apk

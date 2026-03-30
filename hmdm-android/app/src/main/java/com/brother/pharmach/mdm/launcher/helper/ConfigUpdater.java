@@ -453,7 +453,7 @@ public class ConfigUpdater {
     private void setDefaultLauncher() {
         ServerConfig config = settingsHelper != null ? settingsHelper.getConfig() : null;
         if (Utils.isDeviceOwner(context) && config != null) {
-            // "Run default launcher" means we should not set Brother Pharmach MDM as a default
+            // "Run default launcher" means we should not set Brother Pharmamach MDM as a default
             // launcher
             // and clear the setting if it has been already set
             boolean needSetLauncher = (config.getRunDefaultLauncher() == null || !config.getRunDefaultLauncher());

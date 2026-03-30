@@ -1,4 +1,4 @@
-# Brother Pharmach MDM: free and open-source MDM launcher
+# Brother Pharmamach MDM: free and open-source MDM launcher
 
 A Powerful Open Source Platform to Manage your Enterprise Android Devices
 

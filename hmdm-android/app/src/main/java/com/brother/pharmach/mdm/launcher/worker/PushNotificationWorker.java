@@ -1,5 +1,5 @@
 /*
- * Brother Pharmach MDM: Open Source Android MDM Software
+ * Brother Pharmamach MDM: Open Source Android MDM Software
  * https://h-mdm.com
  *
  * Copyright (C) 2019 Headwind Solutions LLC (http://h-sms.com)
@@ -94,7 +94,7 @@ public class PushNotificationWorker extends Worker {
             // Note: MQTT client is automatically reconnected if connection is broken during launcher running,
             // and re-initializing it may cause looped errors
             // In particular, MQTT client is reconnected after turning Wi-Fi off and back on.
-            // Re-connection of MQTT client at Brother Pharmach MDM startup is implemented in MainActivity
+            // Re-connection of MQTT client at Brother Pharmamach MDM startup is implemented in MainActivity
             // So by now, just request configuration update some times per day to avoid "device lost" issues
             return doMqttWork();
         } else {

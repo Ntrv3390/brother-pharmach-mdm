@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "== Brother Pharmach MDM Docker dry run (Windows Server mode) =="
+Write-Host "== Brother Pharmamach MDM Docker dry run (Windows Server mode) =="
 
 function Assert-Command {
     param([string]$Name)

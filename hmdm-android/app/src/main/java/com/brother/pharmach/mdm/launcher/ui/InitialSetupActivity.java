@@ -116,7 +116,7 @@ public class InitialSetupActivity extends BaseActivity implements ConfigUpdater.
 
     @Override
     public void onConfigLoaded() {
-        // Set Brother Pharmach MDM as the default launcher if required
+        // Set Brother Pharmamach MDM as the default launcher if required
         final ServerConfig config = settingsHelper.getConfig();
         if (config != null) {
             // Device owner should be already granted, so we grant requested permissions early
@@ -145,7 +145,7 @@ public class InitialSetupActivity extends BaseActivity implements ConfigUpdater.
                 }.execute();
                 return;
             } else {
-                // Brother Pharmach MDM works with default system launcher
+                // Brother Pharmamach MDM works with default system launcher
                 // Run services here
                 // TODO: permissions required for watchdog services are not yet granted
                 // so watchdog services are not being started at this point.

@@ -17,12 +17,12 @@ import java.net.URL;
 import dalvik.system.PathClassLoader;
 
 /**
- * Higher level Brother Pharmach MDM integration API incapsulating reconnection to the service and configuration update
+ * Higher level Brother Pharmamach MDM integration API incapsulating reconnection to the service and configuration update
  */
 public class HeadwindMDM {
 
     public interface EventHandler {
-        // This method is called when Brother Pharmach MDM is ready to answer
+        // This method is called when Brother Pharmamach MDM is ready to answer
         // Get your app settings in this method using MDMService.Preferences.get()
         void onHeadwindMDMConnected();
         // This is just an informative method which doesn't need any actions
@@ -78,10 +78,10 @@ public class HeadwindMDM {
     }
 
     /**
-     * Connect to Brother Pharmach MDM service
+     * Connect to Brother Pharmamach MDM service
      * @param context
      * @param eventHandler
-     * @return true if Brother Pharmach MDM exists, false otherwise
+     * @return true if Brother Pharmamach MDM exists, false otherwise
      */
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     public boolean connect(final Context context, final EventHandler eventHandler) {
@@ -305,7 +305,7 @@ public class HeadwindMDM {
                     throw new MDMException(MDMError.ERROR_NOT_CONFIGURED);
                 }
 
-                // NPE can be here! queryConfig() may return null if Brother Pharmach MDM
+                // NPE can be here! queryConfig() may return null if Brother Pharmamach MDM
                 // is not configured. Not sure how to handle this, though
                 serverHost = data.getString(MDMService.KEY_SERVER_HOST);
                 secondaryServerHost = data.getString(MDMService.KEY_SECONDARY_SERVER_HOST);
@@ -331,7 +331,7 @@ public class HeadwindMDM {
 
         @Override
         public void onMDMDisconnected() {
-            // This may be raised when Brother Pharmach MDM launcher is updated or due to a launcher crash
+            // This may be raised when Brother Pharmamach MDM launcher is updated or due to a launcher crash
             mdmConnected = false;
             if (mustRun) {
                 if (eventHandler != null) {

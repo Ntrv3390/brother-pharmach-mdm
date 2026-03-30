@@ -1,5 +1,5 @@
 /*
- * Brother Pharmach MDM: Open Source Android MDM Software
+ * Brother Pharmamach MDM: Open Source Android MDM Software
  * https://h-mdm.com
  *
  * Copyright (C) 2019 Headwind Solutions LLC (http://h-sms.com)
@@ -33,9 +33,9 @@ public class MDMError {
             case NO_ERROR:
                 return "";
             case ERROR_NO_MDM:
-                return "Brother Pharmach MDM not installed";
+                return "Brother Pharmamach MDM not installed";
             case ERROR_INTERNAL:
-                return "Internal Brother Pharmach MDM error";
+                return "Internal Brother Pharmamach MDM error";
             case ERROR_GENERAL:
                 return "General error";
             case ERROR_DISCONNECTED:
@@ -43,7 +43,7 @@ public class MDMError {
             case ERROR_INVALID_PARAMETER:
                 return "Invalid parameter";
             case ERROR_VERSION:
-                return "Please update Brother Pharmach MDM launcher";
+                return "Please update Brother Pharmamach MDM launcher";
             case ERROR_KEY_NOT_MATCH:
                 return "API key is not correct";
             case ERROR_NOT_CONFIGURED:
@@ -58,12 +58,12 @@ public class MDMError {
     }
 
     public static final int NO_ERROR = 0;
-    public static final int ERROR_NO_MDM = 1;           // Brother Pharmach MDM not installed
+    public static final int ERROR_NO_MDM = 1;           // Brother Pharmamach MDM not installed
     public static final int ERROR_INTERNAL = 2;         // Launcher internal error
     public static final int ERROR_GENERAL = 3;          // Library error
     public static final int ERROR_DISCONNECTED = 4;     // Service disconnected
     public static final int ERROR_INVALID_PARAMETER = 5;
     public static final int ERROR_VERSION = 6;          // Launcher needs to update
     public static final int ERROR_KEY_NOT_MATCH = 7;    // API key does not match
-    public static final int ERROR_NOT_CONFIGURED = 8;  // Brother Pharmach MDM is not configured
+    public static final int ERROR_NOT_CONFIGURED = 8;  // Brother Pharmamach MDM is not configured
 }

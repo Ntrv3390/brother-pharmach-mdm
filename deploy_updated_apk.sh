@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================================================================
 # deploy_updated_apk.sh
-# Builds the Brother Pharmach MDM Android APK and deploys it.
+# Builds the Brother Pharmamach MDM Android APK and deploys it.
 #
 # Usage:
 #   ./deploy_updated_apk.sh              # Docker mode (default)

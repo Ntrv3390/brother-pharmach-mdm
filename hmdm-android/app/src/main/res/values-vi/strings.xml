@@ -1,5 +1,5 @@
 <!--
-  ~ Brother Pharmach MDM: Open Source Android MDM Software
+  ~ Brother Pharmamach MDM: Open Source Android MDM Software
   ~ https://h-mdm.com
   ~
   ~ Copyright (C) 2019 Headwind Solutions LLC (http://h-sms.com)
@@ -49,7 +49,7 @@
     <string name="main_activity_update_config">Yêu cầu file cấu hình từ máy chủ</string>
     <string name="main_activity_applications_update">Cập nhật ứng dụng</string>
     <string name="dialog_overlay_settings_title">Vui lòng cho phép ứng dụng vẽ trên các cửa sổ khác.\n\nTùy chọn này giúp chặn các ứng dụng không mong muốn và cho phép mở khóa khẩn cấp chế độ kiosk.\n\nNhấn \"Tiếp tục\" để mở cài đặt. Tìm mục \"%s\", cấp quyền, sau đó nhấn \"Quay lại\".</string>
-    <string name="dialog_manage_storage_title">Vui lòng cho phép ứng dụng quản lý bộ nhớ.\n\nTùy chọn này cho phép Brother Pharmach MDM quản lý file trên thiết bị của bạn.</string>
+    <string name="dialog_manage_storage_title">Vui lòng cho phép ứng dụng quản lý bộ nhớ.\n\nTùy chọn này cho phép Brother Pharmamach MDM quản lý file trên thiết bị của bạn.</string>
     <string name="dialog_history_settings_title">Vui lòng cho phép ứng dụng truy cập dữ liệu sử dụng.\n\nTùy chọn này cho phép kiểm soát ứng dụng và cài đặt.\n\nTùy chọn này có thể gây hao pin nhanh hơn. Để tiết kiệm pin, bỏ qua tùy chọn này (sử dụng dịch vụ trợ năng hoặc chế độ kiosk thay thế).\n\nNhấn \"Tiếp tục\" để mở cài đặt. Tìm mục \"%s\", cấp quyền, sau đó nhấn \"Quay lại\".</string>
     <string name="dialog_history_settings_continue">Tiếp tục</string>
     <string name="dialog_history_settings_skip">Bỏ qua</string>

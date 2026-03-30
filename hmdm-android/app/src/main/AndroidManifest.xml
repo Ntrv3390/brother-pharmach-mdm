@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  ~ Brother Pharmach MDM: Open Source Android MDM Software
+  ~ Brother Pharmamach MDM: Open Source Android MDM Software
   ~ https://h-mdm.com
   ~
   ~ Copyright (C) 2019 Headwind Solutions LLC (http://h-sms.com)
@@ -33,7 +33,7 @@
     <uses-permission android:name="android.permission.READ_CALL_LOG"/>
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
 <!-- This permission is dangerous and causes blocking by Play Protect in some countries.
-     In fact, this permission is currently never used by Brother Pharmach MDM.
+     In fact, this permission is currently never used by Brother Pharmamach MDM.
  -->
 <!--    <uses-permission android:name="android.permission.READ_SMS"/>-->
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS"/>

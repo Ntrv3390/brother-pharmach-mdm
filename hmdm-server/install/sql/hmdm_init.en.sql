@@ -70,7 +70,7 @@ INSERT INTO applications (id, pkg, name, showicon, customerid, system, latestver
     (4, 'com.google.android.apps.docs', 'Google Drive', true, 1, true, 10003, false),
     (30, 'com.huawei.android.launcher', 'Default launcher (Huawei)', false, 1, true, 10029, false),
     (8, 'com.android.browser', 'Browser (generic)', true, 1, true, 10007, false),
-    (46, 'com.brother.pharmach.mdm.launcher', 'Brother Pharmach MDM', false, 1, false, 10045, false),
+    (46, 'com.brother.pharmach.mdm.launcher', 'Brother Pharmamach MDM', false, 1, false, 10045, false),
     (47, 'com.huawei.android.internal.app', 'Huawei Launcher Selector', false, 1, true, 10046, false),
     (48, 'com.hmdm.pager', 'Headwind MDM Pager Plugin', true, 1, false, 10047, false),
     (49, 'com.hmdm.phoneproxy', 'Dialer Helper', true, 1, false, 10048, false),

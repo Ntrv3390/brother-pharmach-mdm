@@ -1,5 +1,5 @@
 /*
- * Brother Pharmach MDM: Open Source Android MDM Software
+ * Brother Pharmamach MDM: Open Source Android MDM Software
  * https://h-mdm.com
  *
  * Copyright (C) 2019 Headwind Solutions LLC (http://h-sms.com)
@@ -275,7 +275,7 @@ public class MainActivity
 
                 case Const.ACTION_POLICY_VIOLATION:
                     if (isBackground) {
-                        // If we're in the background, let's bring Brother Pharmach MDM to top and the notification will be raised in onResume
+                        // If we're in the background, let's bring Brother Pharmamach MDM to top and the notification will be raised in onResume
                         Intent restoreLauncherIntent = new Intent(context, MainActivity.class);
                         restoreLauncherIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         context.startActivity(restoreLauncherIntent);
@@ -766,8 +766,8 @@ public class MainActivity
     private void setDefaultLauncherEarly() {
         ServerConfig config = SettingsHelper.getInstance(this).getConfig();
         if (BuildConfig.SET_DEFAULT_LAUNCHER_EARLY && config == null && Utils.isDeviceOwner(this)) {
-            // At first start, temporarily set Brother Pharmach MDM as a default launcher
-            // to prevent the user from clicking Home to stop running Brother Pharmach MDM
+            // At first start, temporarily set Brother Pharmamach MDM as a default launcher
+            // to prevent the user from clicking Home to stop running Brother Pharmamach MDM
             String defaultLauncher = Utils.getDefaultLauncher(this);
 
             // As per the documentation, setting the default preferred activity should not be done on the main thread
@@ -1740,7 +1740,7 @@ public class MainActivity
         if (ProUtils.kioskModeRequired(this)) {
             String kioskApp = settingsHelper.getConfig().getMainApp();
             if (kioskApp != null && kioskApp.trim().length() > 0 &&
-                    // If Brother Pharmach MDM itself is set as kiosk app, the kiosk mode is already turned on;
+                    // If Brother Pharmamach MDM itself is set as kiosk app, the kiosk mode is already turned on;
                     // So here we just proceed to drawing the content
                     (!kioskApp.equals(getPackageName()) || !ProUtils.isKioskModeRunning(this))) {
                 if (ProUtils.getKioskAppIntent(kioskApp, this) != null && startKiosk(kioskApp)) {
@@ -1794,7 +1794,7 @@ public class MainActivity
                     } else {
                         // Add signature to all requests to protect against unauthorized API calls
                         // For TRUST_ANY_CERTIFICATE, we won't add signatures because it's unsafe anyway
-                        // and is just a workaround to use Brother Pharmach MDM on the LAN
+                        // and is just a workaround to use Brother Pharmamach MDM on the LAN
                         OkHttpClient clientWithSignature = new OkHttpClient.Builder()
                                 .cache(new Cache(new File(getApplication().getCacheDir(), "image_cache"), 1000000L))
                                 .addInterceptor(chain -> {
@@ -1936,7 +1936,7 @@ public class MainActivity
         }
     }
 
-    // Run default launcher (Brother Pharmach MDM) as if the user clicked Home button
+    // Run default launcher (Brother Pharmamach MDM) as if the user clicked Home button
     private void openDefaultLauncher() {
         Intent intent = new Intent(Intent.ACTION_MAIN);
         intent.addCategory(Intent.CATEGORY_HOME);

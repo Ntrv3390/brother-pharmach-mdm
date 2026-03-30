@@ -1,5 +1,5 @@
 /*
- * Brother Pharmach MDM: Open Source Android MDM Software
+ * Brother Pharmamach MDM: Open Source Android MDM Software
  * https://h-mdm.com
  *
  * Copyright (C) 2019 Headwind Solutions LLC (http://h-sms.com)
@@ -64,7 +64,7 @@ android {
         buildConfigField("Boolean", "ENABLE_PUSH", "true")
         // MQTT port for Push notifications
         buildConfigField("Integer", "MQTT_PORT", "31000")
-        // Set this parameter to true if you'll grant system privileges to Brother Pharmach MDM (signing it by system keys).
+        // Set this parameter to true if you'll grant system privileges to Brother Pharmamach MDM (signing it by system keys).
         // This will enable silent installation and the launcher will try to get the device owner rights by updating system files.
         // This may be useful, for example, when your device doesn't have QR code provisioning capability.
         buildConfigField("Boolean", "SYSTEM_PRIVILEGES", "false")
@@ -88,8 +88,8 @@ android {
         buildConfigField("Boolean", "ENABLE_KIOSK_WITHOUT_OVERLAYS", "false")
         // Foreground service for MQTT: prevents OS from killing MQTT service on weak devices
         buildConfigField("Boolean", "MQTT_SERVICE_FOREGROUND", "true")
-        // Set Brother Pharmach MDM to default launcher at early time of the first start
-        // to prevent the user from clicking Home and stop initializing Brother Pharmach MDM
+        // Set Brother Pharmamach MDM to default launcher at early time of the first start
+        // to prevent the user from clicking Home and stop initializing Brother Pharmamach MDM
         buildConfigField("Boolean", "SET_DEFAULT_LAUNCHER_EARLY", "false")
         // Adjust application selection on TV boxes
         buildConfigField("Boolean", "SELECTED_ITEM_BY_CLICK", "false")

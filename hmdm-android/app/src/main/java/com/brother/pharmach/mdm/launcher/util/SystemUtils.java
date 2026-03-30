@@ -19,7 +19,7 @@ import java.lang.reflect.Method;
 
 /**
  * These utils are used only in the 'system' flavor
- * when Brother Pharmach MDM is installed as a system app and
+ * when Brother Pharmamach MDM is installed as a system app and
  * signed by OS keys
  */
 public class SystemUtils {
@@ -32,9 +32,9 @@ public class SystemUtils {
      * The device owner can only be set before the setup phase of the primary user has completed,
      * except for adb command if no accounts or additional users are present on the device.
      *
-     * So it looks like Brother Pharmach MDM can never declare itself as a device owner,
+     * So it looks like Brother Pharmamach MDM can never declare itself as a device owner,
      * except when it is running from inside a setup wizard (or declares itself as a setup wizard!)
-     * To become a setup wizard, Brother Pharmach MDM should be preinstalled in the system, and
+     * To become a setup wizard, Brother Pharmamach MDM should be preinstalled in the system, and
      * handle the following intent: android.intent.action.DEVICE_INITIALIZATION_WIZARD
      *
      * @param context

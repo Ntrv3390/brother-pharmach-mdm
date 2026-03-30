@@ -1,4 +1,4 @@
-# Brother Pharmach MDM
+# Brother Pharmamach MDM
 
 ## 1. What to install on Windows
 

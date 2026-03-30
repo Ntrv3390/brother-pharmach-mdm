@@ -12,7 +12,7 @@ def replace_in_file(filepath):
             content = f.read()
             
         new_content = content.replace('com.hmdm', 'com.brother.pharmach.mdm')
-        new_content = new_content.replace('Headwind MDM', 'Brother Pharmach MDM')
+        new_content = new_content.replace('Headwind MDM', 'Brother Pharmamach MDM')
         
         if new_content != content:
             with open(filepath, 'w', encoding='utf-8') as f:

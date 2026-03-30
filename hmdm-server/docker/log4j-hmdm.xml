@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Log4j configuration for Brother Pharmach MDM Server running in Docker.
+  Log4j configuration for Brother Pharmamach MDM Server running in Docker.
   Writes to stdout (visible via `docker logs`) and rotating log files.
   _BASE_DIRECTORY_ is replaced by entrypoint.sh at runtime.
 -->

@@ -1,5 +1,5 @@
 /*
- * Brother Pharmach MDM: Open Source Android MDM Software
+ * Brother Pharmamach MDM: Open Source Android MDM Software
  * https://h-mdm.com
  *
  * Copyright (C) 2019 Headwind Solutions LLC (http://h-sms.com)
@@ -106,7 +106,7 @@ public class Utils {
                     }
                 }
                 // This permission is dangerous and causes blocking by Play Protect in some countries.
-                //     In fact, this permission is currently never used by Brother Pharmach MDM.
+                //     In fact, this permission is currently never used by Brother Pharmamach MDM.
 //                if (devicePolicyManager.getPermissionGrantState(adminComponentName,
 //                        context.getPackageName(), Manifest.permission.READ_SMS) != DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED) {
 //                    boolean success = devicePolicyManager.setPermissionGrantState(adminComponentName,
@@ -160,7 +160,7 @@ public class Utils {
             // Some devices do not include SD card permissions in the list of runtime permissions
             // So the files could not be read or written.
             // Here we add SD card permissions manually (device owner can grant them!)
-            // This is done for the Brother Pharmach MDM launcher only
+            // This is done for the Brother Pharmamach MDM launcher only
             if (forceSdCardPermissions) {
                 boolean hasReadExtStorage = false;
                 boolean hasWriteExtStorage = false;
@@ -234,7 +234,7 @@ public class Utils {
                 }
             }
             // There's a bug in Android 11+: MANAGE_EXTERNAL_STORAGE can't be automatically granted
-            // but if Brother Pharmach MDM is granting WRITE_EXTERNAL_STORAGE, then the app can't request
+            // but if Brother Pharmamach MDM is granting WRITE_EXTERNAL_STORAGE, then the app can't request
             // MANAGE_EXTERNAL_STORAGE, it's locked!
             // So the workaround is do not request WRITE_EXTERNAL_STORAGE in this case
             if (manageStorage && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -830,7 +830,7 @@ public class Utils {
         filter.addCategory(Intent.CATEGORY_DEFAULT);
 
         ComponentName activity = new ComponentName(context, MainActivity.class);
-        setPreferredActivity(context, filter, activity, "Set Brother Pharmach MDM as default launcher");
+        setPreferredActivity(context, filter, activity, "Set Brother Pharmamach MDM as default launcher");
     }
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)

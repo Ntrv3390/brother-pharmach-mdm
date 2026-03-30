@@ -1,8 +1,8 @@
-# Brother Pharmach MDM – Docker Deployment Guide
+# Brother Pharmamach MDM – Docker Deployment Guide
 
 ## Overview
 
-This guide explains how to deploy Brother Pharmach MDM Server using Docker Desktop on Windows. After completing setup, clients and Android devices access the server at `http://YOUR_SERVER_IP:8080`.
+This guide explains how to deploy Brother Pharmamach MDM Server using Docker Desktop on Windows. After completing setup, clients and Android devices access the server at `http://YOUR_SERVER_IP:8080`.
 
 **What you get:**
 

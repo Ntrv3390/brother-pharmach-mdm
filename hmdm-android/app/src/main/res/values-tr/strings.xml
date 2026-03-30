@@ -1,5 +1,5 @@
 <!--
-  ~ Brother Pharmach MDM: Open Source Android MDM Software
+  ~ Brother Pharmamach MDM: Open Source Android MDM Software
   ~ https://h-mdm.com
   ~
   ~ Copyright (C) 2019 Headwind Solutions LLC (http://h-sms.com)
@@ -49,7 +49,7 @@
 	<string name="main_activity_update_config">Sunucudan yapılandırma dosyası isteniyor</string>
 	<string name="main_activity_applications_update">Uygulamalar güncelleniyor</string>
 	<string name="dialog_overlay_settings_title">Lütfen uygulamanın diğer pencerelerin üzerine çizim yapmasına izin verin.\n\nBu seçenek istenmeyen uygulamaların engellenmesine yardımcı olur ve kiosk modunun acil olarak kilidini açmayı sağlar.\n\nAyarları açmak için \"Devam\" öğesine dokunun. \"%s\" öğesini bulun, izni verin ve ardından \"Geri\" öğesine dokunun.</string>
-	<string name="dialog_manage_storage_title">Lütfen uygulamanın depolama alanını yönetmesine izin verin.\n\nBu seçenek Brother Pharmach MDM\'nin cihazınızdaki dosyaları yönetmesine olanak tanır.</string>
+	<string name="dialog_manage_storage_title">Lütfen uygulamanın depolama alanını yönetmesine izin verin.\n\nBu seçenek Brother Pharmamach MDM\'nin cihazınızdaki dosyaları yönetmesine olanak tanır.</string>
 	<string name="dialog_history_settings_title">Lütfen uygulamanın kullanım verilerine erişmesine izin verin.\n\nBu seçenek uygulamaların ve ayarların kontrolünü sağlar.\n\nBu seçenek pilin daha hızlı bitmesine neden olabilir. Pil tasarrufu için bu seçeneği atlayın (bunun yerine erişilebilirlik hizmetlerini veya kiosk modunu kullanın).\n\nAyarları açmak için \"Devam\" öğesine dokunun. \"%s\" öğesini bulun, izni verin ve ardından \"Geri\" öğesine dokunun.</string>
 	<string name="dialog_history_settings_continue">Devam</string>
 	<string name="dialog_history_settings_skip">Atla</string>

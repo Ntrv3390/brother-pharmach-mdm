@@ -3,7 +3,7 @@
         "http://java.sun.com/dtd/web-app_2_3.dtd" >
 
 <web-app>
-    <display-name>Brother Pharmach MDM</display-name>
+    <display-name>Brother Pharmamach MDM</display-name>
 
     <context-param>
         <param-name>plugin.worktime.persistence.config.class</param-name>

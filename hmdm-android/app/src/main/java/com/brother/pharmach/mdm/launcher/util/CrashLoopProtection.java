@@ -8,7 +8,7 @@ import com.brother.pharmach.mdm.launcher.Const;
 
 public class CrashLoopProtection {
     // Crash loop protection
-    // We consider it to be an unrecoverable fault if Brother Pharmach MDM crashes 5 times or more within a minute
+    // We consider it to be an unrecoverable fault if Brother Pharmamach MDM crashes 5 times or more within a minute
     private static final long LOOP_TIME_SPAN = 60000;
     private static final long LOOP_CRASHES = 3;
     private static final String FAULT_PREFERENCE_NAME = "com.brother.pharmach.mdm.launcher.fault";

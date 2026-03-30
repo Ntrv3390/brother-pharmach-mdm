@@ -129,7 +129,7 @@ public class BaseAppListAdapter extends RecyclerView.Adapter<BaseAppListAdapter.
                     } else {
                         // Add signature to all requests to protect against unauthorized API calls
                         // For TRUST_ANY_CERTIFICATE, we won't add signatures because it's unsafe anyway
-                        // and is just a workaround to use Brother Pharmach MDM on the LAN
+                        // and is just a workaround to use Brother Pharmamach MDM on the LAN
                         OkHttpClient clientWithSignature = new OkHttpClient.Builder()
                                 .cache(new Cache(new File(parentActivity.getApplication().getCacheDir(), "image_cache"), 1000000L))
                                 .addInterceptor(chain -> {

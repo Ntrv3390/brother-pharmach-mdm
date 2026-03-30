@@ -2,7 +2,7 @@
 # =============================================================================
 # hmdm-server Docker Entrypoint
 # 1. Generates Tomcat context.xml from environment variables
-# 2. Deploys the embedded Brother Pharmach MDM APK to the files directory
+# 2. Deploys the embedded Brother Pharmamach MDM APK to the files directory
 # 3. Seeds the database on first run (with correct APK URL + hash)
 # 4. Updates the APK URL + hash on every container start (keeps DB in sync)
 # 5. Starts Tomcat
@@ -93,7 +93,7 @@ DB_INIT_MARKER="${FILES_DIRECTORY}/.db_initialized"
 INSTALL_FLAG="${BASE_DIRECTORY}/hmdm_install_flag"
 LOG4J_CONFIG="file://${BASE_DIRECTORY}/log4j-hmdm.xml"
 
-echo "==> [hmdm] Starting Brother Pharmach MDM Server"
+echo "==> [hmdm] Starting Brother Pharmamach MDM Server"
 
 # ---------------------------------------------------------------------------
 # Ensure directories exist
@@ -106,7 +106,7 @@ mkdir -p "${BASE_DIRECTORY}/files" \
 # Deploy the freshly built APK to the files directory
 # ---------------------------------------------------------------------------
 if [ -f "${APK_SETUP_PATH}" ]; then
-    echo "==> [hmdm] Deploying Brother Pharmach MDM APK to files directory..."
+    echo "==> [hmdm] Deploying Brother Pharmamach MDM APK to files directory..."
     cp -f "${APK_SETUP_PATH}" "${APK_DEST}"
     echo "==> [hmdm] APK deployed: ${APK_DEST}"
 else

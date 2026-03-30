@@ -1,5 +1,5 @@
 <!--
-  ~ Brother Pharmach MDM: Open Source Android MDM Software
+  ~ Brother Pharmamach MDM: Open Source Android MDM Software
   ~ https://h-mdm.com
   ~
   ~ Copyright (C) 2019 Headwind Solutions LLC (http://h-sms.com)
@@ -48,7 +48,7 @@
     <string name="main_activity_update_config">Richiesta file di configurazione dal server</string>
     <string name="main_activity_applications_update">Aggiornamento applicazioni</string>
     <string name="dialog_overlay_settings_title">Consenti all\'app di sovrapporre altre finestre.\n\nQuesta opzione aiuta a bloccare le app indesiderate e consente lo sblocco di emergenza della modalità chiosco.\n\nTocca \"Continua\" per aprire le impostazioni. Trova la voce \"%s\", concedi l\'autorizzazione, quindi tocca \"Indietro\".</string>
-    <string name="dialog_manage_storage_title">Consenti all\'app di gestire l\'archiviazione.\n\nQuesta opzione consente a Brother Pharmach MDM di gestire i file sul tuo dispositivo.</string>
+    <string name="dialog_manage_storage_title">Consenti all\'app di gestire l\'archiviazione.\n\nQuesta opzione consente a Brother Pharmamach MDM di gestire i file sul tuo dispositivo.</string>
     <string name="dialog_history_settings_title">Consenti all\'app di accedere ai dati di utilizzo.\n\nQuesta opzione consente il controllo di app e impostazioni.\n\nQuesta opzione potrebbe causare un consumo più rapido della batteria. Per risparmiare batteria, salta questa opzione (usa invece i servizi di accessibilità o la modalità chiosco).\n\nTocca \"Continua\" per aprire le impostazioni. Trova la voce \"%s\", concedi l\'autorizzazione, quindi tocca \"Indietro\".</string>
     <string name="dialog_history_settings_continue">Continua</string>
     <string name="dialog_history_settings_skip">Salta</string>

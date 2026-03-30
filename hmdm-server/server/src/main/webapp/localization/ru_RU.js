@@ -1092,7 +1092,7 @@ document.localization["ru_RU"] = {
   "breadcrumb.config.details": "Детали",
   "breadcrumb.application.versions": "Версии",
 
-  "app.name": "Brother Pharmach MDM",
+  "app.name": "Brother Pharmamach MDM",
   "app.vendor.name": "h-mdm.com",
   "app.vendor.link": "https://h-mdm.com",
   "app.description":

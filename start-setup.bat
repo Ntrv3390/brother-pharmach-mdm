@@ -3,7 +3,7 @@ setlocal
 
 cd /d "%~dp0"
 
-echo Starting Brother Pharmach MDM setup web installer...
+echo Starting Brother Pharmamach MDM setup web installer...
 echo.
 
 where py >nul 2>nul

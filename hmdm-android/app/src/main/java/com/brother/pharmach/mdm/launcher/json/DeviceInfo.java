@@ -1,5 +1,5 @@
 /*
- * Brother Pharmach MDM: Open Source Android MDM Software
+ * Brother Pharmamach MDM: Open Source Android MDM Software
  * https://h-mdm.com
  *
  * Copyright (C) 2019 Headwind Solutions LLC (http://h-sms.com)
@@ -55,7 +55,7 @@ public class DeviceInfo {
     private String cpu;
     private String serial;
 
-    // These fields are reserved for custom builds of Brother Pharmach MDM
+    // These fields are reserved for custom builds of Brother Pharmamach MDM
     private String custom1;
     private String custom2;
     private String custom3;
