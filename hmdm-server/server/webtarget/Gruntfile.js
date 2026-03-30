@@ -7,7 +7,10 @@ module.exports = function( grunt ) {
         bower: {
             install: {
                 options: {
-                    copy: true
+                    copy: true,
+                    bowerOptions: {
+                        '--allow-root': true
+                    }
                 }
             }
         },

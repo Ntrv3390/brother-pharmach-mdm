@@ -49,6 +49,10 @@ RUN APK_PATH="app/build/outputs/apk/opensource/release/app-opensource-release.ap
 # =============================================================================
 FROM maven:3.8.8-eclipse-temurin-11 AS server-builder
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /build
 
 # Copy POM files first for better layer caching
