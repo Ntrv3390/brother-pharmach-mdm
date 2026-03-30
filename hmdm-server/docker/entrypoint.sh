@@ -9,6 +9,31 @@
 # =============================================================================
 set -e
 
+increment_app_version() {
+    local current="$1"
+    local major minor
+
+    if [[ ! "$current" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+        echo "1.0"
+        return
+    fi
+
+    major="${current%%.*}"
+    if [[ "$current" == "$major" ]]; then
+        minor=0
+    else
+        minor="${current#*.}"
+    fi
+
+    minor=$((10#$minor + 1))
+    if [ "$minor" -ge 100 ]; then
+        major=$((major + 1))
+        minor=0
+    fi
+
+    echo "${major}.${minor}"
+}
+
 # ---------------------------------------------------------------------------
 # Configuration with defaults  (override via .env / docker-compose.yml)
 # ---------------------------------------------------------------------------
@@ -224,6 +249,20 @@ EOF
 # ---------------------------------------------------------------------------
 if [ -n "${APK_HASH}" ] && [ -f "${APK_DEST}" ]; then
     echo "==> [hmdm] Syncing APK metadata in database..."
+    CURRENT_VERSION="$(PGPASSWORD="${DB_PASSWORD}" psql \
+        -h "${DB_HOST}" \
+        -p "${DB_PORT}" \
+        -U "${DB_USER}" \
+        -d "${DB_NAME}" \
+        -tA \
+        -c "SELECT av.version
+            FROM applicationversions av
+            JOIN applications a ON a.id = av.applicationid
+            WHERE a.pkg = '${PKG_NAME}'
+            ORDER BY av.id DESC
+            LIMIT 1;" 2>/dev/null | tr -d '[:space:]')"
+    NEXT_VERSION="$(increment_app_version "${CURRENT_VERSION:-1.0}")"
+
     PGPASSWORD="${DB_PASSWORD}" psql \
         -h "${DB_HOST}" \
         -p "${DB_PORT}" \
@@ -231,11 +270,17 @@ if [ -n "${APK_HASH}" ] && [ -f "${APK_DEST}" ]; then
         -d "${DB_NAME}" \
         -c "UPDATE applicationversions
             SET url = '${APK_URL}',
-                apkhash = '${APK_HASH}'
-            WHERE applicationid = (
-                SELECT id FROM applications WHERE pkg = '${PKG_NAME}' LIMIT 1
+                apkhash = '${APK_HASH}',
+                version = '${NEXT_VERSION}'
+            WHERE id = (
+                SELECT av.id
+                FROM applicationversions av
+                JOIN applications a ON a.id = av.applicationid
+                WHERE a.pkg = '${PKG_NAME}'
+                ORDER BY av.id DESC
+                LIMIT 1
             );" 2>&1 || echo "==> [hmdm] WARNING: Failed to update APK metadata in DB (DB may not be fully initialized yet)."
-    echo "==> [hmdm] APK metadata synced."
+    echo "==> [hmdm] APK metadata synced. New app version: ${NEXT_VERSION}"
 else
     echo "==> [hmdm] WARNING: Skipping APK metadata sync (no hash or APK file available)."
 fi

@@ -12,7 +12,7 @@ cd /workspace
 
 APK="app/build/outputs/apk/opensource/release/app-opensource-release.apk"
 AAB="app/build/outputs/bundle/opensourceRelease/app-opensource-release.aab"
-APKSIGNER="${ANDROID_HOME}/build-tools/34.0.0/apksigner"
+APKSIGNER="${ANDROID_HOME}/build-tools/35.0.0/apksigner"
 
 test -f "${APK}"
 test -f "${AAB}"

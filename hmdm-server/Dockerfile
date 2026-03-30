@@ -6,7 +6,7 @@ FROM eclipse-temurin:17-jdk AS android-builder
 
 # Install Android SDK Command-line Tools
 ENV ANDROID_HOME=/opt/android-sdk
-ENV PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/34.0.0
+ENV PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/35.0.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget unzip curl python3 \
@@ -21,7 +21,7 @@ RUN mkdir -p ${ANDROID_HOME}/cmdline-tools && \
 
 # Accept SDK licenses and install required components
 RUN yes | sdkmanager --licenses > /dev/null 2>&1 || true && \
-    sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+    sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
 WORKDIR /android-build
 

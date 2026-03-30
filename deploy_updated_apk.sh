@@ -21,10 +21,10 @@ ANDROID_DIR="${ANDROID_DIR:-$HMDM_DIR/hmdm-android}"
 
 # Load optional env files
 if [ -f "$HMDM_DIR/.env" ]; then
-    set -a; . "$HMDM_DIR/.env"; set +a
+    set -a; . <(tr -d '\r' < "$HMDM_DIR/.env"); set +a
 fi
 if [ -f "$HMDM_DIR/hmdm-server/.env" ]; then
-    set -a; . "$HMDM_DIR/hmdm-server/.env"; set +a
+    set -a; . <(tr -d '\r' < "$HMDM_DIR/hmdm-server/.env"); set +a
 fi
 
 # Defaults
@@ -39,6 +39,32 @@ DB_NAME="${DB_NAME:-hmdm}"
 DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
 SERVER_FILES_DIR="${SERVER_FILES_DIR:-/opt/hmdm/files}"
+APP_ARTIFACT_DIR="${APP_ARTIFACT_DIR:-$HMDM_DIR/app}"
+
+increment_app_version() {
+    local current="$1"
+    local major minor
+
+    if [[ ! "$current" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+        echo "1.0"
+        return
+    fi
+
+    major="${current%%.*}"
+    if [[ "$current" == "$major" ]]; then
+        minor=0
+    else
+        minor="${current#*.}"
+    fi
+
+    minor=$((10#$minor + 1))
+    if [ "$minor" -ge 100 ]; then
+        major=$((major + 1))
+        minor=0
+    fi
+
+    echo "${major}.${minor}"
+}
 
 # Detect mode
 MODE="docker"
@@ -55,11 +81,12 @@ fi
 # Build APK
 # ---------------------------------------------------------------------------
 APK_PATH="$ANDROID_DIR/app/build/outputs/apk/opensource/release/app-opensource-release.apk"
+AAB_PATH="$ANDROID_DIR/app/build/outputs/bundle/opensourceRelease/app-opensource-release.aab"
 
 if [ "${SKIP_BUILD}" != "1" ]; then
-    echo "Building Android APK (Release)..."
+    echo "Building Android APK + AAB (Release)..."
     cd "$ANDROID_DIR"
-    ./gradlew assembleOpensourceRelease --no-daemon
+    ./gradlew bundleOpensourceRelease assembleOpensourceRelease --no-daemon
     cd "$ROOT_DIR"
 else
     echo "Skipping build (SKIP_BUILD=1)"
@@ -69,6 +96,16 @@ if [ ! -f "$APK_PATH" ]; then
     echo "Error: APK not found at $APK_PATH"
     exit 1
 fi
+
+if [ ! -f "$AAB_PATH" ]; then
+    echo "Error: AAB not found at $AAB_PATH"
+    exit 1
+fi
+
+mkdir -p "$APP_ARTIFACT_DIR"
+cp -f "$APK_PATH" "$APP_ARTIFACT_DIR/app-opensource-release.apk"
+cp -f "$AAB_PATH" "$APP_ARTIFACT_DIR/app-opensource-release.aab"
+echo "Updated app artifacts in: $APP_ARTIFACT_DIR"
 
 # ---------------------------------------------------------------------------
 # Calculate hash
@@ -96,7 +133,17 @@ if [ "$MODE" = "docker" ]; then
     # Update DB through the postgres container
     if [ "$SKIP_DB_UPDATE" != "1" ]; then
         echo "Updating database via Docker..."
-        APP_VERSION="6.31-release-$(date +%s)"
+        CURRENT_VERSION="$(docker exec "$DOCKER_DB_CONTAINER" psql \
+            -U "$DB_USER" \
+            -d "$DB_NAME" \
+            -tA \
+            -c "SELECT av.version
+                FROM applicationversions av
+                JOIN applications a ON a.id = av.applicationid
+                WHERE a.pkg = '${PKG_NAME}'
+                ORDER BY av.id DESC
+                LIMIT 1;" | tr -d '[:space:]')"
+        APP_VERSION="$(increment_app_version "${CURRENT_VERSION:-1.0}")"
         APK_URL="${APK_BASE_URL}/${APK_NAME}"
 
         docker exec "$DOCKER_DB_CONTAINER" psql \
@@ -106,10 +153,15 @@ if [ "$MODE" = "docker" ]; then
                 SET url = '${APK_URL}',
                     apkhash = '${APK_HASH}',
                     version = '${APP_VERSION}'
-                WHERE applicationid = (
-                    SELECT id FROM applications WHERE pkg = '${PKG_NAME}' LIMIT 1
+                WHERE id = (
+                    SELECT av.id
+                    FROM applicationversions av
+                    JOIN applications a ON a.id = av.applicationid
+                    WHERE a.pkg = '${PKG_NAME}'
+                    ORDER BY av.id DESC
+                    LIMIT 1
                 );"
-        echo "Database updated."
+        echo "Database updated. New app version: ${APP_VERSION}"
     fi
 
 else
@@ -130,7 +182,13 @@ else
         fi
 
         echo "Updating database..."
-        APP_VERSION="6.31-release-$(date +%s)"
+        CURRENT_VERSION="$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -tA -c "SELECT av.version
+            FROM applicationversions av
+            JOIN applications a ON a.id = av.applicationid
+            WHERE a.pkg = '$PKG_NAME'
+            ORDER BY av.id DESC
+            LIMIT 1;" | tr -d '[:space:]')"
+        APP_VERSION="$(increment_app_version "${CURRENT_VERSION:-1.0}")"
         APK_URL="$APK_BASE_URL/$APK_NAME?v=$(date +%s)"
 
         export PGPASSWORD="$DB_PASSWORD"
@@ -139,10 +197,15 @@ else
             SET url = '$APK_URL',
                 apkhash = '$APK_HASH',
                 version = '$APP_VERSION'
-            WHERE applicationid = (
-                SELECT id FROM applications WHERE pkg = '$PKG_NAME' LIMIT 1
+            WHERE id = (
+                SELECT av.id
+                FROM applicationversions av
+                JOIN applications a ON a.id = av.applicationid
+                WHERE a.pkg = '$PKG_NAME'
+                ORDER BY av.id DESC
+                LIMIT 1
             );"
-        echo "Database updated."
+        echo "Database updated. New app version: ${APP_VERSION}"
     fi
 fi
 

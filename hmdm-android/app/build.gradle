@@ -30,11 +30,11 @@ repositories {
 }
 
 android {
-    compileSdkVersion 34
+    compileSdkVersion 35
     defaultConfig {
         applicationId "com.brother.pharmach.mdm.launcher"
         minSdkVersion 21
-        targetSdkVersion 34
+        targetSdkVersion 35
         versionCode 15310
         versionName "6.31"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
