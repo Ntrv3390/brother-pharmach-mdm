@@ -1,32 +1,42 @@
-<div class="login-logo" ng-if="rebranding"><img src="rest/public/logo"></div>
-
 <!-- Localization completed -->
-<div ng-if="!isIE">
-    <div class='panel panel-default login' ng-class='{"panel-danger": errorMessage, "panel-success": successMessage}'>
-        <div class='panel-heading' ng-if='errorMessage'>{{errorMessage}}</div>
-        <div class='panel-heading' ng-if='successMessage'>{{successMessage}}</div>
-        <div class='panel-body' style="padding: 30px; background: #f6f8fc">
-            <form name='loginForm' ng-submit='onLogin()' style="margin-bottom: 0px">
+<div ng-if="!isIE" class="auth-shell">
+    <div class="auth-background"></div>
+    <div class="auth-orb auth-orb-1"></div>
+    <div class="auth-orb auth-orb-2"></div>
+
+    <div class="auth-card panel panel-default login" ng-class='{"panel-danger": errorMessage, "panel-success": successMessage}'>
+        <div class="auth-brand" ng-if="rebranding">
+            <img src="rest/public/logo" alt="Logo">
+        </div>
+
+        <div class="auth-title" localized>login.submit</div>
+        <div class="auth-subtitle">Secure access to your device management panel</div>
+
+        <div class='auth-message panel-heading' ng-if='errorMessage'>{{errorMessage}}</div>
+        <div class='auth-message success panel-heading' ng-if='successMessage'>{{successMessage}}</div>
+
+        <div class='panel-body auth-body'>
+            <form name='loginForm' ng-submit='onLogin()'>
                 <div class='form-group'>
                     <label for='username' localized>login.username</label>
-                    <input type='text' class='form-control' id='username'
+                    <input type='text' class='form-control auth-input' id='username'
                            ng-model='login.username' localized-placeholder="login.username.placeholder"
                            required/>
                 </div>
                 <div class='form-group'>
                     <label for='password' localized>login.password</label>
-                    <input type='password' class='form-control' id='password'
+                    <input type='password' class='form-control auth-input' id='password'
                            ng-model='login.password' localized-placeholder='login.password.placeholder'
                            required/>
                 </div>
 
-                <div style="float: left; min-height: 45px; display: flex; flex-direction: column">
-                    <div ng-if="canRecover" style="margin: auto; width: 100%"><a class="action-link" ng-click="recoverPassword()" localized>login.password.recovery</a></div>
-                    <div ng-if="rebranding.signupLink" style="margin: auto; width: 100%"><span localized>login.no.account</span> <a class="action-link" href="{{rebranding.signupLink}}" localized>login.signup</a></div>
-                    <div ng-if="!rebranding.signupLink && canSignup" style="margin: auto; width: 100%"><span localized>login.no.account</span> <a class="action-link" ng-click="signup()" localized>login.signup</a></div>
+                <div class="auth-links">
+                    <div ng-if="canRecover"><a class="action-link" ng-click="recoverPassword()" localized>login.password.recovery</a></div>
+                    <div ng-if="rebranding.signupLink"><span localized>login.no.account</span> <a class="action-link" href="{{rebranding.signupLink}}" localized>login.signup</a></div>
+                    <div ng-if="!rebranding.signupLink && canSignup"><span localized>login.no.account</span> <a class="action-link" ng-click="signup()" localized>login.signup</a></div>
                 </div>
 
-                <button type='submit' class='btn btn-default right' style="opacity: 1; margin-top: 9px"
+                <button type='submit' class='btn btn-default auth-submit'
                         ng-disabled='loginForm.$invalid' localized>login.submit</button>
             </form>
         </div>
@@ -38,6 +48,6 @@
     <div ng-bind-html="ieBrowserNotice2"></div>
 </div>
 
-<div class="login-footer" ng-if="rebranding">
+<div class="login-footer" ng-if="rebranding && !isIE">
     Copyright {{rebranding.vendorName}}
 </div>
