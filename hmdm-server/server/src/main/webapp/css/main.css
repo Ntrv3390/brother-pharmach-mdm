@@ -125,21 +125,40 @@
 }
 
 .header .logo-text {
-    margin-top: 10px;
+    margin-top: 7px;
     padding-left: 15px;
-    color: #afd0df;
-    font-size: 20px;
 }
 
 .header .logo-text a, .header .logo-text a:active {
     text-decoration: none;
     color: #afd0df !important;
-    font-size: 20px !important;
 }
 
 .header .logo-text a:hover {
     text-decoration: none;
     color: #d0e3eb !important;
+}
+
+.header .logo-text .header-logo-link {
+    display: inline-flex;
+    align-items: center;
+}
+
+.header .logo-text .header-logo-card {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 6px 14px rgba(26, 55, 86, 0.18);
+}
+
+.header .logo-text .header-logo-image {
+    display: block;
+    max-height: 30px;
+    width: auto;
+    max-width: 180px;
 }
 
 .header a {
