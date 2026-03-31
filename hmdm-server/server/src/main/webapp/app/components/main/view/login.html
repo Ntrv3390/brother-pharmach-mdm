@@ -306,44 +306,41 @@
 
       <form name="loginForm" ng-submit="$event.preventDefault(); onLogin()" novalidate>
         <div class="form-group">
-          <label for="username" localized>login.username</label>
+          <label for="username" localized>Username</label>
           <input
             type="text"
             class="form-control bp-auth-input"
             id="username"
             ng-model="login.username"
-            localized-placeholder="login.username.placeholder"
+            placeholder="Enter your username"
             required
           />
         </div>
         <div class="form-group">
-          <label for="password" localized>login.password</label>
+          <label for="password" localized>Password:</label>
           <input
             type="password"
             class="form-control bp-auth-input"
             id="password"
             ng-model="login.password"
-            localized-placeholder="login.password.placeholder"
+            placeholder="Enter password"
             required
           />
         </div>
 
         <div class="bp-auth-links">
           <div ng-if="canRecover">
-            <a class="action-link" ng-click="recoverPassword()" localized
-              >login.password.recovery</a
+            <a class="action-link" ng-click="recoverPassword()" localized>Lost password?</a
             >
           </div>
           <div ng-if="rebranding.signupLink">
-            <span localized>login.no.account</span>
-            <a class="action-link" href="{{rebranding.signupLink}}" localized
-              >login.signup</a
+            <span localized>Don't have an account?</span>
+            <a class="action-link" href="{{rebranding.signupLink}}" localized>Sign up</a
             >
           </div>
           <div ng-if="!rebranding.signupLink && canSignup">
-            <span localized>login.no.account</span>
-            <a class="action-link" ng-click="signup()" localized
-              >login.signup</a
+            <span localized>Don't have an account?</span>
+            <a class="action-link" ng-click="signup()" localized>Sign up</a
             >
           </div>
         </div>
@@ -355,7 +352,7 @@
           ng-disabled="!login.username || !login.password"
           localized
         >
-          login.submit
+          Login
         </button>
       </form>
     </div>
@@ -367,6 +364,6 @@
 </div>
 
 <div class="content-wrapper width-1000" ng-if="isIE">
-  <div localized>ie.browser.notice.1</div>
+  <div localized>Unfortunately, Internet Explorer is not supported.</div>
   <div ng-bind-html="ieBrowserNotice2"></div>
 </div>

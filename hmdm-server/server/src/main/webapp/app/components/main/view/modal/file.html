@@ -9,22 +9,22 @@
     <form class='form-horizontal'>
 
         <div class='form-group'>
-            <label class='col-sm-4 control-label' for="fileDescription" localized>form.file.description</label>
+            <label class='col-sm-4 control-label' for="fileDescription" localized>Description (optional)</label>
             <div class='col-sm-8'>
                 <input type='text' ng-model='file.description' class='form-control' id="fileDescription"/>
             </div>
         </div>
 
         <div class='form-group' ng-disabled="file.id">
-            <label class='col-sm-4 control-label' for="fileExternal" localized>form.file.external</label>
+            <label class='col-sm-4 control-label' for="fileExternal" localized>External</label>
             <div class='col-sm-2'>
-                <input localized-title="form.file.external.title" ng-model='file.external' type='checkbox'
+                <input title="Instead of uploading the file, you can specify the URL on an external resource" ng-model='file.external' type='checkbox'
                        ng-disabled="file.id" class='form-control' id="fileExternal"/>
             </div>
         </div>
 
         <div ng-if='!file.external' class='form-group'>
-            <label class='col-sm-4 control-label' localized>form.file.file</label>
+            <label class='col-sm-4 control-label' localized>File</label>
             <div class='col-sm-8'>
                 <div class="btn btn-default full-width btn-upload"
                      upload-button
@@ -37,7 +37,7 @@
         </div>
 
         <div class='form-group' ng-if="!file.external">
-            <label class='col-sm-4 control-label' localized>form.file.name</label>
+            <label class='col-sm-4 control-label' localized>File name</label>
             <div class='col-sm-8'>
                 <input type='text'
                        ng-model='file.filePath'
@@ -46,7 +46,7 @@
         </div>
 
         <div class='form-group' ng-if="file.external">
-            <label class='col-sm-4 control-label' localized>form.file.external.url</label>
+            <label class='col-sm-4 control-label' localized>URL</label>
             <div class='col-sm-8'>
                 <input type='text'
                        ng-model='file.externalUrl'
@@ -56,7 +56,7 @@
         </div>
 
         <div class='form-group'>
-            <label class='col-sm-4 control-label' localized>form.file.device.path</label>
+            <label class='col-sm-4 control-label' localized>Path on device</label>
             <div class='col-sm-8'>
                 <input type='text'
                        ng-model='file.devicePath'
@@ -66,9 +66,9 @@
         </div>
 
         <div class='form-group'>
-            <label class='col-sm-4 control-label' for="variableContent" localized>form.configuration.files.variables</label>
+            <label class='col-sm-4 control-label' for="variableContent" localized>Variable content</label>
             <div class='col-sm-2'>
-                <input localized-title="form.configuration.files.variables.hint" ng-model='file.replaceVariables' type='checkbox'
+                <input title="Strings DEVICE_NUMBER, IMEI, CUSTOM* will be replaced by their values" ng-model='file.replaceVariables' type='checkbox'
                        class='form-control' id="variableContent"/>
             </div>
         </div>
@@ -80,8 +80,8 @@
                 </div>
             </div>
             <div class='col-sm-8'>
-                <button type='submit' class='btn btn-default' ng-disabled='loading' ng-click='save()' localized>button.save</button>
-                <button type='button' class='btn btn-default' ng-click='closeModal()' localized>button.cancel</button>
+                <button type='submit' class='btn btn-default' ng-disabled='loading' ng-click='save()' localized>Save</button>
+                <button type='button' class='btn btn-default' ng-click='closeModal()' localized>Cancel</button>
             </div>
         </div>
     </form>

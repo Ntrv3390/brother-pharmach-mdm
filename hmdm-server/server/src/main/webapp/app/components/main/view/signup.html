@@ -1,34 +1,34 @@
 <div class="login-logo" ng-if="rebranding"><img src="rest/public/logo"><span class="logo">{{rebranding.appName}}</span></div>
 
 <div>
-    <h2 class="login-logo center" localized>signup.title</h2>
+    <h2 class="login-logo center" localized>Get started</h2>
     <div class='panel panel-default login' ng-class='{"panel-danger": errorMessage, "panel-success": successMessage}'>
         <div class='panel-heading' ng-if='errorMessage'>{{errorMessage}}</div>
         <div class='panel-heading' ng-if='successMessage'>{{successMessage}}</div>
         <div class='panel-body' style="padding: 30px; background: #f6f8fc">
             <form name='signupForm' ng-submit='signupForm.$valid && onSignup()' style="margin-bottom: 0px" ng-if="!signupComplete">
                 <div>
-                    <label for='email' localized>signup.email</label>
+                    <label for='email' localized>Your email address</label>
                     <input class='form-control' name="email" id='email' ng-pattern="/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/"
-                           ng-model='signup.email' localized-placeholder="signup.email.placeholder"
+                           ng-model='signup.email' placeholder="Enter a valid email address"
                            required/>
-                    <div class="field-warning" ng-class="(signupForm.email.$dirty && signupForm.email.$error.pattern) ? '' : 'expired-device-hidden'" localized>signup.email.invalid</div>
+                    <div class="field-warning" ng-class="(signupForm.email.$dirty && signupForm.email.$error.pattern) ? '' : 'expired-device-hidden'" localized>Enter a valid email address</div>
                 </div>
                 <div class='form-group' ng-if="rebranding.termsLink">
                     <input type='checkbox' id='agree'
                            ng-model='signup.agree' required/>
-                    <label for='agree'><span localized>signup.terms.agree</span> <span>{{rebranding.appName}}
-                        <a href="{{rebranding.termsLink}}" target="_blank" localized>signup.terms.terms</a></span></label>
+                    <label for='agree'><span localized>I agree with</span> <span>{{rebranding.appName}}
+                        <a href="{{rebranding.termsLink}}" target="_blank" localized>terms and conditions</a></span></label>
                 </div>
 
                 <button type='submit' class='btn btn-default right' style="opacity: 1; margin-top: 9px"
-                        ng-if="!loading" localized>signup.submit</button>
+                        ng-if="!loading" localized>Sign up</button>
                 <button type='submit' class='btn btn-default right' style="opacity: 0.5; margin-top: 9px"
-                        ng-disabled='true' ng-if="loading" localized>signup.progress</button>
+                        ng-disabled='true' ng-if="loading" localized>Signing up...</button>
             </form>
 
-            <h3 ng-if="signupComplete" style="margin: 0 0 20px 0" localized>signup.complete</h3>
-            <div ng-if="signupComplete" localized>signup.email.check</div>
+            <h3 ng-if="signupComplete" style="margin: 0 0 20px 0" localized>Thank you for signing up!</h3>
+            <div ng-if="signupComplete" localized>Please check your email and follow the link to complete the registration!</div>
         </div>
     </div>
 </div>

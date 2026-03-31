@@ -1,7 +1,7 @@
 <!-- Localization completed -->
 <div class="width-1000" ng-controller="SettingsTabController">
     <div class="text-center">
-        <h4 localized>form.settings.design.title</h4>
+        <h4 localized>Default Design</h4>
     </div>
 
     <div>
@@ -11,21 +11,21 @@
             </div>
 
             <div class='form-group'>
-                <label class='col-sm-3 control-label' localized>form.settings.design.color.font</label>
+                <label class='col-sm-3 control-label' localized>Background Color</label>
                 <div class='col-sm-9'>
                     <input ng-model='settings.backgroundColor' colorpicker type='text' class='form-control'
                            localized-placeholder='form.settings.design.color.font.placeholder'/>
                 </div>
             </div>
             <div class='form-group'>
-                <label class='col-sm-3 control-label' localized>form.settings.design.color.app.names</label>
+                <label class='col-sm-3 control-label' localized>Application Names Color</label>
                 <div class='col-sm-9'>
                     <input ng-model='settings.textColor' colorpicker type='text' class='form-control'
                            localized-placeholder='form.settings.design.color.app.names.placeholder'/>
                 </div>
             </div>
             <div class='form-group'>
-                <label class='col-sm-3 control-label' localized>form.settings.design.url.background.image</label>
+                <label class='col-sm-3 control-label' localized>URL of the background image</label>
                 <div class='col-sm-7'>
                     <input ng-model='settings.backgroundImageUrl'
                            type='text' class='form-control'
@@ -33,44 +33,44 @@
                 </div>
                 <div class="col-sm-2 text-right">
                     <button type="button" class="btn btn-default" ng-click="uploadBackground()"
-                            localized>form.configuration.settings.design.upload</button>
+                            localized>Upload</button>
                 </div>
             </div>
             <div class='form-group'>
-                <label class='col-sm-3 control-label' for="iconSize" localized>form.settings.design.size.icon</label>
+                <label class='col-sm-3 control-label' for="iconSize" localized>Icon size</label>
                 <div class='col-sm-9'>
                     <select class='form-control' id="iconSize" ng-model='settings.iconSize'>
                         <option ng-value="'SMALL'" ng-selected="settings.iconSize === 'SMALL'"
-                                localized>form.settings.design.size.icon.small</option>
+                                localized>Small</option>
                         <option ng-value="'MEDIUM'" ng-selected="settings.iconSize === 'MEDIUM'"
-                                localized>form.settings.design.size.icon.medium</option>
+                                localized>Average (+ 20%)</option>
                         <option ng-value="'LARGE'" ng-selected="settings.iconSize === 'LARGE'"
-                                localized>form.settings.design.size.icon.large</option>
+                                localized>Large (+ 40%)</option>
                     </select>
                 </div>
             </div>
             <div class='form-group'>
-                <label class='col-sm-3 control-label' for="desktopHeader" localized>form.configuration.settings.design.desktop.header</label>
+                <label class='col-sm-3 control-label' for="desktopHeader" localized>Desktop title</label>
                 <div class='col-sm-9'>
                     <select class='form-control' id="desktopHeader" ng-model='settings.desktopHeader'>
                         <option ng-value="'NO_HEADER'" ng-selected="settings.desktopHeader === 'NO_HEADER'"
-                                localized>form.configuration.settings.design.desktop.header.no</option>
+                                localized>No</option>
                         <option ng-value="'DEVICE_ID'" ng-selected="settings.desktopHeader === 'DEVICE_ID'"
-                                localized>form.configuration.settings.design.desktop.header.deviceid</option>
+                                localized>Device ID</option>
                         <option ng-value="'DESCRIPTION'" ng-selected="settings.desktopHeader === 'DESCRIPTION'"
-                                localized>form.configuration.settings.design.desktop.header.description</option>
+                                localized>Description</option>
                         <option ng-value="'TEMPLATE'" ng-selected="settings.desktopHeader === 'TEMPLATE'"
-                                localized>form.configuration.settings.design.desktop.header.custom</option>
+                                localized>Custom template</option>
                         <option ng-if="settings.customPropertyName1" ng-value="'CUSTOM1'" ng-selected="settings.desktopHeader === 'CUSTOM1'">{{settings.customPropertyName1}}</option>
                         <option ng-if="settings.customPropertyName2" ng-value="'CUSTOM2'" ng-selected="settings.desktopHeader === 'CUSTOM2'">{{settings.customPropertyName2}}</option>
                         <option ng-if="settings.customPropertyName3" ng-value="'CUSTOM3'" ng-selected="settings.desktopHeader === 'CUSTOM3'">{{settings.customPropertyName3}}</option>
                     </select>
-                    <div class='field-hint'  ng-if="settings.desktopHeader === 'DESCRIPTION' || settings.desktopHeader === 'CUSTOM1' || settings.desktopHeader === 'CUSTOM2' || settings.desktopHeader === 'CUSTOM3'" localized>form.configuration.settings.design.desktop.header.hint</div>
+                    <div class='field-hint'  ng-if="settings.desktopHeader === 'DESCRIPTION' || settings.desktopHeader === 'CUSTOM1' || settings.desktopHeader === 'CUSTOM2' || settings.desktopHeader === 'CUSTOM3'" localized>Make sure this parameter is sent to devices (Settings - General and language settings)</div>
                 </div>
             </div>
 
             <div class='form-group' ng-if="settings.desktopHeader === 'TEMPLATE'">
-                <label class='col-sm-3 control-label' localized>form.configuration.settings.design.desktop.header.template</label>
+                <label class='col-sm-3 control-label' localized>Enter the template</label>
                 <div class='col-sm-9'>
                     <input ng-model='settings.desktopHeaderTemplate'
                            type='text' class='form-control'
@@ -80,7 +80,7 @@
             <div class='form-group'>
                 <div class='col-sm-offset-3 col-sm-9 padding-left'>
                     <button type='submit' class='btn btn-default' ng-click='saveDefaultDesignSettings()'
-                            localized>button.save</button>
+                            localized>Save</button>
                 </div>
             </div>
         </form>

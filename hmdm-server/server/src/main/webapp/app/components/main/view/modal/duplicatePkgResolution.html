@@ -32,11 +32,11 @@
                 <div class="col-sm-offset-1 col-sm-11">{{textLine1}}</div>
             </div>
             <div class="form-group">
-                <div class="col-sm-offset-1 col-sm-11" localized>form.resolved.duplicate.pkg.text2</div>
+                <div class="col-sm-offset-1 col-sm-11" localized>Do you want to add a new application or a new version of an existing application?</div>
             </div>
 
             <div class="form-group">
-                <label class="col-sm-4 control-label" localized>form.resolved.duplicate.pkg.text3</label>
+                <label class="col-sm-4 control-label" localized>New version for</label>
                 <div class="col-sm-8">
                     <select class='form-control'
                             ng-model='formData.targetAppId'
@@ -47,9 +47,9 @@
 
             <div class='form-group'>
                 <div class='col-sm-offset-4 col-sm-8'>
-                    <button type='submit' class='btn btn-default' ng-click='newApp()' localized>button.new.app</button>
-                    <button type='submit' class='btn btn-default' ng-click='newAppVersion()' localized>button.new.app.version</button>
-                    <button type='button' class='btn btn-default' ng-click='closeModal()' localized>button.cancel</button>
+                    <button type='submit' class='btn btn-default' ng-click='newApp()' localized>New application</button>
+                    <button type='submit' class='btn btn-default' ng-click='newAppVersion()' localized>New version</button>
+                    <button type='button' class='btn btn-default' ng-click='closeModal()' localized>Cancel</button>
                 </div>
             </div>
         </div>
@@ -60,13 +60,13 @@
                 <div class="col-sm-offset-1 col-sm-11">{{textLine4}}</div>
             </div>
             <div class="form-group">
-                <div class="col-sm-offset-1 col-sm-11" localized>form.resolved.duplicate.pkg.text5</div>
+                <div class="col-sm-offset-1 col-sm-11" localized>Are you sure you want to change the package ID?</div>
             </div>
 
             <div class='form-group'>
                 <div class='col-sm-offset-3 col-sm-9'>
-                    <button type='submit' class='btn btn-default' ng-click='changePkg()' localized>button.change</button>
-                    <button type='button' class='btn btn-default' ng-click='closeModal()' localized>button.cancel</button>
+                    <button type='submit' class='btn btn-default' ng-click='changePkg()' localized>Edit</button>
+                    <button type='button' class='btn btn-default' ng-click='closeModal()' localized>Cancel</button>
                 </div>
             </div>
         </div>

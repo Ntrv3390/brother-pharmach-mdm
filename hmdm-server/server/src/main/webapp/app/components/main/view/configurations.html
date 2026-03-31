@@ -12,7 +12,7 @@
                class='form-control configurations-search-input'>
 
         <div class='configurations-search-buttons'>
-            <button type='button' class='btn btn-default' ng-if="hasPermission('add_config')" ng-click='addConfiguration()' localized>button.add</button>
+            <button type='button' class='btn btn-default' ng-if="hasPermission('add_config')" ng-click='addConfiguration()' localized>Add</button>
         </div>
     </div>
 
@@ -30,9 +30,9 @@
     <table ng-if='configurations && configurations.length > 0' class='table'>
         <thead>
         <tr>
-            <th localized>table.heading.configuration.name</th>
-            <th localized>table.heading.configuration.desc</th>
-            <th class='actions-column-150' localized>table.heading.configuration.actions</th>
+            <th localized>Name</th>
+            <th localized>Description</th>
+            <th class='actions-column-150' localized>Actions</th>
         </tr>
         </thead>
         <tbody>
@@ -41,23 +41,23 @@
             <td>{{configuration.description}}</td>
             <td>
                 <div>
-                    <button type='button' class='btn btn-default' localized-title="button.change"
+                    <button type='button' class='btn btn-default' title="Edit"
                             ng-click='editConfiguration( configuration )'>
                         <span class='glyphicon glyphicon-pencil'></span>
                     </button>
                     <button ng-disabled='configuration.id === 1'
-                            type='button' localized-title="button.delete"
+                            type='button' title="Delete"
                             class='btn btn-default'
                             ng-if="hasPermission('copy_config')"
                             ng-click='removeConfiguration( configuration )'>
                         <span class='glyphicon glyphicon-trash'></span>
                     </button>
-                    <button type='button' class='btn btn-default' localized-title="button.copy"
+                    <button type='button' class='btn btn-default' title="Copy"
                             ng-if="hasPermission('copy_config')"
                             ng-click='copyConfiguration( configuration )'>
                         <span class='glyphicon glyphicon-duplicate'></span>
                     </button>
-                    <button type='button' class='btn btn-default' localized-title="button.qrcode"
+                    <button type='button' class='btn btn-default' title="QR code"
                             data-hint-key="hint.step.2"
                             ng-if="qrCodeAvailable(configuration)"
                             ng-click='showQrCode(configuration)'>
@@ -69,7 +69,7 @@
         </tbody>
     </table>
 
-    <div ng-if='configurations && configurations.length == 0' class='center' localized>notfound.configurations</div>
+    <div ng-if='configurations && configurations.length == 0' class='center' localized>No configurations were found.</div>
 
     <div class="text-center" ng-if="configurations.length > paging.pageSize">
         <pagination

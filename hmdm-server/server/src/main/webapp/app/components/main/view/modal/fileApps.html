@@ -1,9 +1,9 @@
 <!-- Localization completed -->
 <div ng-show='apps.length === 0' class='modal-header'>
-    <div class='error'><span localized>notfound.applications</span></div>
+    <div class='error'><span localized>Applications not found</span></div>
     <br/>
     <div class="center">
-        <button type='button' class='btn btn-default' ng-click='closeModal()' localized>button.close</button>
+        <button type='button' class='btn btn-default' ng-click='closeModal()' localized>Close</button>
     </div>
 </div>
 <div class='modal-body' ng-if="apps.length > 0">
@@ -11,9 +11,9 @@
     <table class='table'>
         <thead>
         <tr>
-            <th localized>form.file.apps.name</th>
-            <th localized>form.file.apps.pkg</th>
-            <th localized>form.file.apps.version</th>
+            <th localized>Application Name</th>
+            <th localized>Package ID</th>
+            <th localized>Version</th>
         </tr>
         </thead>
         <tbody>
@@ -26,6 +26,6 @@
     </table>
 
     <div class="center">
-        <button type='button' class='btn btn-default' ng-click='closeModal()' localized>button.close</button>
+        <button type='button' class='btn btn-default' ng-click='closeModal()' localized>Close</button>
     </div>
 </div>

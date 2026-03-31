@@ -3,7 +3,7 @@
     <tabset class='tabset'>
         <tab>
 
-            <tab-heading localized>tab.customers</tab-heading>
+            <tab-heading localized>Organizations</tab-heading>
 
             <div ng-controller='CustomersTabController'>
                 <div class='form-group'>
@@ -15,7 +15,7 @@
                            class='form-control configurations-search-input'>
 
                     <div class='configurations-search-buttons'>
-                        <button type='button' class='btn btn-default' ng-click='editCustomer( {} )' localized>button.add</button>
+                        <button type='button' class='btn btn-default' ng-click='editCustomer( {} )' localized>Add</button>
                     </div>
                 </div>
 
@@ -24,30 +24,30 @@
                         <select class='form-control'
                                 ng-model='paging.accountType'
                                 ng-change='newSearch()'>
-                            <option value="" selected localized>customer.type.options.all</option>
-                            <option value="0" localized>customer.type.demo</option>
-                            <option value="1" localized>customer.type.small</option>
-                            <option value="2" localized>customer.type.corporate</option>
+                            <option value="" selected localized>All types</option>
+                            <option value="0" localized>Demo</option>
+                            <option value="1" localized>Professional</option>
+                            <option value="2" localized>Enterprise</option>
                         </select>
                     </div>
                     <div class="col-sm-3 margin-bottom">
                         <select class='form-control'
                                 ng-model='paging.customerStatus'
                                 ng-change='newSearch()'>
-                            <option value="" selected localized>customer.status.options.all</option>
-                            <option value="customer.new" localized>customer.new</option>
-                            <option value="customer.active" localized>customer.active</option>
-                            <option value="customer.need.followup" localized>customer.need.followup</option>
-                            <option value="customer.followup.sent" localized>customer.followup.sent</option>
-                            <option value="customer.internal.test" localized>customer.internal.test</option>
-                            <option value="customer.developer" localized>customer.developer</option>
-                            <option value="customer.difficult" localized>customer.difficult</option>
-                            <option value="customer.inactive" localized>customer.inactive</option>
-                            <option value="customer.pause" localized>customer.pause</option>
-                            <option value="customer.abandon" localized>customer.abandon</option>
-                            <option value="customer.denial" localized>customer.denial</option>
-                            <option value="customer.onpremise" localized>customer.onpremise</option>
-                            <option value="customer.client" localized>customer.client</option>
+                            <option value="" selected localized>All statuses</option>
+                            <option value="customer.new" localized>New</option>
+                            <option value="customer.active" localized>Active</option>
+                            <option value="customer.need.followup" localized>Need follow-up</option>
+                            <option value="customer.followup.sent" localized>Follow-up sent</option>
+                            <option value="customer.internal.test" localized>Internal test</option>
+                            <option value="customer.developer" localized>Developer</option>
+                            <option value="customer.difficult" localized>Difficult</option>
+                            <option value="customer.inactive" localized>No sign-in</option>
+                            <option value="customer.pause" localized>Pause</option>
+                            <option value="customer.abandon" localized>Abandon</option>
+                            <option value="customer.denial" localized>Denial</option>
+                            <option value="customer.onpremise" localized>On-premise trial</option>
+                            <option value="customer.client" localized>Client</option>
                         </select>
                     </div>
                 </div>
@@ -66,33 +66,33 @@
                 <table ng-if='customers && customers.length > 0' class='table'>
                     <thead>
                     <tr>
-                        <th localized>table.heading.customer.name</th>
+                        <th localized>Name</th>
                         <th localized class="col-sm-4">table.heading.customer.desc</th>
                         <th ng-click="sortByRegistrationTime()" class="sortable">
-                            <span localized>table.heading.customer.registration.time</span>
+                            <span localized>Registered</span>
                             <span ng-if='paging.sortValue === "registrationTime" && paging.sortDirection === "asc"'
                                   class="glyphicon glyphicon-sort-by-order"></span>
                             <span ng-if='paging.sortValue === "registrationTime" && paging.sortDirection === "desc"'
                                   class="glyphicon glyphicon-sort-by-order-alt"></span>
                         </th>
                         <th ng-click="sortByLastLoginTime()" class="sortable">
-                            <span localized>table.heading.customer.last.login.time</span>
+                            <span localized>Last login</span>
                             <span ng-if='paging.sortValue === "lastLoginTime" && paging.sortDirection === "asc"'
                                   class="glyphicon glyphicon-sort-by-order"></span>
                             <span ng-if='paging.sortValue === "lastLoginTime" && paging.sortDirection === "desc"'
                                   class="glyphicon glyphicon-sort-by-order-alt"></span>
                         </th>
-                        <th localized>table.heading.customer.type</th>
+                        <th localized>Type</th>
                         <th ng-click="sortByExpiryTime()" class="sortable">
-                            <span localized>table.heading.customer.expiry.time</span>
+                            <span localized>Expires</span>
                             <span ng-if='paging.sortValue === "expiryTime" && paging.sortDirection === "asc"'
                                   class="glyphicon glyphicon-sort-by-order"></span>
                             <span ng-if='paging.sortValue === "expiryTime" && paging.sortDirection === "desc"'
                                   class="glyphicon glyphicon-sort-by-order-alt"></span>
                         </th>
-                        <th localized>table.heading.customer.device.limit</th>
-                        <th localized>table.heading.customer.status</th>
-                        <th class='actions-column' style="min-width: 200px" localized>table.heading.customer.actions</th>
+                        <th localized>Limit</th>
+                        <th localized>Status</th>
+                        <th class='actions-column' style="min-width: 200px" localized>Actions</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -107,19 +107,19 @@
                         <td class="{{customerClass(customer.customerStatus)}}">{{localization.localize(customer.customerStatus)}}</td>
                         <td>
                             <div>
-                                <button type='button' class='btn btn-default' localized-title="button.change"
+                                <button type='button' class='btn btn-default' title="Edit"
                                         ng-click='editCustomer( customer )'>
                                     <span class='glyphicon glyphicon-pencil'></span>
                                 </button>
-                                <button type='button' class='btn btn-default' localized-title="button.change.password"
+                                <button type='button' class='btn btn-default' title="Change password"
                                         ng-click='changePassword( customer )'>
                                     <span class='glyphicon glyphicon-ice-lolly'></span>
                                 </button>
-                                <button type='button' localized-title="button.delete"
+                                <button type='button' title="Delete"
                                         class='btn btn-default' ng-click='removeCustomer( customer )'>
                                     <span class='glyphicon glyphicon-trash'></span>
                                 </button>
-                                <button type='button' class='btn btn-default' localized-title="button.login"
+                                <button type='button' class='btn btn-default' title="Login"
                                         ng-click='loginAs( customer )'>
                                     <span class='glyphicon glyphicon-copy'></span>
                                 </button>
@@ -129,7 +129,7 @@
                     </tbody>
                 </table>
 
-                <div ng-if='customers && customers.length == 0' class='center' localized>notfound.customers</div>
+                <div ng-if='customers && customers.length == 0' class='center' localized>Organizations not found.</div>
 
                 <div class="text-center" ng-if="paging.totalItems > paging.pageSize">
                     <pagination
@@ -147,7 +147,7 @@
 
         <tab>
 
-            <tab-heading localized>tab.common.applications</tab-heading>
+            <tab-heading localized>Shared Applications</tab-heading>
 
             <div ng-controller='ControlPanelApplicationsTabController'>
                 <div class='form-group'>
@@ -159,7 +159,7 @@
                            class='form-control application-search-input'>
 
                     <div class='device-search-buttons'>
-                        <button type='button' class='btn btn-default' ng-click='editApplication( {} )' localized>button.add</button>
+                        <button type='button' class='btn btn-default' ng-click='editApplication( {} )' localized>Add</button>
                     </div>
                 </div>
 
@@ -177,13 +177,13 @@
                 <table ng-if='applications && applications.length > 0' class='table'>
                     <thead>
                     <tr>
-                        <th localized>table.heading.common.apps.customer</th>
-                        <th localized>table.heading.common.apps.pkg</th>
-                        <th localized>table.heading.common.apps.name</th>
-                        <th localized>table.heading.common.apps.version</th>
-                        <th localized>table.heading.common.apps.url</th>
-                        <th localized>table.heading.common.apps.label</th>
-                        <th class='actions-column' localized>table.heading.common.apps.actions</th>
+                        <th localized>Organization</th>
+                        <th localized>Package ID</th>
+                        <th localized>Application Name</th>
+                        <th localized>Version</th>
+                        <th localized>URL</th>
+                        <th localized>Icon</th>
+                        <th class='actions-column' localized>Actions</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -198,15 +198,15 @@
 
                         <td>
                             <div>
-                                <button ng-if="application.commonApplication" localized-title="button.change.common.app"
+                                <button ng-if="application.commonApplication" title="Edit Shared Application"
                                         type='button' class='btn btn-default' ng-click='editApplication( application )'>
                                     <span class='glyphicon glyphicon-pencil'></span>
                                 </button>
-                                <button ng-if="application.commonApplication" localized-title="button.delete.common.app"
+                                <button ng-if="application.commonApplication" title="Delete Shared Application"
                                         type='button' class='btn btn-default' ng-click='removeApplication( application )'>
                                     <span class='glyphicon glyphicon-trash'></span>
                                 </button>
-                                <button ng-if="!application.commonApplication" localized-title="button.turn.common.app"
+                                <button ng-if="!application.commonApplication" title="Make Common"
                                         type='button' class='btn btn-default' ng-click='turnIntoCommonApplication( application )'>
                                     <span class='glyphicon glyphicon-share'></span>
                                 </button>
@@ -216,7 +216,7 @@
                     </tbody>
                 </table>
 
-                <div ng-if='applications && applications.length === 0' class='center' localized>notfound.common.apps</div>
+                <div ng-if='applications && applications.length === 0' class='center' localized>There are no applications to display.</div>
 
                 <div class="text-center" ng-if="applications.length > paging.pageSize">
                     <pagination

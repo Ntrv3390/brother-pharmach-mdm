@@ -1,0 +1,277 @@
+<style>
+  .modern-modal .modal-content {
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+  }
+
+  .modern-modal .modal-header {
+    background: #7a9ab9;
+    color: white;
+    border-bottom: none;
+    padding: 18px 22px;
+  }
+
+  .modern-modal .modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .modern-modal .close {
+    color: white;
+    opacity: 0.85;
+  }
+
+  .modern-modal .close:hover {
+    opacity: 1;
+  }
+
+  .modern-panel {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    margin-bottom: 20px;
+  }
+
+  .modern-panel .panel-heading {
+    background: #f8f9fb;
+    border-bottom: 1px solid #eee;
+    border-radius: 10px 10px 0 0;
+    font-weight: 600;
+    padding: 12px 16px;
+  }
+
+  .modern-panel .panel-body {
+    padding: 16px;
+  }
+
+  .device-info strong {
+    display: inline-block;
+    min-width: 120px;
+    color: #555;
+  }
+
+  .modern-table thead th {
+    background: #f5f6fa;
+    border-bottom: 2px solid #e5e7eb;
+    font-weight: 600;
+    color: #444;
+  }
+
+  .modern-table tbody tr:hover {
+    background: #f9fafc;
+  }
+
+  .modern-label {
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    display: inline-block;
+  }
+
+  .label-success {
+    background: #e8f5e9;
+    color: #2e7d32;
+  }
+
+  .label-warning {
+    background: #fff8e1;
+    color: #f57c00;
+  }
+
+  .label-danger {
+    background: #fdecea;
+    color: #c62828;
+  }
+
+  .modern-footer {
+    border-top: 1px solid #eee;
+    padding: 14px 20px;
+    background: #fafafa;
+  }
+
+  .btn-modern {
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-weight: 500;
+  }
+
+  .btn-danger.btn-modern {
+    background: #e53935;
+    border: none;
+  }
+
+  .btn-danger.btn-modern:hover {
+    background: #d32f2f;
+  }
+
+  .pagination-controls {
+    margin-top: 15px;
+  }
+</style>
+
+<div class="modern-modal">
+  <!-- Header -->
+  <div class="modal-header">
+    <button type="button" class="close" ng-click="close()" aria-label="Close">
+      <span aria-hidden="true">&times;</span>
+    </button>
+    <h3 class="modal-title">
+      <span localized>plugin.calllog.modal.title</span> - {{device.number}}
+    </h3>
+  </div>
+
+  <div class="modal-body">
+    <!-- Device Info -->
+    <div class="panel modern-panel">
+      <div class="panel-heading">
+        <span localized>plugin.calllog.device.info</span>
+      </div>
+      <div class="panel-body device-info">
+        <div class="row">
+          <div class="col-sm-6">
+            <strong localized>plugin.calllog.device.number</strong>
+            {{device.number || 'N/A'}}
+          </div>
+          <div class="col-sm-6">
+            <strong localized>plugin.calllog.device.model</strong>
+            {{device.model || 'N/A'}}
+          </div>
+        </div>
+        <div class="row" style="margin-top: 10px">
+          <div class="col-sm-6">
+            <strong localized>plugin.calllog.device.imei</strong>
+            {{device.displayedIMEI || device.imei || 'N/A'}}
+          </div>
+          <div class="col-sm-6">
+            <strong localized>plugin.calllog.device.phone</strong>
+            {{device.displayedPhone || device.phone || 'N/A'}}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Call Logs -->
+    <div class="panel modern-panel">
+      <div class="panel-heading">
+        <span localized>plugin.calllog.logs.title</span>
+        <button
+          class="btn btn-default btn-xs btn-modern pull-right"
+          ng-click="loadCallLogs()"
+          ng-disabled="loading"
+          style="margin-left: 8px;"
+          localized
+        >
+          button.refresh
+        </button>
+        <button
+          class="btn btn-danger btn-xs btn-modern pull-right"
+          ng-click="deleteAllLogs()"
+          ng-disabled="loading || callLogs.length === 0"
+          localized
+        >
+          button.delete.all
+        </button>
+      </div>
+
+      <div class="panel-body">
+        <!-- Loading -->
+        <div ng-if="loading" class="text-center">
+          <i class="fa fa-spinner fa-spin fa-2x"></i>
+          <p localized>loading.data</p>
+        </div>
+
+        <div ng-if="!loading && errorMessage" class="alert alert-danger">
+          {{errorMessage}}
+        </div>
+
+        <!-- Empty -->
+        <div
+          ng-if="!loading && !errorMessage && callLogs.length === 0"
+          class="text-center text-muted"
+        >
+          <p localized>plugin.calllog.no.logs</p>
+        </div>
+
+        <!-- Table -->
+        <div ng-if="!loading && callLogs.length > 0">
+          <table class="table modern-table">
+            <thead>
+              <tr>
+                <th localized>plugin.calllog.table.date</th>
+                <th localized>plugin.calllog.table.type</th>
+                <th localized>plugin.calllog.table.number</th>
+                <th localized>plugin.calllog.table.contact</th>
+                <th localized>plugin.calllog.table.duration</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr ng-repeat="log in callLogs">
+                <td>{{formatDate(log.callTimestamp)}}</td>
+                <td>
+                  <span
+                    class="modern-label"
+                    ng-class="{
+                                            'label-success': log.callType === 1 || log.callType === 2,
+                                            'label-warning': log.callType === 3,
+                                            'label-danger': log.callType === 5 || log.callType === 6
+                                          }"
+                  >
+                    {{getCallTypeName(log.callType)}}
+                  </span>
+                </td>
+                <td>{{log.phoneNumber || 'N/A'}}</td>
+                <td>{{log.contactName || '-'}}</td>
+                <td>{{formatDuration(log.duration)}}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Pagination -->
+          <div
+            class="text-center pagination-controls"
+            ng-if="pagination.total > pagination.pageSize"
+          >
+            <button
+              class="btn btn-default btn-sm btn-modern"
+              ng-click="previousPage()"
+              ng-disabled="pagination.page === 0"
+            >
+              <span class="glyphicon glyphicon-chevron-left"></span>
+              <span localized>button.previous</span>
+            </button>
+
+            <span style="margin: 0 15px">
+              <span localized>plugin.calllog.page</span>
+              {{pagination.page + 1}} / {{getTotalPages()}}
+            </span>
+
+            <button
+              class="btn btn-default btn-sm btn-modern"
+              ng-click="nextPage()"
+              ng-disabled="(pagination.page + 1) * pagination.pageSize >= pagination.total"
+            >
+              <span localized>button.next</span>
+              <span class="glyphicon glyphicon-chevron-right"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="modal-footer modern-footer">
+    <button
+      type="button"
+      class="btn btn-default btn-modern"
+      ng-click="close()"
+      localized
+    >
+      button.close
+    </button>
+  </div>
+</div>

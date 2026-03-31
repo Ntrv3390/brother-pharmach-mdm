@@ -6,49 +6,49 @@
         <div class='panel-body' style="padding: 30px; background: #f6f8fc">
             <form name='signupForm' ng-submit='signupForm.$valid && onSignup()' style="margin-bottom: 0px" ng-if="tokenValid && !signupComplete">
                 <div class='col-sm-12'>
-                    <label for='customerId' localized>signup.customer.id</label>
+                    <label for='customerId' localized>Username</label>
                     <input class='form-control' name='customerId' id='customerId' ng-pattern="/^[a-zA-Z0-9][a-zA-Z0-9\.\-_]{4,48}[a-zA-Z0-9]$/"
-                           ng-model='customer.name' localized-placeholder="signup.customer.id.placeholder"
+                           ng-model='customer.name' placeholder="Use letters and digits only"
                            required/>
-                    <div class="field-warning" ng-class="(signupForm.customerId.$dirty && signupForm.customerId.$error.pattern) ? '' : 'expired-device-hidden'" localized>signup.customer.id.invalid</div>
+                    <div class="field-warning" ng-class="(signupForm.customerId.$dirty && signupForm.customerId.$error.pattern) ? '' : 'expired-device-hidden'" localized>Please use 6 or more characters, letters and digits only</div>
                 </div>
                 <div class="form-group">
                 <div class='form-group col-sm-6'>
-                    <label for='firstName' localized>signup.first.name</label>
+                    <label for='firstName' localized>First name</label>
                     <input class='form-control' id='firstName'
-                           ng-model='customer.firstName' localized-placeholder="signup.first.name.placeholder"
+                           ng-model='customer.firstName' placeholder="Your first name (required)"
                            required/>
                 </div>
                 <div class='form-group col-sm-6'>
-                    <label for='lastName' localized>signup.last.name</label>
+                    <label for='lastName' localized>Last name</label>
                     <input class='form-control' id='lastName'
-                           ng-model='customer.lastName' localized-placeholder="signup.last.name.placeholder"
+                           ng-model='customer.lastName' placeholder="Your last name (required)"
                            required/>
                 </div>
                 </div>
                 <div class='form-group col-sm-12'>
-                    <label for='company' localized>signup.company</label>
+                    <label for='company' localized>Company name</label>
                     <input type='text' class='form-control' id='company'
-                           ng-model='customer.company' localized-placeholder="signup.company.placeholder"/>
+                           ng-model='customer.company' placeholder="Name of your business (optional)"/>
                 </div>
 
                 <div class='form-group col-sm-12'>
-                    <label for='description' localized>signup.description</label>
+                    <label for='description' localized>How will you use MDM?</label>
                     <textarea ng-model='customer.description' id="description" class='form-control no-resize'
                               localized-placeholder='signup.description.placeholder'></textarea>
                 </div>
                 <div class="form-group">
                     <div class='col-sm-6'>
-                        <label for='passwd' localized>signup.password</label>
+                        <label for='passwd' localized>Password</label>
                         <input type='password' class='form-control' id='passwd' ng-change="checkPassword()"
-                               ng-model='passwds.passwd1' localized-placeholder="signup.password.placeholder"
+                               ng-model='passwds.passwd1' placeholder="6+ characters"
                                required/>
                         <div class="field-warning" ng-class="passwordError ? '' : 'expired-device-hidden'">{{passwordError}}</div>
                     </div>
                     <div class='col-sm-6'>
-                        <label for='passwd2' localized>signup.password.repeat</label>
+                        <label for='passwd2' localized>Repeat the password</label>
                         <input type='password' class='form-control' id='passwd2' ng-change="checkPassword()"
-                               ng-model='passwds.passwd2' localized-placeholder="signup.password.placeholder"
+                               ng-model='passwds.passwd2' placeholder="6+ characters"
                                required/>
                     </div>
                 </div>
@@ -56,20 +56,20 @@
 
                 <div class='form-group col-sm-12'>
                 <button type='submit' class='btn btn-default right' style="opacity: 1; margin-top: 9px"
-                        ng-if="!loading" localized>signup.submit</button>
+                        ng-if="!loading" localized>Sign up</button>
                 <button type='submit' class='btn btn-default right' style="opacity: 0.5; margin-top: 9px"
-                        ng-disabled='true' ng-if="loading" localized>signup.progress</button>
+                        ng-disabled='true' ng-if="loading" localized>Signing up...</button>
                 </div>
             </form>
 
             <div ng-if="tokenValid && signupComplete">
-                <h3 style="margin: 0 0 20px 0" localized>signup.finalized.title</h3>
-                <div><span localized>signup.finalized.description</span> &nbsp; <a class="action-link" ng-click="login()" localized>button.login</a></div>
+                <h3 style="margin: 0 0 20px 0" localized>Your account is ready!</h3>
+                <div><span localized>In a short time, you must get the email containing useful instructions. Please review this email and login to the web panel using your username and password.</span> &nbsp; <a class="action-link" ng-click="login()" localized>Login</a></div>
             </div>
 
             <div ng-if="!tokenValid">
-                <h3 style="margin: 0 0 20px 0" localized>signup.token.invalid.title</h3>
-                <div><span localized>signup.token.invalid.description</span> &nbsp; <a class="action-link" ng-click="signup()" localized>login.signup</a></div>
+                <h3 style="margin: 0 0 20px 0" localized>The token is invalid or already used</h3>
+                <div><span localized>Please retry signing up to create a new account!</span> &nbsp; <a class="action-link" ng-click="signup()" localized>Sign up</a></div>
             </div>
         </div>
     </div>

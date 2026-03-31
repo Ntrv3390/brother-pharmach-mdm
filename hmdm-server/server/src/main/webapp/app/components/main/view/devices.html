@@ -62,14 +62,14 @@
 
     <div class="form-group" ng-if="additionalParams.enabled">
       <div class="col-sm-1 margin-bottom" style="margin-top: 5px">
-        <span localized>form.settings.common.enrollment.date</span>
+        <span localized>Enrollment date</span>
       </div>
       <div class="col-sm-2 margin-bottom">
         <div class="min-padding date-picker date-picker-input">
           <input
             class="form-control"
             datepicker-popup="{{dateFormat}}"
-            localized-placeholder="search.placeholder.from"
+            placeholder="From ..."
             ng-enter="initSearch()"
             ng-model="additionalParams.dateFrom"
             is-open="openDatePickers.dateFrom"
@@ -92,7 +92,7 @@
           <input
             class="form-control"
             datepicker-popup="{{dateFormat}}"
-            localized-placeholder="search.placeholder.to"
+            placeholder="To ..."
             ng-enter="initSearch()"
             ng-model="additionalParams.dateTo"
             is-open="openDatePickers.dateTo"
@@ -117,7 +117,7 @@
           id="addParamsImeiChanged"
           ng-model="additionalParams.imeiChanged"
         />
-        <span localized>form.devices.selection.imei.changed</span>
+        <span localized>IMEI recently changed</span>
       </div>
 
       <div class="col-sm-2 margin-bottom">
@@ -128,8 +128,8 @@
           ng-options="opt.id as opt.name for opt in installStatusOptions"
         >
           <option value="" localized>
-            form.devices.selection.install.status.default
-          </option>
+            Installation status ...
+        </option>
         </select>
       </div>
 
@@ -138,7 +138,7 @@
           type="text"
           ng-enter="initSearch()"
           ng-model="additionalParams.launcherVersion"
-          localized-placeholder="search.placeholder.launcher.version"
+          placeholder="Launcher Version"
           class="form-control"
         />
       </div>
@@ -151,9 +151,9 @@
           id="onlineOrOffline"
           ng-model="additionalParams.onlineOrOffline"
         >
-          <option value="" localized>form.devices.selection.status</option>
-          <option value="1" localized>form.devices.selection.online</option>
-          <option value="2" localized>form.devices.selection.offline</option>
+          <option value="" localized>Status ...</option>
+          <option value="1" localized>Online</option>
+          <option value="2" localized>Offline</option>
         </select>
       </div>
       <div class="col-sm-2 margin-bottom">
@@ -163,38 +163,38 @@
           ng-model="additionalParams.onlineTimeSelect"
         >
           <option value="15" localized>
-            form.devices.selection.online.status.1
-          </option>
+            15 minutes
+        </option>
           <option value="30" localized>
-            form.devices.selection.online.status.2
-          </option>
+            30 minutes
+        </option>
           <option value="60" localized>
-            form.devices.selection.online.status.3
-          </option>
+            1 hour
+        </option>
           <option value="120" localized>
-            form.devices.selection.online.status.4
-          </option>
+            2 hours
+        </option>
           <option value="360" localized>
-            form.devices.selection.online.status.5
-          </option>
+            6 hours
+        </option>
           <option value="1440" localized>
-            form.devices.selection.online.status.6
-          </option>
+            1 day
+        </option>
           <option value="2880" localized>
-            form.devices.selection.online.status.7
-          </option>
+            2 days
+        </option>
           <option value="4320" localized>
-            form.devices.selection.online.status.8
-          </option>
+            3 days
+        </option>
           <option value="10080" localized>
-            form.devices.selection.online.status.9
-          </option>
+            1 week
+        </option>
           <option value="43200" localized>
-            form.devices.selection.online.status.10
-          </option>
+            1 month
+        </option>
           <option value="1" localized>
-            form.devices.selection.online.status.custom
-          </option>
+            Enter time
+        </option>
         </select>
       </div>
       <div
@@ -205,7 +205,7 @@
           type="number"
           ng-enter="initSearch()"
           ng-model="additionalParams.onlineTimeEnter"
-          localized-placeholder="form.devices.selection.number"
+          placeholder="Enter a number"
           class="form-control"
         />
       </div>
@@ -214,7 +214,7 @@
         style="margin-top: 5px"
         ng-if="additionalParams.onlineTimeSelect == 1"
       >
-        <span localized>form.devices.selection.online.status.label</span>
+        <span localized>minute(s)</span>
       </div>
       <div
         class="col-sm-2 margin-bottom"
@@ -229,9 +229,9 @@
           id="mdmMode"
           ng-model="additionalParams.mdmMode"
         >
-          <option value="" localized>form.settings.common.mdm.mode</option>
-          <option value="1" localized>form.selection.status.yes</option>
-          <option value="0" localized>form.selection.status.no</option>
+          <option value="" localized>MDM mode</option>
+          <option value="1" localized>Yes</option>
+          <option value="0" localized>No</option>
         </select>
       </div>
 
@@ -241,9 +241,9 @@
           id="kioskMode"
           ng-model="additionalParams.kioskMode"
         >
-          <option value="" localized>form.settings.common.kiosk.mode</option>
-          <option value="1" localized>form.selection.status.yes</option>
-          <option value="0" localized>form.selection.status.no</option>
+          <option value="" localized>Kiosk mode</option>
+          <option value="1" localized>Yes</option>
+          <option value="0" localized>No</option>
         </select>
       </div>
 
@@ -252,7 +252,7 @@
           type="text"
           ng-enter="initSearch()"
           ng-model="additionalParams.androidVersion"
-          localized-placeholder="form.settings.common.android.version"
+          placeholder="Android version"
           class="form-control"
         />
       </div>
@@ -264,7 +264,7 @@
           type="text"
           ng-model="searchParams.searchValue"
           ng-enter="initSearch()"
-          localized-placeholder="search.placeholder.device"
+          placeholder="Search for a device"
           class="form-control"
         />
       </div>
@@ -277,7 +277,7 @@
           ng-click="initSearch()"
           localized
         >
-          button.search
+          Search
         </button>
 
         <input
@@ -285,8 +285,7 @@
           ng-model="searchParams.fastSearch"
           style="float: left; margin: 10px 10px 10px 30px"
         />
-        <span style="float: left; margin: 7px 0 0 0" localized
-          >form.devices.fast.search</span
+        <span style="float: left; margin: 7px 0 0 0" localized>Fast search by number</span
         >
 
         <div
@@ -310,11 +309,10 @@
             role="menu"
           >
             <li role="menuitem">
-              <a ng-click="openBulkUpdateModal()" localized
-                >button.set.configuration</a
+              <a ng-click="openBulkUpdateModal()" localized>Set configuration</a
               >
-              <a ng-click="openBulkGroupModal()" localized>button.set.group</a>
-              <a ng-click="confirmBulkDelete()" localized>button.delete</a>
+              <a ng-click="openBulkGroupModal()" localized>Set group</a>
+              <a ng-click="confirmBulkDelete()" localized>Delete</a>
             </li>
           </ul>
         </div>
@@ -372,7 +370,7 @@
           ng-click="sortData('STATUS')"
           class="pointer"
         >
-          <span localized>table.heading.device.status</span>
+          <span localized>Status</span>
           <span
             ng-if='paging.sortBy === "STATUS"'
             class="glyphicon"
@@ -384,7 +382,7 @@
           ng-click="sortData('LAST_UPDATE')"
           class="pointer"
         >
-          <span localized>table.heading.device.date</span>
+          <span localized>Date</span>
           <span
             ng-if='paging.sortBy === "LAST_UPDATE"'
             class="glyphicon"
@@ -396,7 +394,7 @@
           ng-click="sortData('NUMBER')"
           class="pointer"
         >
-          <span localized>table.heading.device.device.number</span>
+          <span localized>Device Number</span>
           <span
             ng-if='paging.sortBy === "NUMBER"'
             class="glyphicon"
@@ -408,7 +406,7 @@
           ng-click="sortData('IMEI')"
           class="pointer"
         >
-          <span localized>table.heading.device.imei</span>
+          <span localized>IMEI</span>
           <span
             ng-if='paging.sortBy === "IMEI"'
             class="glyphicon"
@@ -420,7 +418,7 @@
           ng-click="sortData('PHONE')"
           class="pointer"
         >
-          <span localized>table.heading.device.phone.number</span>
+          <span localized>Phone Number</span>
           <span
             ng-if='paging.sortBy === "PHONE"'
             class="glyphicon"
@@ -432,7 +430,7 @@
           ng-click="sortData('MODEL')"
           class="pointer"
         >
-          <span localized>table.heading.device.phone.model</span>
+          <span localized>Phone Model</span>
           <span
             ng-if='paging.sortBy === "MODEL"'
             class="glyphicon"
@@ -444,7 +442,7 @@
           ng-click="sortData('PERMISSIONS')"
           class="pointer"
         >
-          <span localized>table.heading.device.status.permissions</span>
+          <span localized>Permission Status</span>
           <span
             ng-if='paging.sortBy === "PERMISSIONS"'
             class="glyphicon"
@@ -456,7 +454,7 @@
           ng-click="sortData('INSTALLATIONS')"
           class="pointer"
         >
-          <span localized>table.heading.device.status.installation</span>
+          <span localized>Installation Status</span>
           <span
             ng-if='paging.sortBy === "INSTALLATIONS"'
             class="glyphicon"
@@ -468,7 +466,7 @@
           ng-click="sortData('FILES')"
           class="pointer"
         >
-          <span localized>table.heading.device.status.files</span>
+          <span localized>Files status</span>
           <span
             ng-if='paging.sortBy === "FILES"'
             class="glyphicon"
@@ -480,7 +478,7 @@
           ng-click="sortData('CONFIGURATION')"
           class="pointer"
         >
-          <span localized>table.heading.device.configuration</span>
+          <span localized>Configuration</span>
           <span
             ng-if='paging.sortBy === "CONFIGURATION"'
             class="glyphicon"
@@ -492,7 +490,7 @@
           ng-click="sortData('DESCRIPTION')"
           class="pointer"
         >
-          <span localized>table.heading.device.desc</span>
+          <span localized>Description</span>
           <span
             ng-if='paging.sortBy === "DESCRIPTION"'
             class="glyphicon"
@@ -504,7 +502,7 @@
           ng-click="sortData('GROUP')"
           class="pointer"
         >
-          <span localized>table.heading.device.group</span>
+          <span localized>Group</span>
           <span
             ng-if='paging.sortBy === "GROUP"'
             class="glyphicon"
@@ -516,7 +514,7 @@
           ng-click="sortData('LAUNCHER_VERSION')"
           class="pointer"
         >
-          <span localized>table.heading.device.launcher.version</span>
+          <span localized>Launcher version</span>
           <span
             ng-if='paging.sortBy === "LAUNCHER_VERSION"'
             class="glyphicon"
@@ -528,7 +526,7 @@
           ng-click="sortData('BATTERY_LEVEL')"
           class="pointer"
         >
-          <span localized>table.heading.device.battery.level</span>
+          <span localized>Battery level</span>
           <span
             ng-if='paging.sortBy === "BATTERY_LEVEL"'
             class="glyphicon"
@@ -540,7 +538,7 @@
           ng-click="sortData('DEFAULT_LAUNCHER')"
           class="pointer"
         >
-          <span localized>table.heading.device.default.launcher</span>
+          <span localized>Background mode</span>
           <span
             ng-if='paging.sortBy === "DEFAULT_LAUNCHER"'
             class="glyphicon"
@@ -552,7 +550,7 @@
           ng-click="sortData('MDM_MODE')"
           class="pointer"
         >
-          <span localized>table.heading.device.mdm.mode</span>
+          <span localized>MDM mode</span>
           <span
             ng-if='paging.sortBy === "MDM_MODE"'
             class="glyphicon"
@@ -564,7 +562,7 @@
           ng-click="sortData('KIOSK_MODE')"
           class="pointer"
         >
-          <span localized>table.heading.device.kiosk.mode</span>
+          <span localized>Kiosk mode</span>
           <span
             ng-if='paging.sortBy === "KIOSK_MODE"'
             class="glyphicon"
@@ -576,7 +574,7 @@
           ng-click="sortData('ANDROID_VERSION')"
           class="pointer"
         >
-          <span localized>table.heading.device.android.version</span>
+          <span localized>Android version</span>
           <span
             ng-if='paging.sortBy === "ANDROID_VERSION"'
             class="glyphicon"
@@ -588,7 +586,7 @@
           ng-click="sortData('ENROLLMENT_DATE')"
           class="pointer"
         >
-          <span localized>table.heading.device.enrollment.date</span>
+          <span localized>Enrolled</span>
           <span
             ng-if='paging.sortBy === "ENROLLMENT_DATE"'
             class="glyphicon"
@@ -600,7 +598,7 @@
           ng-click="sortData('SERIAL')"
           class="pointer"
         >
-          <span localized>table.heading.device.serial</span>
+          <span localized>Serial number</span>
           <span
             ng-if='paging.sortBy === "SERIAL"'
             class="glyphicon"
@@ -612,7 +610,7 @@
           ng-click="sortData('PUBLICIP')"
           class="pointer"
         >
-          <span localized>table.heading.device.publicip</span>
+          <span localized>IP address</span>
           <span
             ng-if='paging.sortBy === "PUBLICIP"'
             class="glyphicon"
@@ -687,7 +685,7 @@
           ng-if="(device.lastUpdateDate <= 0 || !device.lastUpdateDate) && settings.columnDisplayedDeviceDate"
           localized
         >
-          devices.date.unknown
+          unknown
         </td>
         <td ng-if="settings.columnDisplayedDeviceNumber">
           <span>{{device.number}}</span>
@@ -782,7 +780,7 @@
           ng-if="(device.enrollTime <= 0 || !device.enrollTime) && settings.columnDisplayedEnrollmentDate"
           localized
         >
-          devices.date.unknown
+          unknown
         </td>
         <td ng-if="settings.columnDisplayedSerial">
           <span>{{getSerial(device)}}</span>
@@ -811,7 +809,7 @@
             type="button"
             class="btn btn-default"
             ng-click="editDevice( device )"
-            localized-title="button.change"
+            title="Edit"
             ng-if="hasPermission('edit_devices') || hasPermission('edit_device_desc')"
           >
             <span class="glyphicon glyphicon-pencil"></span>
@@ -819,7 +817,7 @@
           <button
             type="button"
             class="btn btn-default"
-            localized-title="button.qrcode"
+            title="QR code"
             ng-if="hasPermission('enroll_devices')"
             ng-disabled="device.configuration.qrCodeKey == null"
             data-hint-key="hint.step.1"
@@ -831,7 +829,7 @@
             type="button"
             class="btn btn-default"
             ng-click="removeDevice( device )"
-            localized-title="button.delete"
+            title="Delete"
             ng-if="hasPermission('edit_devices')"
           >
             <span class="glyphicon glyphicon-trash"></span>
@@ -845,7 +843,7 @@
               id="single-button-{{device.id}}"
               uib-dropdown-toggle
               type="button"
-              localized-title="button.more"
+              title="More ..."
               class="btn btn-default dropdown-toggle"
             >
               <span class="glyphicon glyphicon-option-horizontal"></span>
@@ -861,13 +859,11 @@
                 role="menuitem"
                 ng-if="hasPermission('edit_device_app_settings')"
               >
-                <a ng-click="manageApplicationSettings(device)" localized
-                  >button.app.settings</a
+                <a ng-click="manageApplicationSettings(device)" localized>Application settings</a
                 >
               </li>
               <li role="menuitem">
-                <a ng-click="viewCallLogs(device)" localized
-                  >button.view.calllogs</a
+                <a ng-click="viewCallLogs(device)" localized>View Call Logs</a
                 >
               </li>
               <li
@@ -886,11 +882,11 @@
     </tbody>
   </table>
 
-  <div ng-if="!devices" class="center" localized>success.loading.devices</div>
+  <div ng-if="!devices" class="center" localized>Loading device list ...</div>
 
   <div ng-if="devices && devices.length === 0" class="center" localized>
-    notfound.devices
-  </div>
+    There are no devices to display.
+        </div>
 
   <div class="custom-pagination-wrapper">
     <div class="custom-pagination" ng-if="paging.totalItems > 0">

@@ -1,7 +1,7 @@
 <!-- Localization completed -->
 <div class="width-1000" ng-controller="UsersTabController">
     <div class="text-center">
-        <h4 localized>form.settings.users.title</h4>
+        <h4 localized>Users</h4>
     </div>
 
     <div>
@@ -11,8 +11,8 @@
                    class='form-control configurations-search-input'>
 
             <div class='configurations-search-buttons'>
-                <button type='button' class='btn btn-default' ng-click='search()' localized>button.search</button>
-                <button type='button' class='btn btn-default' ng-click='editUser( {} )' localized>button.add</button>
+                <button type='button' class='btn btn-default' ng-click='search()' localized>Search</button>
+                <button type='button' class='btn btn-default' ng-click='editUser( {} )' localized>Add</button>
             </div>
         </div>
 
@@ -30,10 +30,10 @@
         <table ng-if='users && users.length > 0' class='table'>
             <thead>
             <tr>
-                <th localized>table.heading.users.login</th>
-                <th localized>table.heading.users.name</th>
-                <th localized>table.heading.users.role</th>
-                <th class='actions-column' style="min-width: 150px" localized>table.heading.users.actions</th>
+                <th localized>Login</th>
+                <th localized>Name</th>
+                <th localized>Role</th>
+                <th class='actions-column' style="min-width: 150px" localized>Actions</th>
             </tr>
             </thead>
             <tbody>
@@ -48,7 +48,7 @@
                             <span class='glyphicon glyphicon-pencil'></span>
                         </button>
                         <button type='button' ng-if="user.editable && !user.superAdmin"
-                                class='btn btn-default' localized-title="button.login"
+                                class='btn btn-default' title="Login"
                                 ng-click='loginAs( user )'>
                             <span class='glyphicon glyphicon-copy'></span>
                         </button>
@@ -64,7 +64,7 @@
             </tbody>
         </table>
 
-        <div ng-if='users && users.length === 0' class='center' localized>notfound.users</div>
+        <div ng-if='users && users.length === 0' class='center' localized> Users not found. Try a different query.</div>
 
         <div class="text-center" ng-if="users.length > paging.pageSize">
             <pagination

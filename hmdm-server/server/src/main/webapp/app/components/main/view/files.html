@@ -9,7 +9,7 @@
                class='form-control configurations-search-input'>
 
         <div class='configurations-search-buttons'>
-            <button ng-if="hasPermission('edit_files')" type='button' class='btn btn-default' ng-click='editFile({})' localized>button.add</button>
+            <button ng-if="hasPermission('edit_files')" type='button' class='btn btn-default' ng-click='editFile({})' localized>Add</button>
         </div>
     </div>
 
@@ -29,14 +29,14 @@
     <table ng-if='files && files.length > 0' class='table'>
         <thead>
         <tr>
-            <th localized>table.heading.file.name</th>
-            <th localized>table.heading.file.comment</th>
-            <th localized>table.heading.file.size</th>
-            <th localized>table.heading.file.update.time</th>
-            <th localized>table.heading.file.device.path</th>
-            <th localized>table.heading.file.external</th>
-            <th localized>table.heading.file.variable</th>
-            <th class='actions-column' localized>table.heading.file.actions</th>
+            <th localized>File name</th>
+            <th localized>Description</th>
+            <th localized>Size</th>
+            <th localized>Updated at</th>
+            <th localized>Path on device</th>
+            <th localized>External</th>
+            <th localized>Variable</th>
+            <th class='actions-column' localized>Actions</th>
         </tr>
         </thead>
         <tbody>
@@ -55,17 +55,17 @@
                             class='btn btn-default' ng-click='copyLink(file)'>
                         <span class='glyphicon glyphicon-link'></span>
                     </button>
-                    <button type='button' localized-title="button.set.configurations"
+                    <button type='button' title="Specify Configurations"
                             class='btn btn-default' ng-click='editConfiguration(file)'>
                         <span class='glyphicon glyphicon-list'></span>
                     </button>
                     <button ng-if="hasPermission('edit_files')"
                             ng-disabled="file.size == -1"
-                            localized-title="button.edit"
+                            title="Edit"
                             type='button' class='btn btn-default' ng-click='editFile(file)'>
                         <span class='glyphicon glyphicon-pencil'></span>
                     </button>
-                    <button type='button' ng-if="hasPermission('edit_files') && !file.removalDisabled" localized-title="button.delete"
+                    <button type='button' ng-if="hasPermission('edit_files') && !file.removalDisabled" title="Delete"
                             class='btn btn-default' ng-click='removeFile(file)'>
                         <span class='glyphicon glyphicon-trash'></span>
                     </button>
@@ -81,7 +81,7 @@
         </tbody>
     </table>
 
-    <div ng-if='files && files.length == 0' class='center' localized>notfound.files</div>
+    <div ng-if='files && files.length == 0' class='center' localized> The file list is empty.</div>
 
     <div class="text-center" ng-if="files.length > paging.pageSize">
         <pagination

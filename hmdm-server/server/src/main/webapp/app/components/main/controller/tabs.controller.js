@@ -26,8 +26,12 @@ angular.module('headwind-kiosk')
             pluginService.getAvailablePlugins(function (response) {
                 if (response.status === 'OK') {
                     if (response.data) {
+                        var visiblePlugins = response.data.filter(function (plugin) {
+                            return plugin.identifier !== 'xtra';
+                        });
+
                         // Plugins available for Functions tab
-                        $scope.functionsPlugins = response.data.filter(function (plugin) {
+                        $scope.functionsPlugins = visiblePlugins.filter(function (plugin) {
                             return plugin.functionsViewTemplate !== undefined && plugin.functionsViewTemplate !== null;
                         });
                         $scope.functionsPlugins.forEach(function (plugin) {
@@ -36,7 +40,7 @@ angular.module('headwind-kiosk')
                         });
 
                         // Plugins available for Settings tab
-                        $scope.settingsPlugins = response.data.filter(function (plugin) {
+                        $scope.settingsPlugins = visiblePlugins.filter(function (plugin) {
                             return plugin.settingsViewTemplate !== undefined && plugin.settingsViewTemplate !== null;
                         });
                         $scope.settingsPlugins.forEach(function (plugin) {

@@ -14,7 +14,7 @@
             <button type='button' class='btn btn-default'
                     ng-if="hasPermission('edit_application_versions') && !(parentApp.commonApplication && parentApp.customerId != user.customerId)"
                     ng-click='addApplicationVersion( {system: parentApp.system, applicationId: parentApp.id, arch: null} )'
-                    localized>button.add</button>
+                    localized>Add</button>
         </div>
     </div>
 
@@ -32,10 +32,10 @@
     <table ng-if='applications && applications.length > 0' class='table'>
         <thead>
         <tr>
-            <th localized>table.heading.application.version</th>
-            <th localized>form.application.version.code</th>
-            <th localized>table.heading.application.url</th>
-            <th class='actions-column-150' localized>table.heading.application.actions</th>
+            <th localized>Version</th>
+            <th localized>Version Code</th>
+            <th localized>URL</th>
+            <th class='actions-column-150' localized>Actions</th>
         </tr>
         </thead>
         <tbody>
@@ -45,35 +45,35 @@
             <td ng-if="!application.split">{{application.url}}</td>
             <td ng-if="application.split" class="column-split-apk"><span class="configuration-hint">arm64:</span>&nbsp;&nbsp;
                 <span ng-if="application.urlArm64">{{application.urlArm64}}</span>
-                <span class="warning-font" ng-if="!application.urlArm64" localized>form.configuration.apps.no.apk</span><br>
+                <span class="warning-font" ng-if="!application.urlArm64" localized>none</span><br>
                 <span class="configuration-hint">armeabi:</span>
                 <span ng-if="application.urlArmeabi">{{application.urlArmeabi}}</span>
-                <span class="warning-font" ng-if="!application.urlArmeabi" localized>form.configuration.apps.no.apk</span>
+                <span class="warning-font" ng-if="!application.urlArmeabi" localized>none</span>
 
             <td>
                 <div>
-                    <button localized-title="button.set.configurations"
+                    <button title="Specify Configurations"
                             type='button' class='btn btn-default' ng-click='manageConfigurations( application )'>
                         <span class='glyphicon glyphicon-list'></span>
                     </button>
                     <button ng-if="hasPermission('edit_application_versions') && (!parentApp.commonApplication || parentApp.customerId == user.customerId)"
-                            localized-title="button.edit"
+                            title="Edit"
                             type='button' class='btn btn-default' ng-click='editApplicationVersion( application )'>
                         <span class='glyphicon glyphicon-pencil'></span>
                     </button>
                     <button ng-if="hasPermission('edit_application_versions') && !application.deletionProhibited && (!parentApp.commonApplication || parentApp.customerId == user.customerId)"
-                            localized-title="button.delete"
+                            title="Delete"
                             type='button' class='btn btn-default' ng-click='removeApplicationVersion( application )'>
                         <span class='glyphicon glyphicon-trash'></span>
                     </button>
                     <button ng-if="hasPermission('edit_application_versions') && application.deletionProhibited && (!parentApp.commonApplication || parentApp.customerId == user.customerId)"
-                            localized-title="error.application.version.deletion.prohibited" disabled="disabled"
+                            title="The version is either unique or used in configurations and cannot be deleted" disabled="disabled"
                             type='button' class='btn btn-default'>
                         <span class='glyphicon glyphicon-trash'></span>
                     </button>
                     <button ng-if="hasPermission('edit_application_versions') && parentApp.commonApplication && parentApp.customerId != user.customerId"
                             ng-click="clarifyOnCommon()"
-                            localized-title="button.common" type='button' class='btn btn-default'>
+                            title="Common application" type='button' class='btn btn-default'>
                         <span class='glyphicon glyphicon-cloud'></span>
                     </button>
                 </div>
@@ -83,7 +83,7 @@
     </table>
 
 
-    <div ng-if='applications && applications.length === 0' class='center' localized>notfound.app.versions.for.display</div>
+    <div ng-if='applications && applications.length === 0' class='center' localized>There are no versions to display.</div>
 
     <div class="text-center" ng-if="applications.length > paging.pageSize">
         <pagination

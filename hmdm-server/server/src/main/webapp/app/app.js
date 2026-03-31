@@ -522,6 +522,10 @@ angular.module('headwind-kiosk',
             if (response.status === 'OK') {
                 if (response.data) {
                     response.data.forEach(function (plugin) {
+                        if (plugin.identifier === 'xtra') {
+                            return;
+                        }
+
                         try {
                             $ocLazyLoad.load(plugin.javascriptModuleFile);
                         } catch (e) {

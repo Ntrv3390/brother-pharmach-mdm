@@ -6,38 +6,38 @@
 
         <div class='form-group change-title'>
             <label class='col-sm-3 control-label' localized>&nbsp;</label>
-            <div class='col-sm-9'><h3 localized>menu.profile</h3></div>
+            <div class='col-sm-9'><h3 localized>Profile</h3></div>
         </div>
 
         <div class='form-group'>
-            <label for='login' class='col-sm-3 control-label' style="font-weight: normal" localized>form.user.login</label>
+            <label for='login' class='col-sm-3 control-label' style="font-weight: normal" localized>Login</label>
             <div class='col-sm-9'>
                 <input ng-model='user.login' type='text' class='form-control' id='login' disabled>
             </div>
         </div>
 
         <div class='form-group' ng-if="settings.accountType != 3 && !settings.singleCustomer">
-            <div class="col-sm-3 align-right" localized>form.customer.type</div>
+            <div class="col-sm-3 align-right" localized>Customer type</div>
             <div class="col-sm-9 bold">{{accountType(settings.accountType)}}</div>
         </div>
 
         <div class='form-group' ng-if="settings.expiryTime > 0">
-            <div class="col-sm-3 align-right" localized>form.customer.expiry.time</div>
+            <div class="col-sm-3 align-right" localized>Expiry date</div>
             <div class="col-sm-9 bold"><span ng-class="{'warning-font': settings.expiryTime && settings.expiryTime < now + 86400000*3}">{{settings.expiryTime | date:'dd/MM/yyyy'}}</span></div>
         </div>
 
         <div class='form-group' ng-if="settings.deviceLimit > 0">
-            <div class="col-sm-3 align-right" localized>form.customer.device.limit</div>
+            <div class="col-sm-3 align-right" localized>Device limit</div>
             <div class="col-sm-9 bold"><span ng-class="{'warning-font': settings.deviceCount > settings.deviceLimit}">{{settings.deviceCount}} / {{settings.deviceLimit}}</span></div>
         </div>
 
         <div class='form-group' ng-if="settings.sizeLimit > 0">
-            <div class="col-sm-3 align-right" localized>form.customer.size.limit</div>
+            <div class="col-sm-3 align-right" localized>Storage limit</div>
             <div class="col-sm-9 bold"><span>{{sizeLimit}} Mb</span></div>
         </div>
 
         <div class='form-group'>
-            <label for='username' class='col-sm-3 control-label' style="font-weight: normal" localized>form.user.name</label>
+            <label for='username' class='col-sm-3 control-label' style="font-weight: normal" localized>Name</label>
             <div class='col-sm-9'>
                 <input ng-model='user.name' type='text' class='form-control' id='username'
                        localized-placeholder='form.user.name.placeholder'>
@@ -45,7 +45,7 @@
         </div>
 
         <div class='form-group'>
-            <label for='email' class='col-sm-3 control-label' style="font-weight: normal" localized>form.user.email</label>
+            <label for='email' class='col-sm-3 control-label' style="font-weight: normal" localized>E-mail</label>
             <div class='col-sm-9'>
                 <input ng-model='user.email' type='text' class='form-control' id='email'
                        localized-placeholder='form.user.email.placeholder'>
@@ -54,17 +54,17 @@
 
         <div class='form-group'>
             <div class='col-sm-offset-2 col-sm-10'>
-                <button type='submit' class='btn btn-default' ng-disabled="!saveEnabled" ng-click='saveDetails()' localized>button.save</button>
+                <button type='submit' class='btn btn-default' ng-disabled="!saveEnabled" ng-click='saveDetails()' localized>Save</button>
             </div>
         </div>
 
         <div class='form-group change-title'>
             <label class='col-sm-3 control-label' localized>&nbsp;</label>
-            <div class='col-sm-9'><h3 localized>form.profile.title</h3></div>
+            <div class='col-sm-9'><h3 localized>Change password</h3></div>
         </div>
 
         <div class='form-group'>
-            <label for='oldPassword' class='col-sm-3 control-label' style="font-weight: normal" localized>form.profile.password.old</label>
+            <label for='oldPassword' class='col-sm-3 control-label' style="font-weight: normal" localized>Old Password</label>
             <div class='col-sm-9'>
                 <input ng-model='user.oldPassword' type='password' class='form-control' id='oldPassword'
                        localized-placeholder='form.profile.password.old.placeholder'>
@@ -72,7 +72,7 @@
         </div>
 
         <div class='form-group'>
-            <label for='newPassword' class='col-sm-3 control-label' style="font-weight: normal" localized>form.profile.password.new</label>
+            <label for='newPassword' class='col-sm-3 control-label' style="font-weight: normal" localized>New Password</label>
             <div class='col-sm-9'>
                 <input ng-model='user.newPassword' type='password' class='form-control' id='newPassword'
                        localized-placeholder='form.profile.password.new.placeholder'>
@@ -80,7 +80,7 @@
         </div>
 
         <div class='form-group'>
-            <label for='confirm' class='col-sm-3 control-label' style="font-weight: normal" localized>form.profile.password.confirm</label>
+            <label for='confirm' class='col-sm-3 control-label' style="font-weight: normal" localized>Verify</label>
             <div class='col-sm-9'>
                 <input ng-model='user.confirm' type='password' class='form-control' id='confirm'
                        localized-placeholder='form.profile.password.confirm.placeholder'>
@@ -90,7 +90,7 @@
 
         <div class='form-group'>
             <div class='col-sm-offset-2 col-sm-10'>
-                <button type='submit' class='btn btn-default' ng-disabled="!saveEnabled" ng-click='saveProfile()' localized>button.save</button>
+                <button type='submit' class='btn btn-default' ng-disabled="!saveEnabled" ng-click='saveProfile()' localized>Save</button>
             </div>
         </div>
     </form>

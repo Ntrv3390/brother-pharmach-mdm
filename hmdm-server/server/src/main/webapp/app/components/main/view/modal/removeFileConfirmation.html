@@ -24,11 +24,11 @@
     <form class='form-horizontal'>
 
         <div class='form-group'>
-            <p class='col-sm-12 text-center' localized>form.configuration.file.remove.prompt.1</p>
+            <p class='col-sm-12 text-center' localized>This file will not be synchronized with devices any more</p>
         </div>
 
         <div class='form-group' ng-if="deleteOptionEnabled">
-            <label class='col-sm-6 control-label' for="fhfdh93239" localized>form.configuration.file.remove.prompt.2</label>
+            <label class='col-sm-6 control-label' for="fhfdh93239" localized>Remove file from the server</label>
             <div class='col-sm-1'>
                 <input ng-model='obj.deleteFileFromDisk' required type='checkbox' class='form-control' id="fhfdh93239"/>
             </div>
@@ -36,8 +36,8 @@
 
         <div class='form-group'>
             <div class='text-center'>
-                <button type='submit' class='btn btn-default' ng-click='save()' localized>button.delete</button>
-                <button type='button' class='btn btn-default' ng-click='closeModal()' localized>button.cancel</button>
+                <button type='submit' class='btn btn-default' ng-click='save()' localized>Delete</button>
+                <button type='button' class='btn btn-default' ng-click='closeModal()' localized>Cancel</button>
             </div>
         </div>
     </form>

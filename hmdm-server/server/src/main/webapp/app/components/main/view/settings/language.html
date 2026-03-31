@@ -7,44 +7,44 @@
             </div>
 
             <div class="text-center">
-                <h4 localized-change-tracking>form.settings.lang.title</h4>
+                <h4 localized-change-tracking>Language settings</h4>
             </div>
 
             <div class='form-group'>
-                <label class='col-sm-6 control-label' for="c1" localized-change-tracking>form.settings.lang.use.default</label>
+                <label class='col-sm-6 control-label' for="c1" localized-change-tracking>Use default language</label>
                 <div class='col-sm-1'>
                     <input id="c1" ng-model='settings.useDefaultLanguage' type='checkbox' class='form-control'/>
                 </div>
             </div>
 
             <div class='form-group' ng-if="!settings.useDefaultLanguage">
-                <label class='col-sm-6 control-label' localized-change-tracking>form.settings.lang.use</label>
+                <label class='col-sm-6 control-label' localized-change-tracking>Use language</label>
                 <div class="col-sm-6">
                 <select name="c3_lang" ng-model="settings.language" class="form-control">
-                    <option ng-value="'ar_AE'" ng-selected="settings.language === 'ar_AE'" localized-change-tracking>form.settings.lang.ar</option>
-                    <option ng-value="'de_DE'" ng-selected="settings.language === 'de_DE'" localized-change-tracking>form.settings.lang.de</option>
-                    <option ng-value="'en_US'" ng-selected="settings.language === 'en_US'" localized-change-tracking>form.settings.lang.en</option>
-                    <option ng-value="'es_ES'" ng-selected="settings.language === 'es_ES'" localized-change-tracking>form.settings.lang.es</option>
-                    <option ng-value="'fr_FR'" ng-selected="settings.language === 'fr_FR'" localized-change-tracking>form.settings.lang.fr</option>
-                    <option ng-value="'it_IT'" ng-selected="settings.language === 'it_IT'" localized-change-tracking>form.settings.lang.it</option>
-                    <option ng-value="'ja_JP'" ng-selected="settings.language === 'ja_JP'" localized-change-tracking>form.settings.lang.ja</option>
-                    <option ng-value="'pt_PT'" ng-selected="settings.language === 'pt_PT'" localized-change-tracking>form.settings.lang.pt</option>
-                    <option ng-value="'ru_RU'" ng-selected="settings.language === 'ru_RU'" localized-change-tracking>form.settings.lang.ru</option>
-                    <option ng-value="'tr_TR'" ng-selected="settings.language === 'tr_TR'" localized-change-tracking>form.settings.lang.tr</option>
-                    <option ng-value="'zh_CN'" ng-selected="settings.language === 'zh_CN'" localized-change-tracking>form.settings.lang.cn</option>
-                    <option ng-value="'zh_TW'" ng-selected="settings.language === 'zh_TW'" localized-change-tracking>form.settings.lang.tw</option>
-                    <option ng-value="'vi_VN'" ng-selected="settings.language === 'vi_VN'" localized-change-tracking>form.settings.lang.vi</option>
+                    <option ng-value="'ar_AE'" ng-selected="settings.language === 'ar_AE'" localized-change-tracking>عربي</option>
+                    <option ng-value="'de_DE'" ng-selected="settings.language === 'de_DE'" localized-change-tracking>Deutsch</option>
+                    <option ng-value="'en_US'" ng-selected="settings.language === 'en_US'" localized-change-tracking>English</option>
+                    <option ng-value="'es_ES'" ng-selected="settings.language === 'es_ES'" localized-change-tracking>Español</option>
+                    <option ng-value="'fr_FR'" ng-selected="settings.language === 'fr_FR'" localized-change-tracking>Français</option>
+                    <option ng-value="'it_IT'" ng-selected="settings.language === 'it_IT'" localized-change-tracking>Italiano</option>
+                    <option ng-value="'ja_JP'" ng-selected="settings.language === 'ja_JP'" localized-change-tracking>日本</option>
+                    <option ng-value="'pt_PT'" ng-selected="settings.language === 'pt_PT'" localized-change-tracking>Português</option>
+                    <option ng-value="'ru_RU'" ng-selected="settings.language === 'ru_RU'" localized-change-tracking>Русский</option>
+                    <option ng-value="'tr_TR'" ng-selected="settings.language === 'tr_TR'" localized-change-tracking>Türkçe</option>
+                    <option ng-value="'zh_CN'" ng-selected="settings.language === 'zh_CN'" localized-change-tracking>繁体中文</option>
+                    <option ng-value="'zh_TW'" ng-selected="settings.language === 'zh_TW'" localized-change-tracking>繁體中文</option>
+                    <option ng-value="'vi_VN'" ng-selected="settings.language === 'vi_VN'" localized-change-tracking>Tiếng Việt</option>
                 </select>
                 </div>
             </div>
 
             <div style="margin-top: 50px">
                 <div class="text-center">
-                    <h4 localized-change-tracking>form.settings.misc.title</h4>
+                    <h4 localized-change-tracking>Miscellaneous settings</h4>
                 </div>
 
                 <div class='form-group'>
-                    <label class='col-sm-6 control-label' localized-change-tracking>form.settings.misc.phone.format</label>
+                    <label class='col-sm-6 control-label' localized-change-tracking>Phone number format</label>
                     <div class='col-sm-6'>
                         <input ng-model='settings.phoneNumberFormat' type='text' class='form-control'
                                localized-placeholder='form.settings.misc.phone.format.placeholder'/>
@@ -53,12 +53,12 @@
 
                 <div class="form-group">
                     <div class='col-sm-8'></div>
-                    <div class="col-sm-2"><label class='control-label' localized-change-tracking>form.settings.misc.custom.property.multiline</label></div>
-                    <div class="col-sm-2"><label class='control-label' localized-change-tracking>form.settings.misc.custom.property.send</label></div>
+                    <div class="col-sm-2"><label class='control-label' localized-change-tracking>Multiline</label></div>
+                    <div class="col-sm-2"><label class='control-label' localized-change-tracking>Send to device</label></div>
                 </div>
 
                 <div class='form-group'>
-                    <label class='col-sm-3 control-label' localized-change-tracking>form.settings.misc.custom.property.name.1</label>
+                    <label class='col-sm-3 control-label' localized-change-tracking>Custom property #1</label>
                     <div class='col-sm-5'>
                         <input ng-model='settings.customPropertyName1' type='text' class='form-control'
                                localized-placeholder='form.settings.misc.custom.property.name.placeholder'/>
@@ -74,7 +74,7 @@
                 </div>
 
                 <div class='form-group'>
-                    <label class='col-sm-3 control-label' localized-change-tracking>form.settings.misc.custom.property.name.2</label>
+                    <label class='col-sm-3 control-label' localized-change-tracking>Custom property #2</label>
                     <div class='col-sm-5'>
                         <input ng-model='settings.customPropertyName2' type='text' class='form-control'
                                localized-placeholder='form.settings.misc.custom.property.name.placeholder'/>
@@ -90,7 +90,7 @@
                 </div>
 
                 <div class='form-group'>
-                    <label class='col-sm-3 control-label' localized-change-tracking>form.settings.misc.custom.property.name.3</label>
+                    <label class='col-sm-3 control-label' localized-change-tracking>Custom property #3</label>
                     <div class='col-sm-5'>
                         <input ng-model='settings.customPropertyName3' type='text' class='form-control'
                                localized-placeholder='form.settings.misc.custom.property.name.placeholder'/>
@@ -106,57 +106,57 @@
                 </div>
 
                 <div class='form-group'>
-                    <label class='col-sm-6 control-label' for="sendDescription" localized-change-tracking>form.settings.misc.send.description</label>
+                    <label class='col-sm-6 control-label' for="sendDescription" localized-change-tracking>Send description to devices</label>
                     <div class='col-sm-1'>
                         <input id="sendDescription" ng-model='settings.sendDescription' type='checkbox' class='form-control'/>
                     </div>
                 </div>
 
                 <div class="text-center" style="margin-top: 50px">
-                    <h4 localized-change-tracking>form.settings.security.title</h4>
+                    <h4 localized-change-tracking>Security settings</h4>
                 </div>
 
                 <div class='form-group'>
-                    <label class='col-sm-6 control-label' localized-change-tracking>form.settings.misc.password.length</label>
+                    <label class='col-sm-6 control-label' localized-change-tracking>Minimal password length</label>
                     <div class='col-sm-6'>
                         <input ng-model='settings.passwordLength' type='number' class='form-control'/>
                     </div>
                 </div>
 
                 <div class='form-group'>
-                    <label class='col-sm-6 control-label' localized-change-tracking>form.settings.misc.password.strength</label>
+                    <label class='col-sm-6 control-label' localized-change-tracking>Password strength</label>
                     <div class="col-sm-6">
                         <select name="c3_lang" ng-model="settings.passwordStrength" class="form-control">
-                            <option ng-value="0" ng-selected="settings.passwordStrength === 0" localized-change-tracking>form.settings.misc.password.none</option>
-                            <option ng-value="1" ng-selected="settings.passwordStrength === 1" localized-change-tracking>form.settings.misc.password.alphanumeric</option>
-                            <option ng-value="2" ng-selected="settings.passwordStrength === 2" localized-change-tracking>form.settings.misc.password.specialchar</option>
+                            <option ng-value="0" ng-selected="settings.passwordStrength === 0" localized-change-tracking>Not specified (any characters)</option>
+                            <option ng-value="1" ng-selected="settings.passwordStrength === 1" localized-change-tracking>Lower and uppercase letters, digits</option>
+                            <option ng-value="2" ng-selected="settings.passwordStrength === 2" localized-change-tracking>Lower and uppercase letters, digits, special chars</option>
                         </select>
                     </div>
                 </div>
 
                 <div class='form-group'>
-                    <label class='col-sm-6 control-label' for="passwordReset" localized-change-tracking>form.settings.misc.password.reset</label>
+                    <label class='col-sm-6 control-label' for="passwordReset" localized-change-tracking>User should reset the password</label>
                     <div class='col-sm-1'>
                         <input id="passwordReset" ng-model='settings.passwordReset' type='checkbox' class='form-control'/>
                     </div>
                 </div>
 
                 <div class='form-group'>
-                    <label class='col-sm-6 control-label' localized-change-tracking>form.settings.misc.idle.logout</label>
+                    <label class='col-sm-6 control-label' localized-change-tracking>Log out when idle</label>
                     <div class="col-sm-6">
                         <select name="c3_lang" ng-model="settings.idleLogout" class="form-control">
-                            <option ng-value="0" ng-selected="settings.idleLogout === null || settings.idleLogout === 0" localized-change-tracking>form.settings.misc.idle.logout.never</option>
-                            <option ng-value="300" ng-selected="settings.idleLogout === 300" localized-change-tracking>form.settings.misc.idle.logout.1</option>
-                            <option ng-value="600" ng-selected="settings.idleLogout === 600" localized-change-tracking>form.settings.misc.idle.logout.2</option>
-                            <option ng-value="1800" ng-selected="settings.idleLogout === 1800" localized-change-tracking>form.settings.misc.idle.logout.3</option>
-                            <option ng-value="3600" ng-selected="settings.idleLogout === 3600" localized-change-tracking>form.settings.misc.idle.logout.4</option>
+                            <option ng-value="0" ng-selected="settings.idleLogout === null || settings.idleLogout === 0" localized-change-tracking>Never</option>
+                            <option ng-value="300" ng-selected="settings.idleLogout === 300" localized-change-tracking>5 minutes</option>
+                            <option ng-value="600" ng-selected="settings.idleLogout === 600" localized-change-tracking>10 minutes</option>
+                            <option ng-value="1800" ng-selected="settings.idleLogout === 1800" localized-change-tracking>30 minutes</option>
+                            <option ng-value="3600" ng-selected="settings.idleLogout === 3600" localized-change-tracking>1 hour</option>
                         </select>
                     </div>
                 </div>
 
 
                 <div ng-if="settings.singleCustomer" class='form-group'>
-                    <label class='col-sm-6 control-label' for="c2_createNewDevices" localized-change-tracking>form.settings.misc.create.new.devices</label>
+                    <label class='col-sm-6 control-label' for="c2_createNewDevices" localized-change-tracking>Add device on first access</label>
                     <div class='col-sm-1'>
                         <input id="c2_createNewDevices" ng-model='settings.createNewDevices' type='checkbox' name="c_createNewDevices"
                                class='form-control'/>
@@ -164,7 +164,7 @@
                 </div>
 
                 <div ng-if="settings.singleCustomer" class='form-group'>
-                    <label class='col-sm-6 control-label' localized-change-tracking>form.settings.misc.new.device.config</label>
+                    <label class='col-sm-6 control-label' localized-change-tracking>New device configuration</label>
                     <div class='col-sm-4'>
                         <select class='form-control'
                                 ng-model='settings.newDeviceConfigurationId'
@@ -174,7 +174,7 @@
                 </div>
 
                 <div ng-if="settings.singleCustomer" class='form-group'>
-                    <label class='col-sm-6 control-label' localized-change-tracking>form.settings.misc.new.device.group</label>
+                    <label class='col-sm-6 control-label' localized-change-tracking>New device group</label>
                     <div class='col-sm-4'>
                         <select class='form-control'
                                 ng-model='settings.newDeviceGroupId'
@@ -188,7 +188,7 @@
 
             <div class='form-group'>
                 <div class='col-sm-offset-6 col-sm-9 padding-left'>
-                    <button type='submit' class='btn btn-default' ng-click='saveLanguageSettings()' localized-change-tracking>button.save</button>
+                    <button type='submit' class='btn btn-default' ng-click='saveLanguageSettings()' localized-change-tracking>Save</button>
                 </div>
             </div>
         </form>
@@ -196,11 +196,11 @@
         <form class='form-horizontal' ng-if="false">
 
             <div class="text-center" style="margin-top: 50px">
-                <h4 localized-change-tracking>form.two.factor.auth.title</h4>
+                <h4 localized-change-tracking>Two-factor authentication</h4>
             </div>
 
             <div class='form-group'>
-                <label class='col-sm-6 control-label' for="twoFactor" localized-change-tracking>form.two.factor.auth.title</label>
+                <label class='col-sm-6 control-label' for="twoFactor" localized-change-tracking>Two-factor authentication</label>
                 <div class='col-sm-1'>
                     <input id="twoFactor" ng-model='twoFactor.use' type='checkbox' class='form-control'
                         ng-checked="twoFactor.use" ng-change="twoFactorToggled()"/>
@@ -215,7 +215,7 @@
                 <div class="center">
                     <img ng-src="{{twoFactor.qrCodeUrl}}" alt="" />
                 </div>
-                <div localized>form.two.factor.auth.settings.hint</div>
+                <div localized>To set the two-factor authentication, please install the Authenticator app on your mobile device, scan the QR code, generate and enter the verification code.</div>
             </div>
 
             <div class='form-group'>
@@ -223,7 +223,7 @@
             </div>
 
             <div class='form-group' ng-if="twoFactor.use && !twoFactor.accepted">
-                <label class='col-sm-6 control-label' for='authCode' localized>form.two.factor.auth.code</label>
+                <label class='col-sm-6 control-label' for='authCode' localized>Verification code</label>
                 <div class="col-sm-4">
                     <input type='text' class='form-control' id='authCode'
                            ng-model='twoFactor.code' localized-placeholder='form.two.factor.auth.code.hint'
@@ -231,7 +231,7 @@
                 </div>
                 <div class="col-sm-2">
                     <button type='submit' class='btn btn-default' style="opacity: 1" ng-click='verifyTwoFactor()'
-                            localized>form.two.factor.auth.verify</button>
+                            localized>Verify</button>
                 </div>
             </div>
 

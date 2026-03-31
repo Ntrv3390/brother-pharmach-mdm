@@ -5,7 +5,7 @@
     <form class='form-horizontal'>
 
         <div class='form-group'>
-            <label class='col-sm-3 control-label' localized>form.role.name</label>
+            <label class='col-sm-3 control-label' localized>Name</label>
             <div class='col-sm-9'>
                 <input ng-model='role.name' required type='text' class='form-control'
                        localized-placeholder='form.role.name.placeholder'>
@@ -13,7 +13,7 @@
         </div>
 
         <div class='form-group'>
-            <label class='col-sm-3 control-label' localized>form.role.permissions</label>
+            <label class='col-sm-3 control-label' localized>Permissions</label>
             <div class='col-sm-9'>
                 <div ng-dropdown-multiselect
                      options='permissionList'
@@ -25,8 +25,8 @@
 
         <div class='form-group'>
             <div class='col-sm-offset-2 col-sm-10'>
-                <button type='submit' class='btn btn-default' ng-click='save()' localized>button.save</button>
-                <button type='button' class='btn btn-default' ng-click='closeModal()' localized>button.cancel</button>
+                <button type='submit' class='btn btn-default' ng-click='save()' localized>Save</button>
+                <button type='button' class='btn btn-default' ng-click='closeModal()' localized>Cancel</button>
             </div>
         </div>
     </form>

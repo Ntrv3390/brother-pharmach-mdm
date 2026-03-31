@@ -9,29 +9,29 @@
     <form class='form-horizontal'>
 
         <div class='form-group'>
-            <label class='col-sm-4 control-label' for="applicationType" localized>form.application.type</label>
+            <label class='col-sm-4 control-label' for="applicationType" localized>Type</label>
             <div class='col-sm-8'>
                 <select class="form-control" ng-model='application.type' id="applicationType" ng-disabled="!isNewApp">
                     <option ng-value="'app'" ng-selected="application.type === 'app'"
-                            localized>form.application.type.option.app</option>
+                            localized>Application</option>
                     <option ng-value="'web'" ng-selected="application.type === 'web'"
-                            localized>form.application.type.option.web</option>
+                            localized>Web-page</option>
                     <option ng-value="'intent'" ng-selected="application.type === 'intent'"
-                            localized>form.application.type.option.intent</option>
+                            localized>System action</option>
                 </select>
             </div>
         </div>
 
         <div class='form-group' ng-if="!fileSelected && application.type === 'app'">
-            <label class='col-sm-4 control-label' for="applicationPkg" localized>form.application.pkg</label>
+            <label class='col-sm-4 control-label' for="applicationPkg" localized>Package ID</label>
             <div class='col-sm-8'>
-                <input localized-title="form.application.pkg.title" ng-model='application.pkg' type='text'
-                       class='form-control' id="applicationPkg" localized-placeholder="form.application.pkg.placeholder"/>
+                <input title="Package ID is automatically determined when you upload the APK file. Manually entered package ID is required for system apps only." ng-model='application.pkg' type='text'
+                       class='form-control' id="applicationPkg" placeholder="For example, com.android.camera"/>
             </div>
         </div>
 
         <div class='form-group' ng-if="fileSelected && application.type === 'app'">
-            <label class='col-sm-4 control-label' for="applicationPkg2" localized>form.application.pkg</label>
+            <label class='col-sm-4 control-label' for="applicationPkg2" localized>Package ID</label>
             <div class='col-sm-8'>
                 <input disabled ng-model='appdesc.pkg' type='text' class='form-control'
                        id="applicationPkg2"/>
@@ -39,24 +39,24 @@
         </div>
 
         <div class='form-group'>
-            <label class='col-sm-4 control-label' for="applicationName" localized>form.application.name</label>
+            <label class='col-sm-4 control-label' for="applicationName" localized>Application Name</label>
             <div class='col-sm-8'>
-                <input localized-title="form.application.name.title" ng-model='application.name' type='text'
-                       class='form-control' id="applicationName" localized-placeholder="form.application.name.placeholder"/>
+                <input title="You will see the app name in the list. We recommend to use unique and informative names." ng-model='application.name' type='text'
+                       class='form-control' id="applicationName" placeholder="For example, Camera (Android)"/>
             </div>
         </div>
 
         <div class='form-group' ng-if="!fileSelected && application.type === 'app'">
-            <label class='col-sm-4 control-label' for="applicationVersion" localized>form.application.version</label>
+            <label class='col-sm-4 control-label' for="applicationVersion" localized>Version</label>
             <div class='col-sm-8'>
-                <input localized-title="form.application.version.title" ng-model='application.version' type='text'
+                <input title="Package version is automatically determined when you upload the APK file. Set it to 0 for system apps." ng-model='application.version' type='text'
                        class='form-control' ng-disabled="application.id" id="applicationVersion"
-                       localized-placeholder="form.application.version.placeholder"/>
+                       placeholder="0 for preinstalled apps"/>
             </div>
         </div>
 
         <div class='form-group' ng-if="fileSelected && application.type === 'app'">
-            <label class='col-sm-4 control-label' for="applicationVersion2" localized>form.application.version</label>
+            <label class='col-sm-4 control-label' for="applicationVersion2" localized>Version</label>
             <div class='col-sm-8'>
                 <input disabled type='text' class='form-control' id="applicationVersion2"
                        ng-model='appdesc.version'/>
@@ -64,21 +64,21 @@
         </div>
 
         <div class='form-group' ng-if="application.type === 'app'">
-            <label class='col-sm-4 control-label' for="applicationArch" localized>form.application.arch</label>
+            <label class='col-sm-4 control-label' for="applicationArch" localized>Native code</label>
             <div class='col-sm-8'>
                 <select class="form-control" ng-model='application.arch' id="applicationArch" ng-if="!application.id">
                     <option ng-value="''" ng-selected="application.arch === null || application.arch === ''"
-                            localized>form.application.arch.universal</option>
+                            localized>None (universal APK)</option>
                     <option ng-value="'armeabi'" ng-selected="application.arch === 'armeabi'"
-                            localized>form.application.arch.armeabi</option>
+                            localized>Native code for armeabi-v7a</option>
                     <option ng-value="'arm64'" ng-selected="application.arch === 'arm64'"
-                            localized>form.application.arch.arm64</option>
+                            localized>Native code for arm64-v8a</option>
                 </select>
                 <div class="field-hint warning-font" ng-show="appTypeWarning">{{appTypeWarning}}</div>
                 <div class="field-hint success-font" ng-show="appTypeSuccess">{{appTypeSuccess}}</div>
                 <input ng-if="application.id"
-                       localized-placeholder="form.application.disabled.arch"
-                       localized-title="form.application.disabled.arch.title"
+                       placeholder="Version-specific"
+                       title="To add APKs for different CPU architectures, click &quot;Add&quot;, or open the app versions list"
                        type='text'
                        class='form-control'
                        disabled>
@@ -86,31 +86,31 @@
         </div>
 
         <div class='form-group' ng-if="application.type === 'app'">
-            <label class='col-sm-4 control-label' for="applicationSystem" localized>form.application.system</label>
+            <label class='col-sm-4 control-label' for="applicationSystem" localized>Preinstalled app</label>
             <div class='col-sm-2'>
-                <input localized-title="form.application.system.title" ng-model='application.system' type='checkbox'
+                <input title="System applications are preinstalled on a device and do not require URL or file. Set this flag only if you need to enable a certain system package." ng-model='application.system' type='checkbox'
                        class='form-control' id="applicationSystem"/>
             </div>
         </div>
 
         <div class='form-group' ng-if="application.type === 'app'">
             <label class='col-sm-4 control-label' for="applicationRunAfterInstall"
-                   localized>form.application.run.after.install</label>
+                   localized>Run after installation</label>
             <div class='col-sm-2'>
-                <input localized-title="form.application.run.after.install.title" ng-model='application.runAfterInstall'
+                <input title="Applications with background services need to be started in the foreground at least once." ng-model='application.runAfterInstall'
                        ng-disabled="application.system" type='checkbox' class='form-control' id="applicationRunAfterInstall"/>
             </div>
 
             <label class='col-sm-4 control-label' for="applicationRunAtBoot"
-                   localized>form.application.run.at.boot</label>
+                   localized>Run at boot</label>
             <div class='col-sm-2'>
-                <input localized-title="form.application.run.at.boot.title" ng-model='application.runAtBoot'
+                <input title="Set this flag if you need to run the app in the foreground after boot. This flag is not affecting background processes." ng-model='application.runAtBoot'
                        ng-disabled="application.system" type='checkbox' class='form-control' id="applicationRunAtBoot"/>
             </div>
         </div>
 
         <div class='form-group' ng-if="application.type === 'app' || application.type === 'web'">
-            <label class='col-sm-4 control-label' for="applicationUrl" localized>form.application.url</label>
+            <label class='col-sm-4 control-label' for="applicationUrl" localized>URL</label>
             <div class='col-sm-8'>
                 <!-- We enable editing the URL for better user experience. The URL changes will be applied
                 to the latest app version. Only apps without split APKs could be edited -->
@@ -120,11 +120,11 @@
                        ng-disabled="(application.system || (application.id && application.split))">
             </div>
             <div class="col-sm-4">&nbsp;</div>
-            <div class="col-sm-8 field-hint" localized>form.application.url.hint</div>
+            <div class="col-sm-8 field-hint" localized>Use file:///storage/emulated/0/... to create links to local files and folders</div>
         </div>
 
         <div class='form-group' ng-if="application.type === 'intent'">
-            <label class='col-sm-4 control-label' for="applicationIntent" localized>form.application.intent</label>
+            <label class='col-sm-4 control-label' for="applicationIntent" localized>Action</label>
             <div class='col-sm-8'>
                 <input-dropdown
                         id="applicationIntent"
@@ -140,7 +140,7 @@
         </div>
 
         <div class='form-group' ng-if="isNewApp && application.type === 'app'">
-            <label class='col-sm-4 control-label' localized>form.application.file</label>
+            <label class='col-sm-4 control-label' localized>File</label>
             <div class='col-sm-8'>
                 <div class="btn btn-default full-width btn-upload" ng-if="!file.path"
                      file-input-disabler input-disabled="{{application.system}}"
@@ -150,30 +150,30 @@
                      on-progress="onUploadProgress(progress)"
                      on-success="fileUploaded(response)"></div>
                 <span ng-if="file.path && !invalidFile">{{fileName}}</span>
-                <button class="btn btn-default" ng-if="file.path" ng-click="clearFile()" localized>button.cleanup</button>
+                <button class="btn btn-default" ng-if="file.path" ng-click="clearFile()" localized>Clear</button>
                 <div ng-if="availableSpace" class="field-hint" style="margin-bottom: 0">{{availableSpace}}</div>
             </div>
         </div>
 
         <div class='form-group'>
-            <label class='col-sm-4 control-label' for="showLabelBox" localized>form.application.showLabel</label>
+            <label class='col-sm-4 control-label' for="showLabelBox" localized>Show Icon</label>
             <div class='col-sm-2'>
-                <input localized-title="form.application.showLabel.title" ng-model='application.showIcon'
+                <input title="This flag denotes whether the app icon should be displayed in the launcher. This option may be overridden in the configuration." ng-model='application.showIcon'
                        type='checkbox' class='form-control' id="showLabelBox"/>
             </div>
 
             <div ng-if="application.type === 'app' && application.autoUpdateDisplayed">
-                <label class='col-sm-4 control-label' for="autoUpdateBox" localized>form.application.auto.update</label>
+                <label class='col-sm-4 control-label' for="autoUpdateBox" localized>Auto Update</label>
                 <div class='col-sm-2'>
-                    <input localized-title="form.application.auto.update.title" ng-model='application.autoUpdate'
+                    <input title="Set this flag to update all configurations where the app is installed. Use only if you are 100% sure the app is stable." ng-model='application.autoUpdate'
                            type='checkbox' class='form-control' id="autoUpdateBox"/>
                 </div>
             </div>
 
             <div ng-if="application.type === 'web'">
-                <label class='col-sm-4 control-label' for="useKioskBox" localized>form.application.use.kiosk</label>
+                <label class='col-sm-4 control-label' for="useKioskBox" localized>Open in Kiosk Browser</label>
                 <div class='col-sm-2'>
-                    <input localized-title="form.application.use.kiosk.title" ng-model='application.useKiosk'
+                    <input title="Set this flag if you'd like to open a web page in Kiosk Browser without any possibility to change the address" ng-model='application.useKiosk'
                            type='checkbox' class='form-control' id="useKioskBox"/>
                 </div>
             </div>
@@ -181,33 +181,33 @@
         </div>
 
         <div class='form-group' ng-if="application.showIcon">
-            <label class='col-sm-4 control-label' for="iconTextInput" localized>form.application.iconText</label>
+            <label class='col-sm-4 control-label' for="iconTextInput" localized>Icon Text</label>
             <div class='col-sm-8'>
                 <input ng-model='application.iconText' type='text' class='form-control' id="iconTextInput"
-                       localized-placeholder="form.application.iconText.placeholder"
+                       placeholder="(default)"
                        maxlength="256"/>
             </div>
         </div>
 
         <div class='form-group' ng-if="application.showIcon">
-            <label class='col-sm-4 control-label' for="iconInput" localized>form.application.icon</label>
+            <label class='col-sm-4 control-label' for="iconInput" localized>Icon</label>
             <div class='col-sm-5'>
                 <select ng-options="icon.id as icon.name for icon in icons" name="icon"
                         ng-model='application.iconId' class='form-control' id="iconInput">
                 </select>
             </div>
             <dic class="col-sm-3 align-right">
-                <button class="btn btn-default" type="button" ng-click="addNewIcon()" localized>button.add.icon</button>
+                <button class="btn btn-default" type="button" ng-click="addNewIcon()" localized>New Icon</button>
             </dic>
         </div>
 
 
         <div class='form-group'>
             <div class='col-sm-offset-4 col-sm-8'>
-                <button type='submit' class='btn btn-default' ng-click='save()' ng-disabled="loading" localized>button.save</button>
-                <button type='button' class='btn btn-default' ng-click='closeModal()' ng-disabled="loading" localized >button.cancel</button>
+                <button type='submit' class='btn btn-default' ng-click='save()' ng-disabled="loading" localized>Save</button>
+                <button type='button' class='btn btn-default' ng-click='closeModal()' ng-disabled="loading" localized>Cancel</button>
                 <button type='button' class='btn btn-default' ng-click='manageConfigurations()' ng-disabled="loading"
-                        ng-if="!isNewApp" localized>button.configurations</button>
+                        ng-if="!isNewApp" localized>Configurations</button>
             </div>
         </div>
     </form>

@@ -13,14 +13,14 @@
         </div>
 
         <div class='device-search-buttons col-sm-2'>
-            <button ng-if="hasPermission('edit_applications')" type='button' class='btn btn-default' ng-click='editApplication( {arch:null} )' localized>button.add</button>
+            <button ng-if="hasPermission('edit_applications')" type='button' class='btn btn-default' ng-click='editApplication( {arch:null} )' localized>Add</button>
         </div>
     </div>
 
     <div class="form-group">
         <div class="col-sm-2"><div ng-if="availableSpace" class="field-hint" style="margin-top: 9px">{{availableSpace}}</div></div>
 
-        <label for='cc12222' class="control-label col-sm-3" localized>form.configuration.apps.show.systeam.apps</label>
+        <label for='cc12222' class="control-label col-sm-3" localized>Show System Applications</label>
 
         <div class="col-sm-1">
             <input id="cc12222" ng-model='showMyAppsOnly.system' name="n42" type='checkbox' class='form-control'
@@ -29,7 +29,7 @@
         </div>
 
         <label for="cc1" class="control-label col-sm-3" ng-if="myAppsButtonVisible"
-               localized>box.show.my.apps.only</label>
+               localized>Display my applications only</label>
 
         <div class='col-sm-1' ng-if="myAppsButtonVisible">
             <input id="cc1" ng-model='showMyAppsOnly.on' name="n4" type='checkbox' class='form-control'
@@ -52,12 +52,12 @@
     <table ng-if='applications && applications.length > 0' class='table'>
         <thead>
         <tr>
-            <th localized>table.heading.application.pkg</th>
-            <th localized>table.heading.application.name</th>
-            <th localized>table.heading.application.version</th>
-            <th localized>table.heading.application.url</th>
-            <th localized>table.heading.application.label</th>
-            <th class='actions-column-150' localized>table.heading.application.actions</th>
+            <th localized>Package ID</th>
+            <th localized>Application Name</th>
+            <th localized>Version</th>
+            <th localized>URL</th>
+            <th localized>Icon</th>
+            <th class='actions-column-150' localized>Actions</th>
         </tr>
         </thead>
         <tbody>
@@ -72,40 +72,40 @@
             <td ng-if="!application.split">{{application.url}}</td>
             <td ng-if="application.split" class="column-split-apk"><span class="configuration-hint">arm64:</span>&nbsp;&nbsp;
                 <span ng-if="application.urlArm64">{{application.urlArm64}}</span>
-                <span class="warning-font" ng-if="!application.urlArm64" localized>form.configuration.apps.no.apk</span><br>
+                <span class="warning-font" ng-if="!application.urlArm64" localized>none</span><br>
                 <span class="configuration-hint">armeabi:</span>
                 <span ng-if="application.urlArmeabi">{{application.urlArmeabi}}</span>
-                <span class="warning-font" ng-if="!application.urlArmeabi" localized>form.configuration.apps.no.apk</span>
+                <span class="warning-font" ng-if="!application.urlArmeabi" localized>none</span>
             <td>{{application.showIcon ? '✓' : ''}}</td>
 
             <td>
                 <div>
-                    <button localized-title="button.edit.versions" ng-class="'btn btn-default ' + (application.type == 'app' ? '' : 'expired-device-hidden')"
+                    <button title="Versions" ng-class="'btn btn-default ' + (application.type == 'app' ? '' : 'expired-device-hidden')"
                             type='button' ng-click='editVersions( application )'>
                         <span class='glyphicon glyphicon-sound-5-1'></span>
                     </button>
-                    <button localized-title="button.set.configurations"
+                    <button title="Specify Configurations"
                             type='button' class='btn btn-default' ng-click='editConfiguration( application )'>
                         <span class='glyphicon glyphicon-list'></span>
                     </button>
                     <button ng-if="hasPermission('edit_applications') && (!application.commonApplication || application.customerId == user.customerId)"
-                            localized-title="button.edit"
+                            title="Edit"
                             type='button' class='btn btn-default' ng-click='editApplication( application )'>
                         <span class='glyphicon glyphicon-pencil'></span>
                     </button>
                     <button ng-if="hasPermission('edit_applications') && !application.deletionProhibited && (!application.commonApplication || application.customerId == user.customerId)"
-                            localized-title="button.delete"
+                            title="Delete"
                             type='button' class='btn btn-default' ng-click='removeApplication( application )'>
                         <span class='glyphicon glyphicon-trash'></span>
                     </button>
                     <button ng-if="hasPermission('edit_applications') && application.deletionProhibited && (!application.commonApplication || application.customerId == user.customerId)"
-                            localized-title="error.application.config.reference.exists" disabled="disabled"
+                            title="The application is used in configurations and cannot be deleted" disabled="disabled"
                             type='button' class='btn btn-default' ng-click='removeApplication( application )'>
                         <span class='glyphicon glyphicon-trash'></span>
                     </button>
                     <button ng-if="hasPermission('edit_applications') && application.commonApplication && application.customerId != user.customerId"
                             ng-click="clarifyOnCommon()"
-                            localized-title="button.common" type='button' class='btn btn-default'>
+                            title="Common application" type='button' class='btn btn-default'>
                         <span class='glyphicon glyphicon-cloud'></span>
                     </button>
                 </div>
@@ -114,7 +114,7 @@
         </tbody>
     </table>
 
-    <div ng-if='applications && applications.length === 0' class='center' localized>notfound.apps.for.display</div>
+    <div ng-if='applications && applications.length === 0' class='center' localized>There are no applications to display.</div>
 
     <div class="text-center" ng-if="applications.length > paging.pageSize">
         <pagination

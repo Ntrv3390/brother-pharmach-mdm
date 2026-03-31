@@ -2,7 +2,7 @@
 <div class="width-1000" ng-controller="GroupsTabController">
 
     <div class="text-center">
-        <h4 localized>form.settings.groups.title</h4>
+        <h4 localized>Groups</h4>
     </div>
 
     <div>
@@ -13,8 +13,8 @@
                    class='form-control configurations-search-input'/>
 
             <div class='configurations-search-buttons'>
-                <button type='button' class='btn btn-default' ng-click='search()' localized>button.search</button>
-                <button type='button' class='btn btn-default' ng-click='editGroup( {} )' localized>button.add</button>
+                <button type='button' class='btn btn-default' ng-click='search()' localized>Search</button>
+                <button type='button' class='btn btn-default' ng-click='editGroup( {} )' localized>Add</button>
             </div>
         </div>
 
@@ -32,8 +32,8 @@
         <table ng-if='groups && groups.length > 0' class='table'>
             <thead>
             <tr>
-                <th localized>table.heading.group.name</th>
-                <th class='actions-column' localized>table.heading.group.actions</th>
+                <th localized>Name</th>
+                <th class='actions-column' localized>Actions</th>
             </tr>
             </thead>
             <tbody>
@@ -56,7 +56,7 @@
             </tbody>
         </table>
 
-        <div ng-if='groups && groups.length === 0' class='center' localized>notfound.groups</div>
+        <div ng-if='groups && groups.length === 0' class='center' localized> No groups found. Try a different query.</div>
 
         <div class="text-center" ng-if="groups.length > paging.pageSize">
             <pagination

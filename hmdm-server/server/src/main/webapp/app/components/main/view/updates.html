@@ -4,7 +4,7 @@
 
         <div class='form-group change-title'>
             <label class='col-sm-3 control-label'>&nbsp;</label>
-            <div class='col-sm-9'><h3 localized>updates.title</h3></div>
+            <div class='col-sm-9'><h3 localized>Updates</h3></div>
         </div>
 
         <div class='form-group'>
@@ -17,10 +17,10 @@
         <div ng-if="!isChecking">
 
             <div class='form-group bold'>
-                <div class="col-sm-3" localized>updates.application</div>
-                <div class="col-sm-3" localized>updates.current.version</div>
-                <div class="col-sm-3" localized>updates.available.version</div>
-                <div class="col-sm-3" localized>updates.downloaded</div>
+                <div class="col-sm-3" localized>Application</div>
+                <div class="col-sm-3" localized>Current version</div>
+                <div class="col-sm-3" localized>Available version</div>
+                <div class="col-sm-3" localized>Downloaded</div>
             </div>
 
             <div class='form-group' ng-repeat="app in updates">
@@ -38,25 +38,25 @@
                 <div class='col-sm-1'>
                     <input id="c1" ng-model='updateForm.update' type='checkbox' class='form-control'/>
                 </div>
-                <div class='col-sm-11' style="padding-top: 10px" localized>updates.auto.update</div>
+                <div class='col-sm-11' style="padding-top: 10px" localized>Automatically update mobile apps (use with care in production!)</div>
             </div>
 
             <div class='form-group'>
                 <div class='col-sm-1'>
                     <input id="c2" ng-model='updateForm.sendStats' type='checkbox' class='form-control'/>
                 </div>
-                <div class='col-sm-11' style="padding-top: 10px" localized>updates.enable.stats</div>
+                <div class='col-sm-11' style="padding-top: 10px" localized>Send usage statistics to the service provider to improve system performance</div>
             </div>
 
             <div class='form-group'>
-                <span class="field-hint" localized>updates.web.hint</span>
+                <span class="field-hint" localized>To complete the web app update, run the shell script "/opt/hmdm/update-web-app.sh" in the SSH console</span>
             </div>
 
             <p>&nbsp;</p>
 
             <div class='form-group'>
                 <div class='col-sm-offset-2 col-sm-10'>
-                    <button type='submit' class='btn btn-default' ng-disabled="isUpdating || isError" ng-click='getUpdates()' localized>updates.get</button>
+                    <button type='submit' class='btn btn-default' ng-disabled="isUpdating || isError" ng-click='getUpdates()' localized>Get updates</button>
                 </div>
             </div>
 

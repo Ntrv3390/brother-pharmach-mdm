@@ -1,40 +1,40 @@
 <!-- Localization completed -->
 <div style="text-align: center" ng-if="showQR">
     <img ng-src="{{qrCodeUrl}}" width="{{size}}" height="{{size}}"
-         localized-alt="form.qr.code.image.alt"/>
+         alt="QR code"/>
 </div>
 
 <form class='form-horizontal' name="qrForm">
 <div class="text-center width-1000">
     <div class="form-group">
-        <label class="col-sm-6 control-label" localized>form.qr.device.number</label>
+        <label class="col-sm-6 control-label" localized>Device number</label>
         <div class="col-sm-3" style="text-align: left">
             <input type="text" maxlength="100" name="qrdevice" style="width: auto;display: inline-block"
                    ng-enter='renew()'
                    ng-change="renew()"
                    ng-model="formData.deviceIdNew"
-                   localized-placeholder="form.qr.device.number.placeholder"
+                   placeholder="Enter the device ID ..."
                    class="form-control"
             />
         </div>
     </div>
 
     <div class="form-group">
-        <label class="col-sm-6 control-label" localized>form.qr.number.use</label>
+        <label class="col-sm-6 control-label" localized>Device number assignment</label>
         <div class="col-sm-3" style="padding-right: 45px">
             <select class='form-control' id="useId-c" name="useId" ng-change="renew()"
                     ng-model='formData.useId' ng-disabled="formData.deviceIdNew != ''">
-                <option ng-value="''" ng-selected="!formData.useId && formData.deviceIdNew == ''" localized>form.qr.number.use.request</option>
-                <option ng-value="'imei'" ng-selected="formData.useId === 'imei'" localized>form.qr.number.use.imei</option>
-                <option ng-value="'serial'" ng-selected="formData.useId === 'serial'" localized>form.qr.number.use.serial</option>
+                <option ng-value="''" ng-selected="!formData.useId && formData.deviceIdNew == ''" localized>User value</option>
+                <option ng-value="'imei'" ng-selected="formData.useId === 'imei'" localized>IMEI</option>
+                <option ng-value="'serial'" ng-selected="formData.useId === 'serial'" localized>Serial number</option>
             </select>
         </div>
         <div class="col-sm-3">&nbsp;</div>
-        <div class="col-sm-4 col-sm-offset-6" style="color: #888; font-size: 13px; margin-top: 5px; text-align: left" localized>form.qr.number.hint</div>
+        <div class="col-sm-4 col-sm-offset-6" style="color: #888; font-size: 13px; margin-top: 5px; text-align: left" localized>Clear the device number to enable automatic device number assignment</div>
     </div>
 
     <div class="form-group">
-        <label class="col-sm-6 control-label" localized>form.qr.auto.create</label>
+        <label class="col-sm-6 control-label" localized>Add to device list if not exists</label>
         <div class="col-sm-1">
             <input type="checkbox" name="qrcreate"
                    ng-model="formData.create"
@@ -46,7 +46,7 @@
 
     <style type="text/css">.dropdown-multiselect button { min-width: 198px; }</style>
     <div class="form-group" ng-if="formData.create">
-        <label class="col-sm-6 control-label" localized>form.qr.groups</label>
+        <label class="col-sm-6 control-label" localized>Add to groups</label>
         <div class="col-sm-3" style="text-align: left">
                     <div ng-dropdown-multiselect
                          options='groupsList'
@@ -64,11 +64,11 @@
 
     <div class='form-group'>
         <div style="display: inline-block">
-            <!--<button type="button" class="btn btn-default" ng-click="renew()" localized>button.renew.code</button> -->
-            <button type="button" class="btn btn-default" ng-click="generateJson()" localized>form.qr.button.json</button>
+            <!--<button type="button" class="btn btn-default" ng-click="renew()" localized>Renew</button> -->
+            <button type="button" class="btn btn-default" ng-click="generateJson()" localized>Get JSON</button>
             <button type="button" class="btn btn-default dropdown-toggle" data-hint-key="hint.step.3" data-hint-order="3"
-                    localized-title="button.help" ng-click="helpClicked()">
-                <span localized>button.help</span>
+                    title="Help" ng-click="helpClicked()">
+                <span localized>Help</span>
             </button>
         </div>
     </div>
@@ -80,12 +80,12 @@
 
 <div class="qr-help-wrapper" ng-if="showHelp" ng-style="{width: helpSize}">
     <div class="qr-help">
-        <div class="qr-help-line" localized>qrcode.help.line1</div>
+        <div class="qr-help-line" localized>To setup the Android device (version 7 or higher) in a managed (corporate) mode:</div>
         <div class="qr-help-line">
             <ol>
-                <li localized>qrcode.help.line2</li>
-                <li localized>qrcode.help.line3</li>
-                <li localized>qrcode.help.line4</li>
+                <li localized>Reset the device to factory settings</li>
+                <li localized>Tap 7 times on any place of the start screen (you must enter a hidden QR code scanning mode)</li>
+                <li localized>Follow the device instructions: accept the terms, connect to Wi-Fi, scan this QR-code</li>
             </ol>
         </div>
         <div class="qr-help-line">{{qrCodeHelpLine5}}</div>

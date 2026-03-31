@@ -5,18 +5,18 @@
 <div class='modal-body'>
     <form class='form-horizontal'>
         <div class='form-group'>
-            <label class='col-sm-3 control-label' localized>form.update.device.action</label>
+            <label class='col-sm-3 control-label' localized>Group action</label>
             <div class='col-sm-9'>
                 <select class='form-control'
                         ng-model='groupAction'>
-                    <option ng-value="'set'" selected localized>form.device.set.group</option>
-                    <option ng-value="'clear'" localized>form.device.clear.group</option>
+                    <option ng-value="'set'" selected localized>Add to groups</option>
+                    <option ng-value="'clear'" localized>Remove from groups</option>
                 </select>
             </div>
         </div>
 
         <div class='form-group'>
-            <label class='col-sm-3 control-label' localized>form.device.groups</label>
+            <label class='col-sm-3 control-label' localized>Groups</label>
             <div class='col-sm-9'>
                 <div ng-dropdown-multiselect
                      options='groupsList'
@@ -28,8 +28,8 @@
 
         <div class='form-group'>
             <div class='col-sm-offset-3 col-sm-9'>
-                <button type='submit' class='btn btn-default' ng-click='save()' localized>button.save</button>
-                <button type='button' class='btn btn-default' ng-click='closeModal()' localized>button.cancel</button>
+                <button type='submit' class='btn btn-default' ng-click='save()' localized>Save</button>
+                <button type='button' class='btn btn-default' ng-click='closeModal()' localized>Cancel</button>
             </div>
         </div>
     </form>

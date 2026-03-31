@@ -1,0 +1,50 @@
+<!-- Call Log Settings View -->
+<div class="panel panel-default" ng-controller="PluginCallLogSettingsController">
+    <div class="panel-heading">
+        <h3 class="panel-title" localized>plugin.calllog.settings.title</h3>
+    </div>
+    <div class="panel-body">
+        <div ng-if="loading" class="text-center">
+            <i class="fa fa-spinner fa-spin fa-2x"></i>
+        </div>
+
+        <form ng-if="!loading" class="form-horizontal" name="settingsForm">
+            <div class="form-group">
+                <label class="col-sm-3 control-label" localized>plugin.calllog.settings.enabled</label>
+                <div class="col-sm-9">
+                    <input type="checkbox" ng-model="settings.enabled" />
+                    <span class="help-block" localized>plugin.calllog.settings.enabled.hint</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="col-sm-3 control-label" localized>plugin.calllog.settings.retention</label>
+                <div class="col-sm-9">
+                    <input 
+                        type="number" 
+                        class="form-control" 
+                        ng-model="settings.retentionDays" 
+                        min="0"
+                        max="365"
+                        required 
+                    />
+                    <span class="help-block" localized>plugin.calllog.settings.retention.hint</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="col-sm-offset-3 col-sm-9">
+                    <button 
+                        type="submit" 
+                        class="btn btn-primary" 
+                        ng-click="save()" 
+                        ng-disabled="saving || settingsForm.$invalid"
+                        localized>
+                        button.save
+                    </button>
+                    <i ng-if="saving" class="fa fa-spinner fa-spin"></i>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
