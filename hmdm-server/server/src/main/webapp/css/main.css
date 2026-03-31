@@ -125,8 +125,11 @@
 }
 
 .header .logo-text {
-    margin-top: 7px;
+    margin-top: 0px;
     padding-left: 15px;
+    height: 50px;
+    display: flex;
+    align-items: center;
 }
 
 .header .logo-text a, .header .logo-text a:active {
@@ -144,21 +147,17 @@
     align-items: center;
 }
 
-.header .logo-text .header-logo-card {
+.header .logo-text .header-client-name-link {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    padding: 6px 12px;
-    border-radius: 14px;
-    background: #ffffff;
-    box-shadow: 0 6px 14px rgba(26, 55, 86, 0.18);
+    height: 50px;
 }
 
-.header .logo-text .header-logo-image {
-    display: block;
-    max-height: 30px;
-    width: auto;
-    max-width: 180px;
+.header .logo-text .header-client-name {
+    color: #ffffff;
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 1;
 }
 
 .header a {
@@ -1980,6 +1979,14 @@ td.app-desc span {
     max-width: 90px;
     display: inline-block;
     text-align: right;
+    vertical-align: middle;
+}
+
+.header-user-icon {
+    font-size: 14px;
+    margin-right: 6px;
+    vertical-align: middle;
+    line-height: 1;
 }
 
 .username-tip {
@@ -1988,8 +1995,14 @@ td.app-desc span {
 }
 
 .username-caret {
-    float: right;
-    margin: 10px 0px 10px 10px;
+    float: none;
+    margin: 0px 0px 0px 8px;
+    vertical-align: middle;
+}
+
+.header .dropdown-toggle {
+    display: inline-flex !important;
+    align-items: center;
 }
 
 .leaflet-popup-content {

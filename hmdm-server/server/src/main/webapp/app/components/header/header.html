@@ -1,10 +1,8 @@
 <!-- Localization completed -->
 <nav class='navbar navbar-default navbar-fixed-top header'>
     <div class='nav navbar-nav navbar-left logo-text'>
-        <a ng-click='mainPanel()' class='header-logo-link' aria-label='{{appName}}'>
-            <span class='header-logo-card'>
-                <img class='header-logo-image' src='rest/public/logo' alt='{{appName}}' />
-            </span>
+        <a ng-click='mainPanel()' class='header-client-name-link' aria-label='Brothers Pharmamach India Pvt Ltd'>
+            <span class='header-client-name'>Brothers Pharmamach India Pvt Ltd</span>
         </a>
     </div>
     <ul class='nav navbar-nav navbar-right'>
@@ -15,6 +13,7 @@
         <li class='dropdown margin-right' uib-dropdown>
             <a class='dropdown-toggle' uib-dropdown-toggle role='button' aria-expanded='false'>
 <!--                <span class='hide-on-small-screen username-tip' localized-change-tracking>header.label.username</span> -->
+                <span class='glyphicon glyphicon-user header-user-icon' aria-hidden='true'></span>
                 <span class='username-label'>{{getUserName()}}</span>
                 <span class='caret username-caret'></span>
             </a>
