@@ -293,7 +293,7 @@
             <input
               type="text"
               class="form-control"
-              ng-model="duringWorkSearchText"
+              ng-model="$parent.duringWorkSearchText"
               placeholder="Search apps..."
               style="margin-bottom: 10px"
             />
@@ -321,8 +321,6 @@
                   ng-disabled="selectedAppsDuringWork['*']"
                 />
                 <strong>{{app.name || app.pkg}}</strong>
-                <br />
-                <small>{{app.pkg}}</small>
               </label>
             </div>
           </div>
@@ -339,7 +337,7 @@
             <input
               type="text"
               class="form-control"
-              ng-model="outsideWorkSearchText"
+              ng-model="$parent.outsideWorkSearchText"
               placeholder="Search apps..."
               style="margin-bottom: 10px"
             />
@@ -366,8 +364,6 @@
                   ng-disabled="selectedAppsOutsideWork['*']"
                 />
                 <strong>{{app.name || app.pkg}}</strong>
-                <br />
-                <small>{{app.pkg}}</small>
               </label>
             </div>
           </div>

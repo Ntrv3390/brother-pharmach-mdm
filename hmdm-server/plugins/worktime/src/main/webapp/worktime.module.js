@@ -188,15 +188,29 @@ angular
         }
       };
 
+      var getAppSearchText = function(app) {
+        var parts = [
+          app && app.name,
+          app && app.applicationName,
+          app && app.appName,
+          app && app.label,
+          app && app.title,
+          app && app.pkg
+        ];
+
+        return parts
+          .filter(function(value) { return !!value; })
+          .join(' ')
+          .toLowerCase();
+      };
+
       // Get filtered apps for during work
       $scope.getFilteredAppsDuringWork = function() {
         if (!$scope.applications) return [];
         if (!$scope.duringWorkSearchText) return $scope.applications;
         var search = $scope.duringWorkSearchText.toLowerCase();
         return $scope.applications.filter(function(app) {
-          var name = (app.name || '').toLowerCase();
-          var pkg = (app.pkg || '').toLowerCase();
-          return name.indexOf(search) !== -1 || pkg.indexOf(search) !== -1;
+          return getAppSearchText(app).indexOf(search) !== -1;
         });
       };
 
@@ -206,9 +220,7 @@ angular
         if (!$scope.outsideWorkSearchText) return $scope.applications;
         var search = $scope.outsideWorkSearchText.toLowerCase();
         return $scope.applications.filter(function(app) {
-          var name = (app.name || '').toLowerCase();
-          var pkg = (app.pkg || '').toLowerCase();
-          return name.indexOf(search) !== -1 || pkg.indexOf(search) !== -1;
+          return getAppSearchText(app).indexOf(search) !== -1;
         });
       };
 
