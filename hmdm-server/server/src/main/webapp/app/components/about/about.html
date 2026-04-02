@@ -1,32 +1,34 @@
 <!-- Localization completed -->
-<div class='modal-body'>
-    <form class='form-horizontal'>
+<div class="modal-body">
+  <form class="form-horizontal">
+    <div class="text-center">
+      <h4>{{line1Text}}</h4>
+    </div>
 
-        <div class="text-center">
-            <h4>{{line1Text}}</h4>
-        </div>
+    <div class="text-center">
+      <h4>{{line3Text}}</h4>
+    </div>
 
-        <div class="text-center">
-            <h4 localized>Open source MDM for Android</h4>
-        </div>
+    <div ng-if="plugins" class="text-center margin-top-40">
+      <div>
+        <div><h4 localized>Installed plugins</h4></div>
 
-        <div class="text-center">
-            <h4>{{line3Text}}</h4>
-        </div>
+        <!--<div class="form-group" ng-repeat="plugin in plugins">{{plugin}}</div> -->
+        <div class="form-group" style="margin: 15px">{{pluginList}}</div>
+      </div>
+    </div>
 
-        <div ng-if="plugins" class="text-center margin-top-40">
-            <div>
-                <div><h4 localized>Installed plugins</h4></div>
-
-                <!--<div class="form-group" ng-repeat="plugin in plugins">{{plugin}}</div> -->
-                <div class="form-group" style="margin: 15px">{{pluginList}}</div>
-            </div>
-        </div>
-
-        <div class='form-group margin-top-40'>
-            <div class="text-center">
-                <button type='button' class='btn btn-default' ng-click='closeModal()' localized>Close</button>
-            </div>
-        </div>
-    </form>
+    <div class="form-group margin-top-40">
+      <div class="text-center">
+        <button
+          type="button"
+          class="btn btn-default"
+          ng-click="closeModal()"
+          localized
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </form>
 </div>
