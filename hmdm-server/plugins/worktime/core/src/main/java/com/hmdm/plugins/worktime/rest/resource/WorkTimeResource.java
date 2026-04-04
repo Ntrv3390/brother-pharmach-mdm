@@ -208,6 +208,19 @@ public class WorkTimeResource {
             } else {
                 override.setDeviceName(device.getNumber());
             }
+
+            // Populate group membership so the frontend can drive group-level policy selection
+            java.util.List<java.util.Map<String, Object>> deviceGroups = new java.util.ArrayList<>();
+            if (device.getGroups() != null) {
+                for (com.hmdm.rest.json.LookupItem g : device.getGroups()) {
+                    java.util.Map<String, Object> gm = new java.util.HashMap<>();
+                    gm.put("id", g.getId());
+                    gm.put("name", g.getName());
+                    deviceGroups.add(gm);
+                }
+            }
+            override.setDeviceGroups(deviceGroups);
+
             if (override.getExceptions() == null) {
                 override.setExceptions(new java.util.ArrayList<>());
             }

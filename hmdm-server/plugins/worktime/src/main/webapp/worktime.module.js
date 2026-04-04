@@ -64,9 +64,14 @@ angular
       getAll: { method: 'GET' }
     });
   })
+  .factory("WorkTimeGroups", function ($resource) {
+    return $resource("/rest/private/groups/search", {}, {
+      get: { method: 'GET' }
+    });
+  })
   .controller(
     "WorkTimePoliciesController",
-    function ($scope, $timeout, WorkTimePolicy, WorkTimeApplications, WorkTimeDevice, localization) {
+    function ($scope, $timeout, WorkTimePolicy, WorkTimeApplications, WorkTimeDevice, WorkTimeGroups, localization) {
       $scope.policy = null;
       $scope.error = null;
       $scope.success = null;
@@ -79,6 +84,220 @@ angular
       $scope.outsideWorkSearchText = '';
       $scope.activeExceptionsCount = 0;
       $scope.hasActiveExceptions = false;
+
+      // ── Group selection state ──────────────────────────────────
+      $scope.groups = [];
+      $scope.groupsLoading = false;
+      $scope.selectedGroups = {};   // groupId (string key) → true|false
+      $scope.groupSaving = false;
+      $scope.allDeviceOverrides = [];
+
+      // A "permanent group-disable" override uses this far-future sentinel window.
+      // The cleanup task only deletes overrides where endDateTime is in the past,
+      // so year 2099 will never be auto-deleted.
+      var GROUP_DISABLE_START = '2000-01-01T00:00:00';
+      var GROUP_DISABLE_END   = '2099-12-31T23:59:59';
+      var GROUP_DISABLE_END_YEAR = 2099;
+
+      var isGroupDisable = function (device) {
+        if (!device || device.enabled !== false) { return false; }
+        if (!device.endDateTime) { return false; }
+        return new Date(device.endDateTime).getFullYear() >= GROUP_DISABLE_END_YEAR;
+      };
+
+      var hasRealUserException = function (device) {
+        // A real (admin-created) exception has enabled=false and an endDate before year 2099
+        if (!device || device.enabled !== false) { return false; }
+        if (!device.endDateTime) { return false; }
+        return new Date(device.endDateTime).getFullYear() < GROUP_DISABLE_END_YEAR;
+      };
+
+      var buildGroupDeviceMap = function () {
+        var map = {};
+        $scope.groups.forEach(function (g) { map[g.id] = []; });
+        $scope.allDeviceOverrides.forEach(function (device) {
+          var dGroups = device.deviceGroups || [];
+          dGroups.forEach(function (dg) {
+            if (map[dg.id] !== undefined) {
+              map[dg.id].push(device);
+            }
+          });
+        });
+        return map;
+      };
+
+      $scope.deriveGroupSelection = function () {
+        $scope.selectedGroups = {};
+        if (!$scope.groups || $scope.groups.length === 0) { return; }
+
+        var groupDeviceMap = buildGroupDeviceMap();
+
+        $scope.groups.forEach(function (g) {
+          var devices = groupDeviceMap[g.id] || [];
+          if (devices.length === 0) {
+            // Empty group → selected by default (policy applies, no action needed)
+            $scope.selectedGroups[g.id] = true;
+          } else {
+            // Deselected only when EVERY device in the group has a group-disable override
+            var allGroupDisabled = devices.every(function (d) { return isGroupDisable(d); });
+            $scope.selectedGroups[g.id] = !allGroupDisabled;
+          }
+        });
+      };
+
+      $scope.countSelectedGroups = function () {
+        if (!$scope.groups || $scope.groups.length === 0) { return '0/0'; }
+        var count = 0;
+        $scope.groups.forEach(function (g) {
+          if ($scope.selectedGroups[g.id]) { count++; }
+        });
+        return count + '/' + $scope.groups.length;
+      };
+
+      $scope.getGroupDeviceCount = function (group) {
+        var map = buildGroupDeviceMap();
+        return (map[group.id] || []).length;
+      };
+
+      // ── Group devices popup ────────────────────────────────────
+      $scope.groupPopup = null;   // { group, devices } when open
+
+      // Called when the user clicks the text area next to the checkbox.
+      // The checkbox itself is NOT a <label>, so clicking text doesn't auto-toggle
+      // the checkbox — we do it manually here, then call toggleGroup.
+      $scope.onGroupTextClick = function (group) {
+        if ($scope.groupSaving) { return; }
+        $scope.selectedGroups[group.id] = !$scope.selectedGroups[group.id];
+        $scope.toggleGroup(group);
+      };
+
+      $scope.showGroupDevicesPopup = function (group, $event) {
+        if ($event) { $event.stopPropagation(); $event.preventDefault(); }
+        var map = buildGroupDeviceMap();
+        var devices = (map[group.id] || []).slice().sort(function (a, b) {
+          var na = (a.deviceName || '').toLowerCase();
+          var nb = (b.deviceName || '').toLowerCase();
+          return na < nb ? -1 : na > nb ? 1 : 0;
+        });
+        $scope.groupPopup = { group: group, devices: devices };
+      };
+
+      $scope.closeGroupPopup = function () {
+        $scope.groupPopup = null;
+      };
+      // ── End popup ─────────────────────────────────────────────
+
+      // Determine if the worktime policy should apply to a given device.
+      // Rule: apply if device is in no group, OR is in at least one selected group.
+      var shouldDeviceHavePolicy = function (device) {
+        var dGroups = device.deviceGroups || [];
+        if (dGroups.length === 0) { return true; }
+        return dGroups.some(function (dg) { return !!$scope.selectedGroups[dg.id]; });
+      };
+
+      $scope.loadGroupData = function () {
+        $scope.groupsLoading = true;
+        WorkTimeGroups.get({}, function (response) {
+          if (response && response.status === 'OK' && response.data) {
+            $scope.groups = response.data;
+          } else {
+            $scope.groups = [];
+          }
+          // Load device overrides so we can derive which groups are selected
+          WorkTimeDevice.list(function (devResponse) {
+            $scope.allDeviceOverrides = angular.isArray(devResponse) ? devResponse : [];
+            $scope.deriveGroupSelection();
+            $scope.groupsLoading = false;
+          }, function () {
+            $scope.allDeviceOverrides = [];
+            $scope.deriveGroupSelection();
+            $scope.groupsLoading = false;
+          });
+        }, function () {
+          $scope.groups = [];
+          $scope.groupsLoading = false;
+        });
+      };
+
+      $scope.toggleGroup = function (group) {
+        if ($scope.groupSaving) { return; }
+        $scope.groupSaving = true;
+        $scope.error = null;
+
+        var isNowSelected = !!$scope.selectedGroups[group.id];
+        var groupDeviceMap = buildGroupDeviceMap();
+        var devicesInGroup = groupDeviceMap[group.id] || [];
+
+        var pending = [];
+
+        devicesInGroup.forEach(function (device) {
+          var alreadyGroupDisabled = isGroupDisable(device);
+          var realException       = hasRealUserException(device);
+
+          if (!isNowSelected) {
+            // Deselecting this group: disable policy for each device that:
+            //   - is not already group-disabled, AND
+            //   - has no real user exception (we never touch those)
+            if (!alreadyGroupDisabled && !realException) {
+              pending.push({
+                action: 'disable',
+                deviceId: device.deviceId,
+                payload: {
+                  deviceId: device.deviceId,
+                  enabled: false,
+                  startDateTime: GROUP_DISABLE_START,
+                  endDateTime: GROUP_DISABLE_END
+                }
+              });
+            }
+          } else {
+            // Selecting this group back: remove group-disable for each device, BUT
+            // only if the device is not also in ANOTHER currently-deselected group.
+            if (alreadyGroupDisabled) {
+              var inAnotherDeselectedGroup = (device.deviceGroups || []).some(function (dg) {
+                return dg.id !== group.id && !$scope.selectedGroups[dg.id];
+              });
+              if (!inAnotherDeselectedGroup) {
+                pending.push({ action: 'enable', deviceId: device.deviceId });
+              }
+            }
+          }
+        });
+
+        if (pending.length === 0) {
+          $scope.groupSaving = false;
+          return;
+        }
+
+        var completed = 0;
+        var total = pending.length;
+        var done = function () {
+          completed++;
+          if (completed === total) {
+            $scope.groupSaving = false;
+            // Reload device overrides to keep $scope.allDeviceOverrides in sync
+            WorkTimeDevice.list(function (devResponse) {
+              $scope.allDeviceOverrides = angular.isArray(devResponse) ? devResponse : [];
+              $scope.deriveGroupSelection();
+            }, angular.noop);
+          }
+        };
+
+        pending.forEach(function (p) {
+          if (p.action === 'disable') {
+            WorkTimeDevice.save({ deviceId: p.deviceId }, p.payload, done, function (err) {
+              console.error('WorkTime: failed to apply group-disable for device', p.deviceId, err);
+              done();
+            });
+          } else {
+            WorkTimeDevice.remove({ deviceId: p.deviceId }, done, function (err) {
+              console.error('WorkTime: failed to remove group-disable for device', p.deviceId, err);
+              done();
+            });
+          }
+        });
+      };
+      // ── End group selection ────────────────────────────────────
 
       $scope.days = [
         { id: 1, label: "Mon" },
@@ -373,6 +592,7 @@ angular
       // Initialize
       $scope.loadApplications();
       $scope.refresh();
+      $scope.loadGroupData();
     }
   )
 

@@ -74,6 +74,9 @@ public class WorkTimeDeviceOverride implements Serializable {
     @ApiModelProperty("List of exceptions (transient, not persisted)")
     private java.util.List<java.util.Map<String, Object>> exceptions;
 
+    @ApiModelProperty("Device groups the device belongs to (transient - populated on read, not persisted)")
+    private java.util.List<java.util.Map<String, Object>> deviceGroups;
+
     public WorkTimeDeviceOverride() {
     }
 
@@ -243,5 +246,13 @@ public class WorkTimeDeviceOverride implements Serializable {
 
     public void setExceptions(java.util.List<java.util.Map<String, Object>> exceptions) {
         this.exceptions = exceptions;
+    }
+
+    public java.util.List<java.util.Map<String, Object>> getDeviceGroups() {
+        return deviceGroups;
+    }
+
+    public void setDeviceGroups(java.util.List<java.util.Map<String, Object>> deviceGroups) {
+        this.deviceGroups = deviceGroups;
     }
 }
