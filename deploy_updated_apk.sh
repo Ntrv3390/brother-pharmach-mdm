@@ -78,12 +78,47 @@ if [ ! -d "$ANDROID_DIR" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Bump versionCode + versionName in version.properties before each build
+# ---------------------------------------------------------------------------
+VERSION_PROPS_FILE="$ANDROID_DIR/version.properties"
+
+bump_android_version() {
+    local props_file="$1"
+    # Read current values (strip comments and whitespace)
+    local cur_code cur_name
+    cur_code=$(grep '^VERSION_CODE=' "$props_file" | head -1 | cut -d= -f2 | tr -d '[:space:]')
+    cur_name=$(grep '^VERSION_NAME=' "$props_file" | head -1 | cut -d= -f2 | tr -d '[:space:]')
+
+    # Increment versionCode by 1
+    local new_code=$(( ${cur_code:-15310} + 1 ))
+
+    # Increment versionName using the same minor/major logic
+    local new_name
+    new_name="$(increment_app_version "${cur_name:-6.31}")"
+
+    # Write back atomically
+    {
+        echo "# Auto-managed by deploy_updated_apk.sh — do not edit manually"
+        echo "# VERSION_CODE must increase monotonically for each Play Console upload"
+        echo "VERSION_CODE=${new_code}"
+        echo "VERSION_NAME=${new_name}"
+    } > "${props_file}.tmp" && mv "${props_file}.tmp" "$props_file"
+
+    echo "Android version bumped: code=${new_code}, name=${new_name}"
+}
+
+# ---------------------------------------------------------------------------
 # Build APK
 # ---------------------------------------------------------------------------
 APK_PATH="$ANDROID_DIR/app/build/outputs/apk/opensource/release/app-opensource-release.apk"
 AAB_PATH="$ANDROID_DIR/app/build/outputs/bundle/opensourceRelease/app-opensource-release.aab"
 
 if [ "${SKIP_BUILD}" != "1" ]; then
+    if [ ! -f "$VERSION_PROPS_FILE" ]; then
+        echo "Warning: version.properties not found at $VERSION_PROPS_FILE, skipping version bump"
+    else
+        bump_android_version "$VERSION_PROPS_FILE"
+    fi
     echo "Building Android APK + AAB (Release)..."
     cd "$ANDROID_DIR"
     ./gradlew bundleOpensourceRelease assembleOpensourceRelease --no-daemon

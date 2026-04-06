@@ -29,14 +29,33 @@ repositories {
     mavenCentral()
 }
 
+// Read version from version.properties (auto-incremented by deploy_updated_apk.sh)
+def versionProps = new Properties()
+def versionPropsFile = rootProject.file('version.properties')
+if (!versionPropsFile.exists()) {
+    throw new GradleException(
+        "version.properties not found at ${versionPropsFile.absolutePath}. " +
+        "Run deploy_updated_apk.sh to generate it before building."
+    )
+}
+versionPropsFile.withInputStream { versionProps.load(it) }
+def appVersionCode = versionProps['VERSION_CODE']?.trim()?.toInteger()
+def appVersionName = versionProps['VERSION_NAME']?.trim()
+if (appVersionCode == null || appVersionCode <= 0) {
+    throw new GradleException("VERSION_CODE is missing or invalid in version.properties")
+}
+if (!appVersionName) {
+    throw new GradleException("VERSION_NAME is missing or empty in version.properties")
+}
+
 android {
     compileSdkVersion 35
     defaultConfig {
         applicationId "com.brother.pharmach.mdm.launcher"
         minSdkVersion 21
         targetSdkVersion 35
-        versionCode 15310
-        versionName "6.31"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         dataBinding {
             enabled = true
