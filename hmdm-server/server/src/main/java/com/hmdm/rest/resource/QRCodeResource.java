@@ -337,15 +337,15 @@ public class QRCodeResource {
             }
 
             if (deviceID != null && !deviceID.trim().isEmpty()) {
-                json.put("com.hmdm.DEVICE_ID", deviceID.trim());
+                json.put("com.brother.pharmach.mdm.DEVICE_ID", deviceID.trim());
             }
 
             if (createOnDemand != null && createOnDemand.equals("1")) {
-                json.put("com.hmdm.CONFIG", Integer.toString(configuration.getId()));
+                json.put("com.brother.pharmach.mdm.CONFIG", Integer.toString(configuration.getId()));
 
                 if (!unsecureDAO.isSingleCustomer()) {
                     Customer customer = customerDAO.findById(configuration.getCustomerId());
-                    json.put("com.hmdm.CUSTOMER", customer.getName());
+                    json.put("com.brother.pharmach.mdm.CUSTOMER", customer.getName());
                 }
             }
 
@@ -360,15 +360,15 @@ public class QRCodeResource {
                     }
                     groupEntry.append(group);
                 }
-                json.put("com.hmdm.GROUP", groupEntry.toString());
+                json.put("com.brother.pharmach.mdm.GROUP", groupEntry.toString());
             }
 
             if (useId != null) {
-                json.put("com.hmdm.DEVICE_ID_USE", useId);
+                json.put("com.brother.pharmach.mdm.DEVICE_ID_USE", useId);
             }
 
-            json.put("com.hmdm.BASE_URL", this.baseUrlForQrCode);
-            json.put("com.hmdm.SERVER_PROJECT", contextPath);
+            json.put("com.brother.pharmach.mdm.BASE_URL", this.baseUrlForQrCode);
+            json.put("com.brother.pharmach.mdm.SERVER_PROJECT", contextPath);
 
             return json.toString();
 

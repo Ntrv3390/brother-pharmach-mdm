@@ -506,6 +506,15 @@ public class MainActivity
         }
     }
 
+    @Override
+    protected void updateSettingsFromQr(String qrcode) {
+        super.updateSettingsFromQr(qrcode);
+        // Dismiss any open enrollment dialogs so the flow can proceed cleanly
+        // when onResume calls startLauncher() with the newly saved settings.
+        dismissDialog(enterDeviceIdDialog);
+        dismissDialog(enterServerDialog);
+    }
+
     private void initReceiver() {
         IntentFilter intentFilter = new IntentFilter(Const.ACTION_UPDATE_CONFIGURATION);
         intentFilter.addAction(Const.ACTION_HIDE_SCREEN);
