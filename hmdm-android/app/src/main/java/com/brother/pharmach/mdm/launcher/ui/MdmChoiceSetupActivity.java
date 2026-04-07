@@ -47,13 +47,11 @@ public class MdmChoiceSetupActivity extends AppCompatActivity {
         Intent intent = getIntent();
         PersistableBundle bundle = intent.getParcelableExtra(DevicePolicyManager.EXTRA_PROVISIONING_ADMIN_EXTRAS_BUNDLE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            if (bundle != null && bundle.getString(Const.QR_OPEN_WIFI_ATTR) != null) {
-                try {
-                    startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS));
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show();
-                }
+            try {
+                startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS));
+            } catch (Exception e) {
+                e.printStackTrace();
+                Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show();
             }
             AdminReceiver.updateSettings(this, bundle);
         }
