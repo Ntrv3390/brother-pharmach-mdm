@@ -40,8 +40,10 @@ angular.module('headwind-kiosk')
                         });
 
                         // Plugins available for Settings tab
+                        var hiddenSettingsPlugins = ['deviceinfo', 'devicelog', 'worktime'];
                         $scope.settingsPlugins = visiblePlugins.filter(function (plugin) {
-                            return plugin.settingsViewTemplate !== undefined && plugin.settingsViewTemplate !== null;
+                            return plugin.settingsViewTemplate !== undefined && plugin.settingsViewTemplate !== null
+                                && hiddenSettingsPlugins.indexOf(plugin.identifier) === -1;
                         });
                         $scope.settingsPlugins.forEach(function (plugin) {
                             let ID = 'plugin-settings-' + plugin.identifier;

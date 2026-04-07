@@ -50,10 +50,6 @@
                     <tab-heading localized-change-tracking>Groups</tab-heading>
                     <ng-include src="'app/components/main/view/settings/groups.html'" ng-if="activeTab === 'GROUPS'"></ng-include>
                 </tab>
-                <tab  active="act.ICONS" ng-click="openTab('ICONS')">
-                    <tab-heading localized-change-tracking>Icons</tab-heading>
-                    <ng-include src="'app/components/main/view/settings/icons.html'" ng-if="activeTab === 'ICONS'"></ng-include>
-                </tab>
                 <tab  active="act.LANG" ng-click="openTab('LANG')">
                     <tab-heading localized-change-tracking>General and language settings</tab-heading>
                     <ng-include src="'app/components/main/view/settings/language.html'" ng-if="activeTab === 'LANG'"></ng-include>
@@ -62,11 +58,6 @@
                     <tab-heading localized-change-tracking>Hints</tab-heading>
                     <ng-include src="'app/components/main/view/settings/hints.html'" ng-if="activeTab === 'HINTS'"></ng-include>
                 </tab> -->
-                <tab active="act.PLUGINS" ng-click="openTab('PLUGINS')" ng-if="hasPermission('plugins_customer_access_management')">
-                    <tab-heading localized-change-tracking>Plugins</tab-heading>
-                    <ng-include src="'app/components/main/view/settings/plugins.html'" ng-if="activeTab === 'PLUGINS'"></ng-include>
-                </tab>
-
                 <tab ng-repeat="plugin in settingsPlugins" active="act['plugin-settings-' + plugin.identifier]"
                      ng-if="!plugin.settingsPermission || hasPermission(plugin.settingsPermission)"
                      ng-click="openTab('plugin-settings-' + plugin.identifier)">
