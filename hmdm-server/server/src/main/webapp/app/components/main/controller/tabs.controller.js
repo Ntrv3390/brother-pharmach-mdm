@@ -30,9 +30,13 @@ angular.module('headwind-kiosk')
                             return plugin.identifier !== 'xtra';
                         });
 
+                        // Plugins hidden from all tabs
+                        var hiddenPlugins = ['messaging'];
+
                         // Plugins available for Functions tab
                         $scope.functionsPlugins = visiblePlugins.filter(function (plugin) {
-                            return plugin.functionsViewTemplate !== undefined && plugin.functionsViewTemplate !== null;
+                            return plugin.functionsViewTemplate !== undefined && plugin.functionsViewTemplate !== null
+                                && hiddenPlugins.indexOf(plugin.identifier) === -1;
                         });
                         $scope.functionsPlugins.forEach(function (plugin) {
                             let ID = 'plugin-' + plugin.identifier;
@@ -40,7 +44,7 @@ angular.module('headwind-kiosk')
                         });
 
                         // Plugins available for Settings tab
-                        var hiddenSettingsPlugins = ['deviceinfo', 'devicelog', 'worktime'];
+                        var hiddenSettingsPlugins = ['deviceinfo', 'devicelog', 'worktime', 'messaging'];
                         $scope.settingsPlugins = visiblePlugins.filter(function (plugin) {
                             return plugin.settingsViewTemplate !== undefined && plugin.settingsViewTemplate !== null
                                 && hiddenSettingsPlugins.indexOf(plugin.identifier) === -1;

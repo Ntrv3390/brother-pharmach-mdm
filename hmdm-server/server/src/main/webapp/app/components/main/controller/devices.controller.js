@@ -1180,12 +1180,14 @@ angular.module('headwind-kiosk')
             });
         };
 
+        var hiddenDevicePlugins = ['messaging'];
         pluginService.getAvailablePlugins(function (response) {
             if (response.status === 'OK') {
                 if (response.data) {
                     $scope.plugins = response.data.filter(function (plugin) {
                         return plugin.enabledForDevice
                             && plugin.functionsViewTemplate
+                            && hiddenDevicePlugins.indexOf(plugin.identifier) === -1
                             && (!plugin.deviceFunctionsPermission
                                 || authService.hasPermission(plugin.deviceFunctionsPermission));
                     });
