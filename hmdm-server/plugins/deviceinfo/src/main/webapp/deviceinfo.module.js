@@ -592,6 +592,15 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                     }
 
                     if ($scope.data && $scope.data.length > 0) {
+                        for (var i = 0; i < $scope.data.length; i++) {
+                            var _lat = parseFloat($scope.data[i] && $scope.data[i].gpsLat);
+                            var _lon = parseFloat($scope.data[i] && $scope.data[i].gpsLon);
+                            if (isFinite(_lat) && isFinite(_lon)) {
+                                $scope.mapLat = _lat;
+                                $scope.mapLon = _lon;
+                                break;
+                            }
+                        }
                         updateMap($scope.data);
                     }
                 } else {
