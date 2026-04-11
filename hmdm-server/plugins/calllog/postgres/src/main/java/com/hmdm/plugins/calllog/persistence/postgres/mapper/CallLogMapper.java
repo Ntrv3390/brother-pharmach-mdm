@@ -54,6 +54,33 @@ public interface CallLogMapper {
             "WHERE deviceid = #{deviceId} AND customerid = #{customerId}")
     int getCallLogsCountByDevice(@Param("deviceId") int deviceId, @Param("customerId") int customerId);
 
+    @Select({"<script>",
+            "SELECT id, deviceid AS deviceId, phonenumber AS phoneNumber, contactname AS contactName, ",
+            "calltype AS callType, duration, calltimestamp AS callTimestamp, calldate AS callDate, ",
+            "createtime AS createTime, customerid AS customerId ",
+            "FROM plugin_calllog_data ",
+            "WHERE deviceid = #{deviceId} AND customerid = #{customerId} ",
+            "<if test='callType != null'>AND calltype = #{callType} </if>",
+            "<if test='search != null and search != \"\"'>",
+            "AND (LOWER(phonenumber) LIKE LOWER(CONCAT('%',#{search},'%')) ",
+            "OR LOWER(contactname) LIKE LOWER(CONCAT('%',#{search},'%'))) ",
+            "</if>",
+            "ORDER BY calltimestamp DESC ",
+            "LIMIT #{limit} OFFSET #{offset}",
+            "</script>"})
+    List<CallLogRecord> getCallLogsByDevicePagedFiltered(Map<String, Object> params);
+
+    @Select({"<script>",
+            "SELECT COUNT(*) FROM plugin_calllog_data ",
+            "WHERE deviceid = #{deviceId} AND customerid = #{customerId} ",
+            "<if test='callType != null'>AND calltype = #{callType} </if>",
+            "<if test='search != null and search != \"\"'>",
+            "AND (LOWER(phonenumber) LIKE LOWER(CONCAT('%',#{search},'%')) ",
+            "OR LOWER(contactname) LIKE LOWER(CONCAT('%',#{search},'%'))) ",
+            "</if>",
+            "</script>"})
+    int getCallLogsCountByDeviceFiltered(Map<String, Object> params);
+
     @Delete("DELETE FROM plugin_calllog_data " +
             "WHERE customerid = #{customerId} " +
             "AND createtime < EXTRACT(EPOCH FROM (NOW() - make_interval(days => #{retentionDays}))) * 1000")

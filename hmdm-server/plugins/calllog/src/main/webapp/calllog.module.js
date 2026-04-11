@@ -80,9 +80,17 @@ angular.module('headwind-kiosk')
         $scope.device = device;
         $scope.loading = true;
         $scope.callLogs = [];
+        $scope.filteredLogs = [];
+        $scope.availableTypes = [];
+        // Use object (dot notation) so ng-if child scopes don't shadow these
+        $scope.filters = { type: '', search: '' };
+
+        // Hardcoded labels – avoids localization timing issues in the $resource callback
+        var CALL_TYPE_LABELS = { 1: 'Incoming', 2: 'Outgoing', 3: 'Missed', 4: 'Rejected', 5: 'Rejected', 6: 'Blocked' };
+
         $scope.pagination = {
             page: 0,
-            pageSize: 50,
+            pageSize: 1000,  // load all records for client-side filtering
             total: 0
         };
 
@@ -119,6 +127,29 @@ angular.module('headwind-kiosk')
             return date.toLocaleString();
         };
 
+        // Exposed on $scope so ng-change can call it directly (avoids ng-if child-scope watch issues)
+        $scope.rebuildFiltered = function () {
+            var typeFilter = $scope.filters.type;
+            var q = ($scope.filters.search || '').trim().toLowerCase();
+            $scope.filteredLogs = $scope.callLogs.filter(function (log) {
+                // typeFilter is '' or undefined when "All Types" is selected
+                if (typeFilter !== null && typeFilter !== undefined && typeFilter !== '') {
+                    // cast both to int for safe comparison
+                    if (parseInt(log.callType) !== parseInt(typeFilter)) return false;
+                }
+                if (q) {
+                    var okPhone = (log.phoneNumber || '').toLowerCase().indexOf(q) !== -1;
+                    var okName  = (log.contactName  || '').toLowerCase().indexOf(q) !== -1;
+                    if (!okPhone && !okName) return false;
+                }
+                return true;
+            });
+        };
+
+        // $watch as a backup (works because filters is a dot-notation object on the parent scope)
+        $scope.$watch('filters.type',   function () { $scope.rebuildFiltered(); });
+        $scope.$watch('filters.search', function () { $scope.rebuildFiltered(); });
+
         $scope.loadCallLogs = function () {
             $scope.loading = true;
             pluginCallLogService.getCallLogs({
@@ -130,6 +161,18 @@ angular.module('headwind-kiosk')
                 if (response.status === 'OK' && response.data) {
                     $scope.callLogs = response.data.items || [];
                     $scope.pagination.total = response.data.total || 0;
+                    // Build type dropdown using hardcoded labels (no localization dependency)
+                    var typeSet = {};
+                    $scope.callLogs.forEach(function (log) {
+                        if (log.callType !== undefined && log.callType !== null) {
+                            typeSet[log.callType] = true;
+                        }
+                    });
+                    $scope.availableTypes = Object.keys(typeSet).map(function (k) {
+                        var v = parseInt(k);
+                        return { value: v, label: CALL_TYPE_LABELS[v] || ('Type ' + k) };
+                    }).sort(function (a, b) { return a.value - b.value; });
+                    $scope.rebuildFiltered();
                 }
             }, function (error) {
                 $scope.loading = false;

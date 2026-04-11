@@ -1004,7 +1004,7 @@ angular.module('headwind-kiosk')
         $scope.viewCallLogs = function (device) {
             var modalInstance = $modal.open({
                 templateUrl: 'app/components/plugins/calllog/views/modal.html',
-                controller: function ($scope, $modalInstance, device, $injector, localization) {
+                controller: function ($scope, $modalInstance, device, $injector, localization, $timeout) {
                     // Load plugin localizations
                     try {
                         localization.loadPluginResourceBundles("calllog");
@@ -1038,11 +1038,32 @@ angular.module('headwind-kiosk')
                     $scope.device = device;
                     $scope.loading = true;
                     $scope.callLogs = [];
+                    $scope.availableTypes = [];
+                    $scope.filters = { type: '', search: '' };
                     $scope.pagination = {
                         page: 0,
                         pageSize: 50,
                         total: 0
                     };
+
+                    var CALL_TYPE_LABELS = {1:'Incoming',2:'Outgoing',3:'Missed',4:'Rejected',5:'Rejected',6:'Blocked'};
+
+                    // Called by ng-change on the type dropdown (instant)
+                    $scope.applyFilter = function () {
+                        $scope.pagination.page = 0;
+                        $scope.loadCallLogs();
+                    };
+
+                    // Debounced watch for the search box — fires 500 ms after typing stops
+                    var _searchDebounce = null;
+                    $scope.$watch('filters.search', function (newVal, oldVal) {
+                        if (newVal === oldVal) return;
+                        if (_searchDebounce) $timeout.cancel(_searchDebounce);
+                        _searchDebounce = $timeout(function () {
+                            $scope.pagination.page = 0;
+                            $scope.loadCallLogs();
+                        }, 500);
+                    });
 
                     // Call type mapping
                     $scope.getCallTypeName = function (type) {
@@ -1056,55 +1077,57 @@ angular.module('headwind-kiosk')
                         }
                     };
 
-                    // Format duration (seconds to readable format)
                     $scope.formatDuration = function (seconds) {
                         if (seconds === 0) return '0s';
                         var hours = Math.floor(seconds / 3600);
                         var minutes = Math.floor((seconds % 3600) / 60);
                         var secs = seconds % 60;
-                        
                         var parts = [];
                         if (hours > 0) parts.push(hours + 'h');
                         if (minutes > 0) parts.push(minutes + 'm');
                         if (secs > 0) parts.push(secs + 's');
-                        
                         return parts.join(' ');
                     };
 
-                    // Format timestamp to readable date
                     $scope.formatDate = function (timestamp) {
-                        var date = new Date(timestamp);
-                        return date.toLocaleString();
+                        return new Date(timestamp).toLocaleString();
                     };
 
-                    // Load call logs
+                    // Load call logs — passes current filter/search to the backend
                     $scope.loadCallLogs = function () {
                         $scope.loading = true;
                         $scope.errorMessage = undefined;
 
-                        if (useMockData) {
-                            // Use mock data
-                            setTimeout(function () {
-                                $scope.$apply(function () {
-                                    $scope.loading = false;
-                                    var start = $scope.pagination.page * $scope.pagination.pageSize;
-                                    var end = start + $scope.pagination.pageSize;
-                                    $scope.callLogs = mockCallLogs.slice(start, end);
-                                    $scope.pagination.total = mockCallLogs.length;
-                                });
-                            }, 300); // Simulate network delay
-                            return;
-                        }
-
-                        pluginCallLogService.getCallLogs({
+                        var params = {
                             deviceId: device.id,
                             page: $scope.pagination.page,
                             pageSize: $scope.pagination.pageSize
-                        }, function (response) {
+                        };
+                        if ($scope.filters.type !== '' && $scope.filters.type !== null && $scope.filters.type !== undefined) {
+                            params.callType = $scope.filters.type;
+                        }
+                        if ($scope.filters.search && $scope.filters.search.trim() !== '') {
+                            params.search = $scope.filters.search.trim();
+                        }
+
+                        pluginCallLogService.getCallLogs(params, function (response) {
                             $scope.loading = false;
                             if (response.status === 'OK') {
                                 $scope.callLogs = response.data.items || [];
                                 $scope.pagination.total = response.data.total || 0;
+                                // Populate type dropdown from full unfiltered result only on first load
+                                if ($scope.availableTypes.length === 0) {
+                                    var typeSet = {};
+                                    $scope.callLogs.forEach(function (log) {
+                                        if (log.callType !== undefined) typeSet[log.callType] = true;
+                                    });
+                                    $scope.availableTypes = [{value: '', label: 'All Types'}].concat(
+                                    Object.keys(typeSet).map(function (k) {
+                                        var v = parseInt(k);
+                                        return {value: v, label: CALL_TYPE_LABELS[v] || ('Type ' + k)};
+                                    }).sort(function (a, b) { return a.value - b.value; })
+                                );
+                                }
                             } else {
                                 $scope.errorMessage = response.message || 'Failed to load call logs';
                             }
@@ -1114,23 +1137,17 @@ angular.module('headwind-kiosk')
                         });
                     };
 
-                    // Delete all call logs
                     $scope.deleteAllLogs = function () {
                         var confirmMsg = localization.localize('plugin.calllog.confirm.delete') || 'Are you sure you want to delete all call logs for this device?';
-                        if (!confirm(confirmMsg)) {
-                            return;
-                        }
-
-                        if (useMockData) {
-                            // Mock delete
-                            alert('Mock mode: Delete operation not available. Backend plugin needed.');
-                            return;
-                        }
+                        if (!confirm(confirmMsg)) return;
 
                         $scope.loading = true;
                         pluginCallLogService.deleteCallLogs({deviceId: device.id}, function (response) {
                             $scope.loading = false;
                             if (response.status === 'OK') {
+                                $scope.filters = { type: '', search: '' };
+                                $scope.availableTypes = [];
+                                $scope.pagination.page = 0;
                                 $scope.loadCallLogs();
                             } else {
                                 $scope.errorMessage = response.message || 'Failed to delete call logs';
@@ -1141,7 +1158,6 @@ angular.module('headwind-kiosk')
                         });
                     };
 
-                    // Pagination
                     $scope.getTotalPages = function () {
                         return Math.ceil($scope.pagination.total / $scope.pagination.pageSize);
                     };
@@ -1154,8 +1170,7 @@ angular.module('headwind-kiosk')
                     };
 
                     $scope.nextPage = function () {
-                        var maxPage = Math.ceil($scope.pagination.total / $scope.pagination.pageSize) - 1;
-                        if ($scope.pagination.page < maxPage) {
+                        if (($scope.pagination.page + 1) * $scope.pagination.pageSize < $scope.pagination.total) {
                             $scope.pagination.page++;
                             $scope.loadCallLogs();
                         }
@@ -1165,7 +1180,7 @@ angular.module('headwind-kiosk')
                         $modalInstance.dismiss();
                     };
 
-                    // Initialize
+                    // Initialize — first load also populates the type dropdown
                     $scope.loadCallLogs();
                 },
                 size: 'lg',

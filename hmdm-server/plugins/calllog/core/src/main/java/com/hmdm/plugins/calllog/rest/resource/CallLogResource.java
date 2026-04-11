@@ -67,7 +67,9 @@ public class CallLogResource {
     public Response getDeviceCallLogs(
             @ApiParam("Device ID") @PathParam("deviceId") int deviceId,
             @ApiParam("Page number (0-based)") @QueryParam("page") @DefaultValue("0") int page,
-            @ApiParam("Page size") @QueryParam("pageSize") @DefaultValue("50") int pageSize
+            @ApiParam("Page size") @QueryParam("pageSize") @DefaultValue("50") int pageSize,
+            @ApiParam("Filter by call type (1=incoming,2=outgoing,3=missed,...)") @QueryParam("callType") Integer callType,
+            @ApiParam("Search by phone number or contact name") @QueryParam("search") @DefaultValue("") String search
     ) {
         if (!checkPermission()) {
             log.error("Unauthorized attempt to access call logs");
@@ -94,8 +96,8 @@ public class CallLogResource {
         List<CallLogRecord> logs;
         int total;
         try {
-            logs = callLogDAO.getCallLogsByDevicePaged(deviceId, customerId, pageSize, offset);
-            total = callLogDAO.getCallLogsCountByDevice(deviceId, customerId);
+            logs = callLogDAO.getCallLogsByDevicePagedFiltered(deviceId, customerId, callType, search, pageSize, offset);
+            total = callLogDAO.getCallLogsCountByDeviceFiltered(deviceId, customerId, callType, search);
         } catch (Exception e) {
             log.error("Failed to load call logs for device {} and customer {}", deviceId, customerId, e);
             return Response.ERROR("plugin.calllog.error.backend.not.ready");

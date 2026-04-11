@@ -31,9 +31,23 @@ public interface CallLogDAO {
     List<CallLogRecord> getCallLogsByDevicePaged(int deviceId, int customerId, int limit, int offset);
 
     /**
+     * Get call logs for a device with pagination and optional server-side filtering
+     * @param callType nullable – filter by call type (1=incoming,2=outgoing,etc.)
+     * @param search   nullable – filter by phone number or contact name (case-insensitive LIKE)
+     */
+    List<CallLogRecord> getCallLogsByDevicePagedFiltered(int deviceId, int customerId,
+                                                         Integer callType, String search,
+                                                         int limit, int offset);
+
+    /**
      * Get total count of call logs for a device
      */
     int getCallLogsCountByDevice(int deviceId, int customerId);
+
+    /**
+     * Get count with optional filters (matches getCallLogsByDevicePagedFiltered)
+     */
+    int getCallLogsCountByDeviceFiltered(int deviceId, int customerId, Integer callType, String search);
 
     /**
      * Delete old call logs based on retention policy

@@ -163,17 +163,15 @@
           ng-click="loadCallLogs()"
           ng-disabled="loading"
           style="margin-left: 8px;"
-          localized
         >
-          button.refresh
+          Refresh
         </button>
         <button
           class="btn btn-danger btn-xs btn-modern pull-right"
           ng-click="deleteAllLogs()"
           ng-disabled="loading || callLogs.length === 0"
-          localized
         >
-          button.delete.all
+          Delete All
         </button>
       </div>
 
@@ -196,6 +194,22 @@
           <p localized>plugin.calllog.no.logs</p>
         </div>
 
+        <!-- Filters — always visible once we have loaded at least once -->
+        <div ng-show="!loading" style="margin-bottom: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <select class="form-control" style="width: auto; min-width: 140px;"
+            ng-model="filters.type"
+            ng-options="t.value as t.label for t in availableTypes"
+            ng-change="applyFilter()">
+          </select>
+          <input
+            type="text"
+            class="form-control"
+            style="flex: 1; min-width: 220px;"
+            ng-model="filters.search"
+            placeholder="Search by name or phone number"
+          />
+        </div>
+
         <!-- Table -->
         <div ng-if="!loading && callLogs.length > 0">
           <table class="table modern-table">
@@ -215,10 +229,10 @@
                   <span
                     class="modern-label"
                     ng-class="{
-                                            'label-success': log.callType === 1 || log.callType === 2,
-                                            'label-warning': log.callType === 3,
-                                            'label-danger': log.callType === 5 || log.callType === 6
-                                          }"
+                      'label-success': log.callType === 1 || log.callType === 2,
+                      'label-warning': log.callType === 3,
+                      'label-danger': log.callType === 5 || log.callType === 6
+                    }"
                   >
                     {{getCallTypeName(log.callType)}}
                   </span>
@@ -269,9 +283,8 @@
       type="button"
       class="btn btn-default btn-modern"
       ng-click="close()"
-      localized
     >
-      button.close
+      Close
     </button>
   </div>
 </div>
