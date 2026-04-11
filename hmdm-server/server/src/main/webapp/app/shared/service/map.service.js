@@ -237,7 +237,7 @@ angular.module('headwind-kiosk')
              * @param {number} lon a longitude coordinate.
              */
             var centerMap = function (lat, lon) {
-                map.panTo(new L.LatLng(lat, lon));
+                map.setView(new L.LatLng(lat, lon), 13);
             };
 
             /**
