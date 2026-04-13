@@ -2587,4 +2587,55 @@
         </rollback>
     </changeSet>
 
+    <changeSet id="13.04.26-07:20" author="worktime-plugin" context="common">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="configurations"/>
+            <tableExists tableName="groups"/>
+            <tableExists tableName="userroles"/>
+            <tableExists tableName="permissions"/>
+        </preConditions>
+        <comment>Normalize legacy Russian seed data to English labels</comment>
+        <sql>
+            UPDATE configurations
+            SET name = 'Default', description = 'Base configuration for all devices'
+            WHERE name = 'По умолчанию' AND description = 'Базовая конфигурация для всех устройств';
+
+            UPDATE groups SET name = 'General' WHERE name = 'Общая';
+
+            UPDATE userroles
+            SET name = 'Super-Admin', description = 'Can sign in as any user. In shared mode, manages corporate accounts'
+            WHERE name = 'Супер-Администратор';
+
+            UPDATE userroles
+            SET name = 'Admin', description = 'Full access to the control panel'
+            WHERE name = 'Администратор';
+
+            UPDATE userroles
+            SET name = 'User', description = 'Limited access to the control panel'
+            WHERE name = 'Пользователь';
+
+            UPDATE userroles
+            SET name = 'Observer', description = 'Read-only access to the control panel'
+            WHERE name = 'Наблюдатель';
+
+            UPDATE permissions
+            SET description = 'Super-administrator functions for the whole system'
+            WHERE id = 1 AND description = 'Функции супер-администратора всего приложения';
+
+            UPDATE permissions
+            SET description = 'Access to system settings'
+            WHERE id = 2 AND description = 'Имеет доступ к настройкам и видит их в меню';
+
+            UPDATE permissions
+            SET description = 'Access to configurations, applications and files'
+            WHERE id = 3 AND description = 'Имеет доступ к конфигурациям, приложениям и файлам и видит их в меню';
+
+            UPDATE permissions
+            SET description = 'Access to devices'
+            WHERE id = 4 AND description = 'Имеет доступ к редактированию и добавлению устройств';
+        </sql>
+        <rollback>
+        </rollback>
+    </changeSet>
+
 </databaseChangeLog>

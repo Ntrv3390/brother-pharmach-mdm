@@ -81,7 +81,18 @@ angular
       "/rest/private/applications/search/:value",
       { value: "@value" },
       {
-        getAll: { method: "GET" },
+        getAll: {
+          method: "GET",
+          url: "/rest/private/applications/search",
+        },
+        getAllAdmin: {
+          method: "GET",
+          url: "/rest/private/applications/admin/search",
+        },
+        getAllFromConfigurations: {
+          method: "GET",
+          url: "/rest/private/configurations/applications",
+        },
       }
     );
   })
@@ -373,10 +384,10 @@ angular
         if (!$scope.applications) {
           return [];
         }
-        if (!searchText) {
+        if (!searchText || !String(searchText).trim()) {
           return $scope.applications;
         }
-        var lowered = searchText.toLowerCase();
+        var lowered = String(searchText).toLowerCase().trim();
         return $scope.applications.filter(function (app) {
           return getAppSearchText(app).indexOf(lowered) !== -1;
         });
@@ -450,32 +461,93 @@ angular
         );
       };
 
+      function normalizeApplicationsResponse(response) {
+        var list = [];
+        if (response && angular.isArray(response.data)) {
+          list = response.data;
+        } else if (response && angular.isArray(response)) {
+          list = response;
+        }
+
+        return list
+          .filter(function (app) {
+            return !!(app && app.pkg);
+          })
+          .sort(function (left, right) {
+            var leftName = (left.name || left.applicationName || left.pkg).toLowerCase();
+            var rightName = (right.name || right.applicationName || right.pkg).toLowerCase();
+            return leftName.localeCompare(rightName);
+          });
+      }
+
       $scope.loadApplications = function () {
         $scope.appsLoading = true;
-        WorkTimeApplications.getAll(
-          {},
-          function (response) {
-            if (response && response.status === "OK" && response.data) {
-              $scope.applications = response.data
-                .filter(function (app) { return !!app.pkg; })
-                .sort(function (left, right) {
-                  var leftName = (left.name || left.pkg).toLowerCase();
-                  var rightName = (right.name || right.pkg).toLowerCase();
-                  return leftName.localeCompare(rightName);
-                });
+
+        var assignApps = function (apps) {
+          $scope.applications = apps || [];
+          $scope.appsLoading = false;
+        };
+
+        var loadFromConfigurationEndpoint = function () {
+          WorkTimeApplications.getAllFromConfigurations(
+            {},
+            function (configurationResponse) {
+              assignApps(normalizeApplicationsResponse(configurationResponse));
+            },
+            function (configurationError) {
+              console.error("Failed to load applications via configuration endpoint", configurationError);
+              assignApps([]);
             }
-            $scope.appsLoading = false;
-          },
-          function (error) {
-            console.error("Failed to load applications", error);
-            $scope.appsLoading = false;
-          }
-        );
+          );
+        };
+
+        var loadFromStandardSearch = function () {
+          WorkTimeApplications.getAll(
+            {},
+            function (response) {
+              var apps = normalizeApplicationsResponse(response);
+              if (apps.length > 0) {
+                assignApps(apps);
+                return;
+              }
+              loadFromConfigurationEndpoint();
+            },
+            function (error) {
+              console.error("Failed to load applications", error);
+              loadFromConfigurationEndpoint();
+            }
+          );
+        };
+
+        var loadFromAdminSearch = function () {
+          WorkTimeApplications.getAllAdmin(
+            {},
+            function (adminResponse) {
+              var adminApps = normalizeApplicationsResponse(adminResponse);
+              if (adminApps.length > 0) {
+                assignApps(adminApps);
+                return;
+              }
+              loadFromStandardSearch();
+            },
+            function (adminError) {
+              console.error("Failed to load applications via admin search", adminError);
+              loadFromStandardSearch();
+            }
+          );
+        };
+
+        // Prefer admin endpoint to get the full catalog for policy selection.
+        loadFromAdminSearch();
       };
 
       $scope.openPolicyModal = function (device) {
         if (!$scope.canEdit) {
           return;
+        }
+
+        if (!$scope.appsLoading && (!angular.isArray($scope.applications) || $scope.applications.length === 0)) {
+          $scope.loadApplications();
         }
 
         $scope.error = null;
@@ -489,6 +561,7 @@ angular
         modalInstance = $uibModal.open({
           templateUrl: POLICY_MODAL_TEMPLATE,
           scope: $scope,
+          windowClass: "worktime-policy-modal",
           backdrop: "static",
           keyboard: true,
         });
@@ -563,6 +636,7 @@ angular
         modalInstance = $uibModal.open({
           templateUrl: EXCEPTION_MODAL_TEMPLATE,
           scope: $scope,
+          windowClass: "worktime-exception-modal",
           backdrop: "static",
           keyboard: true,
         });

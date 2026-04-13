@@ -154,16 +154,38 @@ DB_HAS_SCHEMA="$(PGPASSWORD="${DB_PASSWORD}" psql \
 # ---------------------------------------------------------------------------
 CLIENT_VERSION="${CLIENT_VERSION:-6.31}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
+PROCESSED_SQL="/tmp/hmdm_init_processed.sql"
 
-if [ "${DB_HAS_SCHEMA}" = "t" ] || [ "${DB_HAS_SCHEMA}" = "true" ]; then
-    echo "==> [hmdm] Existing database detected; skipping init SQL execution."
-    SQL_INIT_SCRIPT_PATH=""
-elif [ -f "${SQL_INIT_SCRIPT_PATH}" ]; then
-    PROCESSED_SQL="/tmp/hmdm_init_processed.sql"
+if [ -f "${SQL_INIT_SCRIPT_PATH}" ]; then
     sed "s|_HMDM_VERSION_|${CLIENT_VERSION}|g; \
          s|_HMDM_APK_URL_|${APK_URL}|g; \
          s|_ADMIN_EMAIL_|${ADMIN_EMAIL}|g" \
         "${SQL_INIT_SCRIPT_PATH}" > "${PROCESSED_SQL}"
+fi
+
+if [ "${DB_HAS_SCHEMA}" = "t" ] || [ "${DB_HAS_SCHEMA}" = "true" ]; then
+    APP_COUNT="$(PGPASSWORD="${DB_PASSWORD}" psql \
+        -h "${DB_HOST}" \
+        -p "${DB_PORT}" \
+        -U "${DB_USER}" \
+        -d "${DB_NAME}" \
+        -tA \
+        -c "SELECT COUNT(*) FROM applications;" 2>/dev/null | tr -d '[:space:]')"
+
+    if [ "${APP_COUNT:-0}" = "0" ] && [ -f "${PROCESSED_SQL}" ]; then
+        echo "==> [hmdm] Existing schema detected with empty application catalog. Seeding baseline test data..."
+        PGPASSWORD="${DB_PASSWORD}" psql \
+            -h "${DB_HOST}" \
+            -p "${DB_PORT}" \
+            -U "${DB_USER}" \
+            -d "${DB_NAME}" \
+            -f "${PROCESSED_SQL}"
+        echo "==> [hmdm] Baseline data seeded successfully."
+    else
+        echo "==> [hmdm] Existing database detected; skipping init SQL execution."
+    fi
+    SQL_INIT_SCRIPT_PATH=""
+elif [ -f "${PROCESSED_SQL}" ]; then
     SQL_INIT_SCRIPT_PATH="${PROCESSED_SQL}"
     echo "==> [hmdm] Empty database detected. Init SQL prepared at ${PROCESSED_SQL} (version=${CLIENT_VERSION}, email=${ADMIN_EMAIL})"
 else

@@ -1,5 +1,26 @@
 <div ng-controller="WorkTimeAdminController" class="worktime-admin-page">
   <style>
+    .worktime-policy-modal .modal-dialog {
+      width: 96vw;
+      max-width: 1480px;
+      margin: 20px auto;
+    }
+
+    .worktime-exception-modal .modal-dialog {
+      width: 92vw;
+      max-width: 1120px;
+      margin: 20px auto;
+    }
+
+    .worktime-policy-modal .modal-content,
+    .worktime-exception-modal .modal-content {
+      border-radius: 18px;
+      overflow: hidden;
+      max-height: 92vh;
+      display: flex;
+      flex-direction: column;
+    }
+
     .worktime-admin-page {
       margin-top: 28px;
       color: #243042;
@@ -21,7 +42,12 @@
 
     .worktime-header-card {
       margin-bottom: 18px;
-      background: linear-gradient(135deg, #eff6ff 0%, #ffffff 62%, #f7fbff 100%);
+      background: linear-gradient(
+        135deg,
+        #eff6ff 0%,
+        #ffffff 62%,
+        #f7fbff 100%
+      );
     }
 
     .worktime-header-body {
@@ -160,12 +186,12 @@
       color: #375577;
     }
 
-    .worktime-badge.alert {
+    .worktime-badge.state-alert {
       background: #fff1f1;
       color: #c44747;
     }
 
-    .worktime-badge.ok {
+    .worktime-badge.state-ok {
       background: #eefaf2;
       color: #2e7d50;
     }
@@ -301,16 +327,28 @@
     .worktime-modal-body {
       padding: 22px;
       background: #f8fbff;
+      flex: 1 1 auto;
+      overflow-y: auto;
+      overflow-x: hidden;
     }
 
     .worktime-modal-footer {
       padding: 16px 22px 22px;
       border: 0;
+      border-top: 1px solid #e0eaf6;
       background: #f8fbff;
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
       justify-content: flex-end;
+      position: relative;
+      z-index: 3;
+      clear: both;
+    }
+
+    .worktime-modal-footer .btn,
+    .worktime-modal-footer button {
+      float: none !important;
     }
 
     .worktime-form-card {
@@ -319,6 +357,39 @@
       border-radius: 16px;
       padding: 18px;
       margin-bottom: 16px;
+    }
+
+    .worktime-inline-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .worktime-field {
+      min-width: 0;
+    }
+
+    .worktime-field label {
+      display: block;
+      margin: 0 0 7px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #263a53;
+    }
+
+    .worktime-note-box {
+      border-radius: 12px;
+      background: #eef6ff;
+      color: #27537f;
+      padding: 14px 16px;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .worktime-app-columns {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
     }
 
     .worktime-form-title {
@@ -366,7 +437,9 @@
     }
 
     .worktime-app-item {
-      display: block;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
       padding: 10px 12px;
       border-radius: 10px;
       color: #29405d;
@@ -395,6 +468,12 @@
     }
 
     @media (max-width: 767px) {
+      .worktime-policy-modal .modal-dialog,
+      .worktime-exception-modal .modal-dialog {
+        width: calc(100vw - 16px);
+        margin: 8px auto;
+      }
+
       .worktime-shell {
         padding: 0 10px 20px;
       }
@@ -406,6 +485,11 @@
 
       .worktime-device-card {
         padding: 16px;
+      }
+
+      .worktime-inline-grid,
+      .worktime-app-columns {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -419,13 +503,10 @@
         <div>
           <h2 class="worktime-header-title">Device Work Time Policies</h2>
           <p class="worktime-header-copy">
-            Manage policy and exception behavior device by device. Policy changes and exception updates refresh automatically and are pushed to devices immediately.
+            Manage policy and exception behavior device by device. Policy
+            changes and exception updates refresh automatically and are pushed
+            to devices immediately.
           </p>
-        </div>
-        <div class="worktime-live-pill">
-          <span class="worktime-live-dot"></span>
-          <span ng-if="lastRefreshAt">Live sync • {{lastRefreshAt | date:'mediumTime'}}</span>
-          <span ng-if="!lastRefreshAt">Live sync</span>
         </div>
       </div>
     </div>
@@ -440,16 +521,26 @@
           placeholder="Search by device name or ID"
         />
       </div>
-      <button type="button" class="worktime-refresh" ng-click="refresh(true)" ng-disabled="refreshing || loading">
+      <button
+        type="button"
+        class="worktime-refresh"
+        ng-click="refresh(true)"
+        ng-disabled="refreshing || loading"
+      >
         <i class="glyphicon glyphicon-refresh"></i>
         <span ng-if="!refreshing">Refresh</span>
         <span ng-if="refreshing">Refreshing...</span>
       </button>
     </div>
 
-    <div class="worktime-empty" ng-if="!loading && filteredDevices().length === 0">
+    <div
+      class="worktime-empty"
+      ng-if="!loading && filteredDevices().length === 0"
+    >
       <strong>No devices found.</strong>
-      <div style="margin-top: 8px;">Try changing the search filter or enroll a device first.</div>
+      <div style="margin-top: 8px">
+        Try changing the search filter or enroll a device first.
+      </div>
     </div>
 
     <div class="worktime-empty" ng-if="loading">
@@ -457,19 +548,33 @@
     </div>
 
     <div class="worktime-list" ng-if="!loading && filteredDevices().length > 0">
-      <div class="worktime-device-card" ng-repeat="device in filteredDevices() track by device.deviceId">
+      <div
+        class="worktime-device-card"
+        ng-repeat="device in filteredDevices() track by device.deviceId"
+      >
         <div class="worktime-device-top">
           <div>
-            <h3 class="worktime-device-title">{{device.deviceName || ('Device ' + device.deviceId)}}</h3>
-            <div class="worktime-device-meta">Device ID: {{device.deviceId}}</div>
+            <h3 class="worktime-device-title">
+              {{device.deviceName || ('Device ' + device.deviceId)}}
+            </h3>
+            <div class="worktime-device-meta">
+              Device ID: {{device.deviceId}}
+            </div>
           </div>
 
           <div class="worktime-badges">
-            <span class="worktime-badge" ng-class="device.policy.enabled ? 'ok' : 'alert'">
+            <span
+              class="worktime-badge"
+              ng-class="device.policy.enabled ? 'state-ok' : 'state-alert'"
+            >
               {{device.policy.enabled ? 'Policy Enabled' : 'Policy Disabled'}}
             </span>
-            <span class="worktime-badge" ng-class="device.hasActiveException ? 'alert' : 'ok'">
-              {{device.hasActiveException ? 'Active Exception' : 'No Active Exception'}}
+            <span
+              class="worktime-badge"
+              ng-class="device.hasActiveException ? 'state-alert' : 'state-ok'"
+            >
+              {{device.hasActiveException ? 'Active Exception' : 'No Active
+              Exception'}}
             </span>
           </div>
         </div>
@@ -477,44 +582,75 @@
         <div class="worktime-policy-grid">
           <div class="worktime-stat">
             <span class="worktime-stat-label">Work Hours</span>
-            <span class="worktime-stat-value">{{device.policy.startTime}} - {{device.policy.endTime}}</span>
+            <span class="worktime-stat-value"
+              >{{device.policy.startTime}} - {{device.policy.endTime}}</span
+            >
           </div>
           <div class="worktime-stat">
             <span class="worktime-stat-label">Days</span>
-            <span class="worktime-stat-value">{{formatDays(device.policy.daysOfWeek)}}</span>
+            <span class="worktime-stat-value"
+              >{{formatDays(device.policy.daysOfWeek)}}</span
+            >
           </div>
           <div class="worktime-stat">
             <span class="worktime-stat-label">During Work</span>
-            <span class="worktime-stat-value">{{describeApps(device.policy.allowedAppsDuringWork)}}</span>
+            <span class="worktime-stat-value"
+              >{{describeApps(device.policy.allowedAppsDuringWork)}}</span
+            >
           </div>
           <div class="worktime-stat">
             <span class="worktime-stat-label">After Work</span>
-            <span class="worktime-stat-value">{{describeApps(device.policy.allowedAppsOutsideWork)}}</span>
+            <span class="worktime-stat-value"
+              >{{describeApps(device.policy.allowedAppsOutsideWork)}}</span
+            >
           </div>
         </div>
 
-        <div class="worktime-exception-strip" ng-if="device.exceptions.length > 0">
+        <div
+          class="worktime-exception-strip"
+          ng-if="device.exceptions.length > 0"
+        >
           <div class="worktime-exception-title">
             <i class="glyphicon glyphicon-warning-sign"></i>
-            <span>{{device.exceptions[0].active ? 'Exception Active' : 'Exception Scheduled'}}</span>
+            <span
+              >{{device.exceptions[0].active ? 'Exception Active' : 'Exception
+              Scheduled'}}</span
+            >
           </div>
           <p class="worktime-exception-copy">
-            {{device.exceptions[0].dateFrom | date:'MMM d, yyyy'}} {{device.exceptions[0].timeFrom}}
-            to
-            {{device.exceptions[0].dateTo | date:'MMM d, yyyy'}} {{device.exceptions[0].timeTo}}
+            {{device.exceptions[0].dateFrom | date:'MMM d, yyyy'}}
+            {{device.exceptions[0].timeFrom}} to {{device.exceptions[0].dateTo |
+            date:'MMM d, yyyy'}} {{device.exceptions[0].timeTo}}
           </p>
         </div>
 
         <div class="worktime-actions">
-          <button type="button" class="worktime-btn-primary" ng-click="openPolicyModal(device)" ng-disabled="!canEdit">
+          <button
+            type="button"
+            class="worktime-btn-primary"
+            ng-click="openPolicyModal(device)"
+            ng-disabled="!canEdit"
+          >
             <i class="glyphicon glyphicon-edit"></i>
             Change Policy
           </button>
-          <button type="button" class="worktime-btn-secondary" ng-click="openExceptionModal(device)" ng-disabled="!canEdit">
+          <button
+            type="button"
+            class="worktime-btn-secondary"
+            ng-if="!device.hasActiveException"
+            ng-click="openExceptionModal(device)"
+            ng-disabled="!canEdit"
+          >
             <i class="glyphicon glyphicon-time"></i>
             Create Exception
           </button>
-          <button type="button" class="worktime-btn-danger" ng-if="device.exceptions.length > 0" ng-click="deleteException(device)" ng-disabled="!canEdit">
+          <button
+            type="button"
+            class="worktime-btn-danger"
+            ng-if="device.exceptions.length > 0"
+            ng-click="deleteException(device)"
+            ng-disabled="!canEdit"
+          >
             <i class="glyphicon glyphicon-trash"></i>
             Remove Exception
           </button>
@@ -540,12 +676,12 @@
 
       <div class="worktime-form-card">
         <h5 class="worktime-form-title">Working Window</h5>
-        <div class="row">
-          <div class="col-sm-6">
+        <div class="worktime-inline-grid">
+          <div class="worktime-field">
             <label>Start Time</label>
             <input type="text" class="form-control" ng-model="editingPolicy.startTime" placeholder="HH:mm" />
           </div>
-          <div class="col-sm-6">
+          <div class="worktime-field">
             <label>End Time</label>
             <input type="text" class="form-control" ng-model="editingPolicy.endTime" placeholder="HH:mm" />
           </div>
@@ -566,55 +702,77 @@
         </div>
       </div>
 
-      <div class="worktime-form-card">
-        <h5 class="worktime-form-title">
-          Allowed During Work
-          <span class="worktime-count-chip">{{countSelectedApps(selectedAppsDuringWork)}}</span>
-        </h5>
-        <input type="text" class="form-control" ng-model="policyDuringSearchText" placeholder="Search applications" style="margin-bottom:12px;" />
-        <div class="worktime-app-panel">
-          <label class="worktime-app-item">
-            <input type="checkbox" ng-model="selectedAppsDuringWork['*']" ng-change="toggleAllAppsDuringWork()" />
-            <strong style="margin-left:6px;">All Apps</strong>
-          </label>
-          <label
-            class="worktime-app-item"
-            ng-class="{'muted': selectedAppsDuringWork['*']}"
-            ng-repeat="app in getFilteredApps(policyDuringSearchText) track by app.pkg">
-            <input
-              type="checkbox"
-              ng-model="selectedAppsDuringWork[app.pkg]"
-              ng-change="toggleIndividualAppDuringWork()"
-              ng-disabled="selectedAppsDuringWork['*']" />
-            <strong style="margin-left:6px;">{{app.name || app.pkg}}</strong>
-            <div class="text-muted" style="margin-left:24px; font-size:12px;">{{app.pkg}}</div>
-          </label>
+      <div class="worktime-app-columns">
+        <div class="worktime-form-card" style="margin-bottom:0;">
+          <h5 class="worktime-form-title">
+            Allowed During Work
+            <span class="worktime-count-chip">{{countSelectedApps(selectedAppsDuringWork)}}</span>
+          </h5>
+          <input type="text" class="form-control" ng-model="policyDuringSearchText" placeholder="Search applications" style="margin-bottom:12px;" />
+          <div class="worktime-app-panel">
+            <label class="worktime-app-item">
+              <input type="checkbox" ng-model="selectedAppsDuringWork['*']" ng-change="toggleAllAppsDuringWork()" />
+              <div>
+                <strong>All Apps</strong>
+              </div>
+            </label>
+            <label
+              class="worktime-app-item"
+              ng-class="{'muted': selectedAppsDuringWork['*']}"
+              ng-repeat="app in getFilteredApps(policyDuringSearchText) track by (app.id || app.pkg || $index)">
+              <input
+                type="checkbox"
+                ng-model="selectedAppsDuringWork[app.pkg]"
+                ng-change="toggleIndividualAppDuringWork()"
+                ng-disabled="selectedAppsDuringWork['*']" />
+              <div>
+                <strong>{{app.name || app.applicationName || app.pkg}}</strong>
+                <div class="text-muted" style="font-size:12px;">{{app.pkg}}</div>
+              </div>
+            </label>
+            <div class="text-muted" ng-if="appsLoading" style="padding:10px 12px;">
+              Loading applications...
+            </div>
+            <div class="text-muted" ng-if="!appsLoading && getFilteredApps(policyDuringSearchText).length === 0" style="padding:10px 12px;">
+              No applications found.
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div class="worktime-form-card" style="margin-bottom:0;">
-        <h5 class="worktime-form-title">
-          Allowed After Work
-          <span class="worktime-count-chip">{{countSelectedApps(selectedAppsOutsideWork)}}</span>
-        </h5>
-        <input type="text" class="form-control" ng-model="policyOutsideSearchText" placeholder="Search applications" style="margin-bottom:12px;" />
-        <div class="worktime-app-panel">
-          <label class="worktime-app-item">
-            <input type="checkbox" ng-model="selectedAppsOutsideWork['*']" ng-change="toggleAllAppsOutsideWork()" />
-            <strong style="margin-left:6px;">All Apps</strong>
-          </label>
-          <label
-            class="worktime-app-item"
-            ng-class="{'muted': selectedAppsOutsideWork['*']}"
-            ng-repeat="app in getFilteredApps(policyOutsideSearchText) track by app.pkg">
-            <input
-              type="checkbox"
-              ng-model="selectedAppsOutsideWork[app.pkg]"
-              ng-change="toggleIndividualAppOutsideWork()"
-              ng-disabled="selectedAppsOutsideWork['*']" />
-            <strong style="margin-left:6px;">{{app.name || app.pkg}}</strong>
-            <div class="text-muted" style="margin-left:24px; font-size:12px;">{{app.pkg}}</div>
-          </label>
+        <div class="worktime-form-card" style="margin-bottom:0;">
+          <h5 class="worktime-form-title">
+            Allowed After Work
+            <span class="worktime-count-chip">{{countSelectedApps(selectedAppsOutsideWork)}}</span>
+          </h5>
+          <input type="text" class="form-control" ng-model="policyOutsideSearchText" placeholder="Search applications" style="margin-bottom:12px;" />
+          <div class="worktime-app-panel">
+            <label class="worktime-app-item">
+              <input type="checkbox" ng-model="selectedAppsOutsideWork['*']" ng-change="toggleAllAppsOutsideWork()" />
+              <div>
+                <strong>All Apps</strong>
+              </div>
+            </label>
+            <label
+              class="worktime-app-item"
+              ng-class="{'muted': selectedAppsOutsideWork['*']}"
+              ng-repeat="app in getFilteredApps(policyOutsideSearchText) track by (app.id || app.pkg || $index)">
+              <input
+                type="checkbox"
+                ng-model="selectedAppsOutsideWork[app.pkg]"
+                ng-change="toggleIndividualAppOutsideWork()"
+                ng-disabled="selectedAppsOutsideWork['*']" />
+              <div>
+                <strong>{{app.name || app.applicationName || app.pkg}}</strong>
+                <div class="text-muted" style="font-size:12px;">{{app.pkg}}</div>
+              </div>
+            </label>
+            <div class="text-muted" ng-if="appsLoading" style="padding:10px 12px;">
+              Loading applications...
+            </div>
+            <div class="text-muted" ng-if="!appsLoading && getFilteredApps(policyOutsideSearchText).length === 0" style="padding:10px 12px;">
+              No applications found.
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -637,30 +795,32 @@
     <div class="worktime-modal-body">
       <div class="worktime-form-card">
         <h5 class="worktime-form-title">Exception Window</h5>
-        <div class="alert alert-info" style="margin-bottom:14px; border-radius:12px; border:0; background:#eef6ff; color:#27537f;">
-          This exception temporarily disables work time enforcement for the selected device.
-        </div>
-
-        <div class="row">
-          <div class="col-sm-6">
+        <div class="worktime-inline-grid">
+          <div class="worktime-field">
             <label>Start Date</label>
             <input type="date" class="form-control" ng-model="editingException.dateFrom" />
           </div>
-          <div class="col-sm-6">
+          <div class="worktime-field">
             <label>End Date</label>
             <input type="date" class="form-control" ng-model="editingException.dateTo" />
           </div>
         </div>
 
-        <div class="row" style="margin-top:14px;">
-          <div class="col-sm-6">
+        <div class="worktime-inline-grid" style="margin-top:14px;">
+          <div class="worktime-field">
             <label>Time From</label>
             <input type="time" class="form-control" ng-model="editingException.timeFromInput" />
           </div>
-          <div class="col-sm-6">
+          <div class="worktime-field">
             <label>Time To</label>
             <input type="time" class="form-control" ng-model="editingException.timeToInput" />
           </div>
+        </div>
+      </div>
+
+      <div class="worktime-form-card" style="margin-bottom:0;">
+        <div class="worktime-note-box">
+          This exception temporarily disables work time enforcement for the selected device.
         </div>
       </div>
     </div>

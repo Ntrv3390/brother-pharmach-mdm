@@ -454,7 +454,7 @@
             <tableExists tableName="worktime_device_policy"/>
             <tableExists tableName="devices"/>
         </preConditions>
-        <sql>
+        <sql splitStatements="false">
             CREATE OR REPLACE FUNCTION worktime_create_default_device_policy()
             RETURNS trigger
             LANGUAGE plpgsql
