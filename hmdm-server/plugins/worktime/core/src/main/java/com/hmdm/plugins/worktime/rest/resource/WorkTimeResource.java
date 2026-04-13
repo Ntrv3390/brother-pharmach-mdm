@@ -14,7 +14,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import com.hmdm.plugins.worktime.model.WorkTimePolicy;
+import com.hmdm.plugins.worktime.model.WorkTimeDevicePolicy;
 import com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride;
 import com.hmdm.plugins.worktime.persistence.WorkTimeDAO;
 import com.hmdm.persistence.UserDAO;
@@ -56,6 +56,14 @@ public class WorkTimeResource {
                 .getCustomerId();
     }
 
+    private Device getScopedDeviceOrNull(int deviceId) {
+        try {
+            return this.deviceDAO.getDeviceById(deviceId);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private boolean isValidTime(String value) {
         if (value == null) {
             return false;
@@ -68,9 +76,9 @@ public class WorkTimeResource {
         }
     }
 
-    private void normalizeGlobalPolicy(WorkTimePolicy policy) {
+    private void normalizeDevicePolicy(WorkTimeDevicePolicy policy) {
         if (policy.getDaysOfWeek() == null) {
-            policy.setDaysOfWeek(127);
+            policy.setDaysOfWeek(31);
         }
         if (policy.getAllowedAppsDuringWork() == null) {
             policy.setAllowedAppsDuringWork("");
@@ -102,30 +110,80 @@ public class WorkTimeResource {
         }, 2, TimeUnit.SECONDS);
     }
 
-    // --- Global policy endpoints ---
+    // --- Per-device policy endpoints ---
     @GET
     @Path("/policy")
-    public Response getPolicy() {
+    public Response getPolicyByQuery(@QueryParam("deviceId") Integer deviceId) {
+        if (deviceId == null || deviceId <= 0) {
+            return Response.ERROR("deviceId query parameter is required");
+        }
+        return getPolicy(deviceId);
+    }
+
+    @GET
+    @Path("/policy/{deviceId}")
+    public Response getPolicy(@PathParam("deviceId") int deviceId) {
         // Check authentication
         User current = SecurityContext.get().getCurrentUser().orElse(null);
         if (current == null) {
-            log.error("Unauthorized attempt to access worktime policy - not authenticated");
+            log.error("Unauthorized attempt to access worktime device policy - not authenticated");
+            return Response.PERMISSION_DENIED();
+        }
+
+        if (!SecurityContext.get().isSuperAdmin() && !this.userDAO.isOrgAdmin(current)) {
+            log.warn("User {} is not allowed to get policy: must be admin", current.getLogin());
+            return Response.PERMISSION_DENIED();
+        }
+
+        if (deviceId <= 0) {
+            return Response.ERROR("Invalid device ID");
+        }
+
+        if (getScopedDeviceOrNull(deviceId) == null) {
+            return Response.DEVICE_NOT_FOUND_ERROR();
+        }
+
+        int customerId = getCustomerId();
+        WorkTimeDevicePolicy policy = workTimeDAO.getDevicePolicy(customerId, deviceId);
+
+        if (policy == null) {
+            policy = new WorkTimeDevicePolicy();
+            policy.setCustomerId(customerId);
+            policy.setDeviceId(deviceId);
+            policy.setStartTime("09:00");
+            policy.setEndTime("17:00");
+            policy.setDaysOfWeek(31);
+            policy.setAllowedAppsDuringWork("");
+            policy.setAllowedAppsOutsideWork("*");
+            policy.setEnabled(true);
+        }
+
+        return Response.OK(policy);
+    }
+
+    @GET
+    @Path("/policies")
+    public Response getPolicies() {
+        User current = SecurityContext.get().getCurrentUser().orElse(null);
+        if (current == null) {
+            return Response.PERMISSION_DENIED();
+        }
+        if (!SecurityContext.get().isSuperAdmin() && !this.userDAO.isOrgAdmin(current)) {
             return Response.PERMISSION_DENIED();
         }
 
         int customerId = getCustomerId();
-        WorkTimePolicy policy = workTimeDAO.getGlobalPolicy(customerId);
-        return Response.OK(policy);
+        return Response.OK(workTimeDAO.getDevicePolicies(customerId));
     }
 
     @POST
     @Path("/policy")
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response savePolicy(WorkTimePolicy policy) {
+    public Response savePolicy(WorkTimeDevicePolicy policy) {
         // Check if user is admin or has worktime permission
         User current = SecurityContext.get().getCurrentUser().orElse(null);
         if (current == null) {
-            log.error("Unauthorized attempt to save worktime policy - not authenticated");
+            log.error("Unauthorized attempt to save worktime device policy - not authenticated");
             return Response.PERMISSION_DENIED();
         }
 
@@ -137,6 +195,14 @@ public class WorkTimeResource {
         if (policy == null) {
             return Response.ERROR("Policy payload is required");
         }
+        if (policy.getDeviceId() <= 0) {
+            return Response.ERROR("Invalid device ID");
+        }
+
+        if (getScopedDeviceOrNull(policy.getDeviceId()) == null) {
+            return Response.DEVICE_NOT_FOUND_ERROR();
+        }
+
         if (!isValidTime(policy.getStartTime()) || !isValidTime(policy.getEndTime())) {
             return Response.ERROR("Invalid time format, expected HH:mm");
         }
@@ -146,19 +212,14 @@ public class WorkTimeResource {
 
         int customerId = getCustomerId();
         policy.setCustomerId(customerId);
-        normalizeGlobalPolicy(policy);
-        workTimeDAO.saveGlobalPolicy(policy);
+        normalizeDevicePolicy(policy);
+        workTimeDAO.saveDevicePolicy(policy);
 
-        // Notify all devices about policy update
-        List<Device> devices = deviceDAO.getAllDevices();
-        int notified = 0;
-        for (Device device : devices) {
-            sendConfigUpdatedTwice(device.getId());
-            notified++;
-        }
+        // Notify target device about policy update
+        sendConfigUpdatedTwice(policy.getDeviceId());
 
-        log.info("Saved WorkTime global policy for customer {} and sent double config update to {} devices",
-                customerId, notified);
+        log.info("Saved WorkTime device policy for customer {}, device {}",
+                customerId, policy.getDeviceId());
 
         return Response.OK(policy);
     }
@@ -208,18 +269,6 @@ public class WorkTimeResource {
             } else {
                 override.setDeviceName(device.getNumber());
             }
-
-            // Populate group membership so the frontend can drive group-level policy selection
-            java.util.List<java.util.Map<String, Object>> deviceGroups = new java.util.ArrayList<>();
-            if (device.getGroups() != null) {
-                for (com.hmdm.rest.json.LookupItem g : device.getGroups()) {
-                    java.util.Map<String, Object> gm = new java.util.HashMap<>();
-                    gm.put("id", g.getId());
-                    gm.put("name", g.getName());
-                    deviceGroups.add(gm);
-                }
-            }
-            override.setDeviceGroups(deviceGroups);
 
             if (override.getExceptions() == null) {
                 override.setExceptions(new java.util.ArrayList<>());
@@ -276,20 +325,18 @@ public class WorkTimeResource {
             return Response.ERROR("Invalid device ID");
         }
 
-        if (!override.isEnabled()) {
-            if (override.getStartDateTime() == null || override.getEndDateTime() == null) {
-                return Response.ERROR("Disabled override requires startDateTime and endDateTime");
-            }
-            if (!override.getEndDateTime().after(override.getStartDateTime())) {
-                return Response.ERROR("endDateTime must be after startDateTime");
-            }
-        } else {
-            if (override.getStartTime() != null && !override.getStartTime().trim().isEmpty() && !isValidTime(override.getStartTime())) {
-                return Response.ERROR("Invalid startTime format, expected HH:mm");
-            }
-            if (override.getEndTime() != null && !override.getEndTime().trim().isEmpty() && !isValidTime(override.getEndTime())) {
-                return Response.ERROR("Invalid endTime format, expected HH:mm");
-            }
+        if (getScopedDeviceOrNull(override.getDeviceId()) == null) {
+            return Response.DEVICE_NOT_FOUND_ERROR();
+        }
+
+        if (override.isEnabled()) {
+            return Response.ERROR("Override endpoint is for device exceptions only; use device policy endpoint for normal policy");
+        }
+        if (override.getStartDateTime() == null || override.getEndDateTime() == null) {
+            return Response.ERROR("Device exception requires startDateTime and endDateTime");
+        }
+        if (!override.getEndDateTime().after(override.getStartDateTime())) {
+            return Response.ERROR("endDateTime must be after startDateTime");
         }
 
         if (override.getPriority() == null) {
@@ -316,6 +363,10 @@ public class WorkTimeResource {
         }
 
         int customerId = getCustomerId();
+        if (getScopedDeviceOrNull(deviceId) == null) {
+            return Response.DEVICE_NOT_FOUND_ERROR();
+        }
+
         workTimeDAO.deleteDeviceOverride(customerId, deviceId);
 
         // Notify device about policy update

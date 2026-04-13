@@ -1,6 +1,6 @@
 package com.hmdm.plugins.worktime.service;
 
-import com.hmdm.plugins.worktime.model.WorkTimePolicy;
+import com.hmdm.plugins.worktime.model.WorkTimeDevicePolicy;
 import com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride;
 import com.hmdm.plugins.worktime.persistence.WorkTimeDAO;
 
@@ -24,18 +24,18 @@ public class WorkTimeService {
     }
 
     public EffectiveWorkTimePolicy resolveEffectivePolicy(int customerId, int deviceId, LocalDateTime now) {
-        // load global
-        WorkTimePolicy global = dao.getGlobalPolicy(customerId);
+        WorkTimeDevicePolicy base = dao.getDevicePolicy(customerId, deviceId);
 
-        if (global == null) {
-            // default: enforcement disabled
-            return new EffectiveWorkTimePolicy(false, "00:00", "00:00", 127, new HashSet<>(), new HashSet<>());
-        }
+        String start = base != null && base.getStartTime() != null ? base.getStartTime() : "09:00";
+        String end = base != null && base.getEndTime() != null ? base.getEndTime() : "17:00";
+        int days = base != null && base.getDaysOfWeek() != null ? base.getDaysOfWeek() : 31;
+        Set<String> during = parseAllowed(base != null ? base.getAllowedAppsDuringWork() : "");
+        Set<String> outside = parseAllowed(base != null ? base.getAllowedAppsOutsideWork() : "*");
+        boolean enforcementEnabled = base == null || base.getEnabled() == null || base.getEnabled();
 
-        // If global disabled => no enforcement
-        if (global.getEnabled() != null && !global.getEnabled()) {
-            int globalDays = global.getDaysOfWeek() != null ? global.getDaysOfWeek() : 127;
-            return new EffectiveWorkTimePolicy(false, global.getStartTime(), global.getEndTime(), globalDays, parseAllowed(global.getAllowedAppsDuringWork()), parseAllowed(global.getAllowedAppsOutsideWork()));
+        // If base policy disabled => no enforcement (except active exception metadata exposure)
+        if (!enforcementEnabled) {
+            return new EffectiveWorkTimePolicy(false, start, end, days, during, outside);
         }
 
         // Check device override
@@ -44,42 +44,28 @@ public class WorkTimeService {
             Long exceptionStartMillis = override.getStartDateTime() != null ? override.getStartDateTime().getTime() : null;
             Long exceptionEndMillis = override.getEndDateTime() != null ? override.getEndDateTime().getTime() : null;
             if (isExceptionActive(override, now)) {
-                int globalDays = global.getDaysOfWeek() != null ? global.getDaysOfWeek() : 127;
-                return new EffectiveWorkTimePolicy(false, global.getStartTime(), global.getEndTime(), globalDays,
-                        parseAllowed(global.getAllowedAppsDuringWork()),
-                        parseAllowed(global.getAllowedAppsOutsideWork()),
+                return new EffectiveWorkTimePolicy(false, start, end, days,
+                        during,
+                        outside,
                         exceptionStartMillis,
                         exceptionEndMillis);
             }
             if (isExceptionExpired(override, now)) {
                 dao.deleteDeviceOverride(customerId, deviceId);
             } else {
-                int globalDays = global.getDaysOfWeek() != null ? global.getDaysOfWeek() : 127;
                 return new EffectiveWorkTimePolicy(true,
-                        global.getStartTime(),
-                        global.getEndTime(),
-                        globalDays,
-                        parseAllowed(global.getAllowedAppsDuringWork()),
-                        parseAllowed(global.getAllowedAppsOutsideWork()),
+                        start,
+                        end,
+                        days,
+                        during,
+                        outside,
                         exceptionStartMillis,
                         exceptionEndMillis);
             }
         }
-        if (override != null && override.isEnabled()) {
-            // use override fields (fall back to global when null)
-            String start = override.getStartTime() != null ? override.getStartTime() : global.getStartTime();
-            String end = override.getEndTime() != null ? override.getEndTime() : global.getEndTime();
-            Set<String> during = override.getAllowedAppsDuringWork() != null ? parseAllowed(override.getAllowedAppsDuringWork()) : parseAllowed(global.getAllowedAppsDuringWork());
-            Set<String> outside = override.getAllowedAppsOutsideWork() != null ? parseAllowed(override.getAllowedAppsOutsideWork()) : parseAllowed(global.getAllowedAppsOutsideWork());
 
-            int days = parseDaysOfWeek(override.getDaysOfWeek(), global.getDaysOfWeek());
-
-            return new EffectiveWorkTimePolicy(true, start, end, days, during, outside);
-        }
-
-        // Fallback to global
-        int globalDays = global.getDaysOfWeek() != null ? global.getDaysOfWeek() : 127;
-        return new EffectiveWorkTimePolicy(true, global.getStartTime(), global.getEndTime(), globalDays, parseAllowed(global.getAllowedAppsDuringWork()), parseAllowed(global.getAllowedAppsOutsideWork()));
+        // Default path: per-device policy only
+        return new EffectiveWorkTimePolicy(true, start, end, days, during, outside);
     }
 
     private boolean isExceptionActive(WorkTimeDeviceOverride override, LocalDateTime now) {
@@ -98,43 +84,6 @@ public class WorkTimeService {
         return now.isAfter(override.getEndDateTime().toLocalDateTime());
     }
 
-    private int parseDaysOfWeek(String overrideDays, Integer globalDays) {
-        if (overrideDays == null || overrideDays.trim().isEmpty()) {
-            return globalDays != null ? globalDays : 127;
-        }
-        String s = overrideDays.trim();
-        // try numeric
-        try {
-            return Integer.parseInt(s);
-        } catch (NumberFormatException e) {
-            // continue to parse csv names
-        }
-
-        int mask = 0;
-        String[] parts = s.split("\\s*,\\s*");
-        for (String t : parts) {
-            String low = t.toLowerCase();
-            switch (low) {
-                case "mon": case "monday": mask |= 1; break;
-                case "tue": case "tuesday": mask |= 2; break;
-                case "wed": case "wednesday": mask |= 4; break;
-                case "thu": case "thursday": mask |= 8; break;
-                case "fri": case "friday": mask |= 16; break;
-                case "sat": case "saturday": mask |= 32; break;
-                case "sun": case "sunday": mask |= 64; break;
-                default:
-                    try {
-                        int v = Integer.parseInt(t);
-                        mask |= v;
-                    } catch (NumberFormatException ex) {
-                        // ignore unknown token
-                    }
-            }
-        }
-        if (mask == 0) return globalDays != null ? globalDays : 127;
-        return mask;
-    }
-
     private Set<String> parseAllowed(String raw) {
         if (raw == null) return new HashSet<>();
         raw = raw.trim();
@@ -149,8 +98,8 @@ public class WorkTimeService {
         return res;
     }
 
-    public boolean isAppAllowed(int customerId, int userId, String pkg, LocalDateTime now) {
-        EffectiveWorkTimePolicy p = resolveEffectivePolicy(customerId, userId, now);
+    public boolean isAppAllowed(int customerId, int deviceId, String pkg, LocalDateTime now) {
+        EffectiveWorkTimePolicy p = resolveEffectivePolicy(customerId, deviceId, now);
 
         if (!p.isEnforcementEnabled()) return true;
 

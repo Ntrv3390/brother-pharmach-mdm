@@ -2,7 +2,7 @@ package com.hmdm.plugins.worktime.persistence.postgres.dao;
 
 import javax.inject.Inject;
 
-import com.hmdm.plugins.worktime.model.WorkTimePolicy;
+import com.hmdm.plugins.worktime.model.WorkTimeDevicePolicy;
 import com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride;
 import com.hmdm.plugins.worktime.persistence.WorkTimeDAO;
 import com.hmdm.plugins.worktime.persistence.postgres.dao.mapper.PostgresWorkTimeMapper;
@@ -19,20 +19,24 @@ public class PostgresWorkTimeDAO implements WorkTimeDAO {
     }
 
     @Override
-    public WorkTimePolicy getGlobalPolicy(int customerId) {
-        return mapper.getGlobalPolicy(customerId);
+    public WorkTimeDevicePolicy getDevicePolicy(int customerId, int deviceId) {
+        return mapper.getDevicePolicy(customerId, deviceId);
+    }
+
+    @Override
+    public List<WorkTimeDevicePolicy> getDevicePolicies(int customerId) {
+        return mapper.getDevicePolicies(customerId);
     }
 
     @Override
     @Transactional
-    public void saveGlobalPolicy(WorkTimePolicy policy) {
-        WorkTimePolicy existing =
-                mapper.getGlobalPolicy(policy.getCustomerId());
+    public void saveDevicePolicy(WorkTimeDevicePolicy policy) {
+        WorkTimeDevicePolicy existing = mapper.getDevicePolicy(policy.getCustomerId(), policy.getDeviceId());
 
         if (existing == null) {
-            mapper.insertGlobalPolicy(policy);
+            mapper.insertDevicePolicy(policy);
         } else {
-            mapper.updateGlobalPolicy(policy);
+            mapper.updateDevicePolicy(policy);
         }
     }
 

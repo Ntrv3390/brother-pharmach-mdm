@@ -1,17 +1,19 @@
 package com.hmdm.plugins.worktime.persistence.postgres.dao.mapper;
 
-import com.hmdm.plugins.worktime.model.WorkTimePolicy;
+import com.hmdm.plugins.worktime.model.WorkTimeDevicePolicy;
 import com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride;
 import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
 public interface PostgresWorkTimeMapper {
 
-    WorkTimePolicy getGlobalPolicy(@Param("customerId") int customerId);
+    WorkTimeDevicePolicy getDevicePolicy(@Param("customerId") int customerId, @Param("deviceId") int deviceId);
 
-    void insertGlobalPolicy(WorkTimePolicy policy);
+    List<WorkTimeDevicePolicy> getDevicePolicies(@Param("customerId") int customerId);
 
-    void updateGlobalPolicy(WorkTimePolicy policy);
+    void insertDevicePolicy(WorkTimeDevicePolicy policy);
+
+    void updateDevicePolicy(WorkTimeDevicePolicy policy);
 
     // Device overrides
     List<WorkTimeDeviceOverride> getDeviceOverrides(@Param("customerId") int customerId);

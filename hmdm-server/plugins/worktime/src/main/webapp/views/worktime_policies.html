@@ -1,521 +1,676 @@
-<div ng-controller="WorkTimePoliciesController" class="worktime-wrapper">
+<div ng-controller="WorkTimeAdminController" class="worktime-admin-page">
   <style>
-    .worktime-wrapper {
-      margin-top: 25px;
+    .worktime-admin-page {
+      margin-top: 28px;
+      color: #243042;
       font-family: "Segoe UI", Roboto, sans-serif;
-      color: #2c3e50;
     }
 
-    .shadow-card {
-      border-radius: 14px;
-      border: none;
-      background: #ffffff;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    .worktime-shell {
+      padding: 0 18px 24px;
+    }
+
+    .worktime-header-card,
+    .worktime-device-card {
+      border: 0;
+      border-radius: 18px;
       overflow: hidden;
+      background: #ffffff;
+      box-shadow: 0 14px 34px rgba(36, 48, 66, 0.09);
     }
 
-    .panel-heading {
-      background: #7a9ab9;
-      color: white;
-      border: none;
-      padding: 18px 25px;
+    .worktime-header-card {
+      margin-bottom: 18px;
+      background: linear-gradient(135deg, #eff6ff 0%, #ffffff 62%, #f7fbff 100%);
     }
 
-    .panel-title {
+    .worktime-header-body {
+      padding: 26px 28px;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .worktime-header-title {
+      margin: 0 0 8px;
+      font-size: 24px;
+      font-weight: 700;
+      color: #1f2e43;
+    }
+
+    .worktime-header-copy {
+      margin: 0;
+      max-width: 700px;
+      color: #5a6a80;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .worktime-live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(48, 122, 191, 0.08);
+      color: #215987;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .worktime-live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #2d8cff;
+      box-shadow: 0 0 0 6px rgba(45, 140, 255, 0.14);
+    }
+
+    .worktime-toolbar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    .worktime-search {
+      position: relative;
+      min-width: 280px;
+      flex: 1 1 340px;
+    }
+
+    .worktime-search .form-control {
+      height: 46px;
+      border-radius: 14px;
+      border: 1px solid #d7e1ee;
+      padding-left: 42px;
+      box-shadow: none;
+    }
+
+    .worktime-search .glyphicon {
+      position: absolute;
+      top: 15px;
+      left: 14px;
+      color: #88a0bb;
+    }
+
+    .worktime-refresh {
+      border-radius: 14px;
+      padding: 11px 16px;
+      border: 1px solid #d7e1ee;
+      background: #ffffff;
+      color: #29415f;
       font-weight: 600;
+    }
+
+    .worktime-refresh:hover {
+      background: #f4f8fc;
+    }
+
+    .worktime-list {
+      display: grid;
+      gap: 16px;
+    }
+
+    .worktime-device-card {
+      padding: 22px;
+    }
+
+    .worktime-device-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .worktime-device-title {
+      margin: 0;
+      font-size: 19px;
+      font-weight: 700;
+      color: #213248;
+    }
+
+    .worktime-device-meta {
+      margin-top: 6px;
+      color: #7990aa;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .worktime-badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .worktime-badge {
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #eef4fb;
+      color: #375577;
+    }
+
+    .worktime-badge.alert {
+      background: #fff1f1;
+      color: #c44747;
+    }
+
+    .worktime-badge.ok {
+      background: #eefaf2;
+      color: #2e7d50;
+    }
+
+    .worktime-policy-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .worktime-stat {
+      padding: 14px 15px;
+      border-radius: 14px;
+      background: #f6f9fd;
+      border: 1px solid #e4edf7;
+    }
+
+    .worktime-stat-label {
+      display: block;
+      margin-bottom: 6px;
+      color: #7a8ea7;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .worktime-stat-value {
+      color: #233348;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .worktime-exception-strip {
+      margin-bottom: 18px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid #f1d3d3;
+      background: linear-gradient(135deg, #fff7f7 0%, #ffffff 100%);
+    }
+
+    .worktime-exception-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 8px;
+      color: #b24848;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .worktime-exception-copy {
+      margin: 0;
+      color: #734949;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .worktime-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .worktime-btn-primary,
+    .worktime-btn-secondary,
+    .worktime-btn-danger {
+      border-radius: 14px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      border: 0;
+    }
+
+    .worktime-btn-primary {
+      background: #2f78b8;
+      color: #ffffff;
+    }
+
+    .worktime-btn-primary:hover {
+      background: #27689f;
+      color: #ffffff;
+    }
+
+    .worktime-btn-secondary {
+      background: #eef4fb;
+      color: #2d5279;
+    }
+
+    .worktime-btn-secondary:hover {
+      background: #dde9f8;
+      color: #1f476f;
+    }
+
+    .worktime-btn-danger {
+      background: #fff1f1;
+      color: #b43e3e;
+    }
+
+    .worktime-btn-danger:hover {
+      background: #ffe0e0;
+      color: #a33434;
+    }
+
+    .worktime-empty {
+      padding: 56px 20px;
+      border-radius: 18px;
+      background: #ffffff;
+      box-shadow: 0 14px 34px rgba(36, 48, 66, 0.07);
+      text-align: center;
+      color: #7f91a8;
+    }
+
+    .worktime-modal-header {
+      padding: 18px 22px;
+      background: linear-gradient(135deg, #2f78b8 0%, #3f96d8 100%);
+      color: #ffffff;
+      border: 0;
+    }
+
+    .worktime-modal-title {
+      margin: 0;
       font-size: 20px;
+      font-weight: 700;
     }
 
-    .panel-body {
-      padding: 30px;
-      background: #f7f9fc;
+    .worktime-modal-body {
+      padding: 22px;
+      background: #f8fbff;
     }
 
-    .section {
-      margin-bottom: 30px;
-      background: white;
-      padding: 20px;
+    .worktime-modal-footer {
+      padding: 16px 22px 22px;
+      border: 0;
+      background: #f8fbff;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .worktime-form-card {
+      background: #ffffff;
+      border: 1px solid #e3ecf6;
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+
+    .worktime-form-title {
+      margin: 0 0 12px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #22354b;
+    }
+
+    .worktime-modal-body .form-control {
       border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      border: 1px solid #d8e3ef;
+      min-height: 42px;
+      box-shadow: none;
     }
 
-    .section-title {
-      margin-bottom: 15px;
-      font-weight: 600;
-      font-size: 16px;
-      color: #2c3e50;
-    }
-
-    .nav-tabs {
-      border-bottom: none;
-      margin-bottom: 25px;
-    }
-
-    .nav-tabs > li > a {
-      border: none;
-      border-radius: 20px;
-      padding: 8px 18px;
-      margin-right: 8px;
-      background: #eef2f7;
-      color: #555;
-      font-weight: 500;
-    }
-
-    .nav-tabs > li.active > a {
-      background: #7a9ab9;
-      color: white !important;
-    }
-
-    .form-control {
-      border-radius: 10px;
-      border: 1px solid #e1e6ef;
-      height: 42px;
-    }
-
-    .form-control:focus {
-      border-color: #7a9ab9;
-      box-shadow: 0 0 0 2px rgba(122, 154, 185, 0.25);
-    }
-
-    .day-toggle-group {
+    .worktime-day-picker {
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
     }
 
-    .day-toggle {
-      min-width: 70px;
-      border-radius: 25px;
-      border: 1px solid #dce2ea;
-      background: #fff;
-      padding: 6px 14px;
-      font-weight: 500;
+    .worktime-day-btn {
+      min-width: 68px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: #eef4fb;
+      color: #35567c;
+      border: 0;
+      font-weight: 700;
     }
 
-    .active-day {
-      background: #7a9ab9;
-      border: none;
-      color: white;
+    .worktime-day-btn.active {
+      background: #2f78b8;
+      color: #ffffff;
     }
 
-    .app-container {
-      max-height: 300px;
+    .worktime-app-panel {
+      border: 1px solid #dce7f2;
+      background: #fdfefe;
+      border-radius: 14px;
+      max-height: 280px;
       overflow-y: auto;
-      border: 1px solid #e3e8f0;
-      border-radius: 10px;
-      padding: 12px;
-      background: #f9fbff;
-    }
-
-    .app-item {
-      margin-bottom: 6px;
       padding: 10px;
-      background: white;
-      border-radius: 8px;
+    }
+
+    .worktime-app-item {
       display: block;
-      cursor: pointer;
-      transition: all 0.15s ease;
-      border: 1px solid transparent;
-    }
-
-    .app-item:hover {
-      border-color: #7a9ab9;
-      background: #f1f5ff;
-    }
-
-    .app-item.text-muted {
-      opacity: 0.5;
-    }
-
-    .badge {
-      background: #7a9ab9;
-      font-weight: 500;
-      padding: 5px 8px;
+      padding: 10px 12px;
       border-radius: 10px;
+      color: #29405d;
+      margin-bottom: 6px;
+      background: #f8fbff;
     }
 
-    .form-actions {
-      margin-top: 25px;
-      padding: 15px 20px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
-      position: sticky;
-      bottom: 10px;
+    .worktime-app-item:last-child {
+      margin-bottom: 0;
     }
 
-    .btn {
-      border-radius: 20px;
-      padding: 8px 18px;
-      font-weight: 500;
+    .worktime-app-item.muted {
+      opacity: 0.55;
     }
 
-    .btn-success {
-      background: #7a9ab9;
-      border: none;
-      color: white;
+    .worktime-count-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #eef4fb;
+      color: #33557b;
+      font-size: 12px;
+      font-weight: 700;
+      margin-left: 6px;
     }
 
-    .btn-success:hover {
-      background: #6a8aa8;
-    }
+    @media (max-width: 767px) {
+      .worktime-shell {
+        padding: 0 10px 20px;
+      }
 
-    .status-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
+      .worktime-header-body,
+      .worktime-device-top {
+        padding: 0;
+      }
 
-    .status-item {
-      min-width: 220px;
-      padding: 12px 14px;
-      border-radius: 10px;
-      background: #f1f5fb;
-      border: 1px solid #e1e6ef;
-      font-weight: 500;
-    }
-
-    .status-item .status-label {
-      color: #5c6b7a;
-      margin-right: 6px;
-    }
-
-    .status-on {
-      color: #7a9ab9;
-      font-weight: 600;
-    }
-
-    .status-off {
-      color: #d9534f;
-      font-weight: 600;
+      .worktime-device-card {
+        padding: 16px;
+      }
     }
   </style>
 
-  <div class="container-fluid">
-    <!-- Tabs -->
-    <ul class="nav nav-tabs">
-      <li class="active">
-        <a href="/#/plugin-worktime">Global Policy</a>
-      </li>
-      <li>
-        <a href="/#/plugin-worktime/devices">Device Exceptions</a>
-      </li>
-    </ul>
+  <div class="worktime-shell">
+    <div class="alert alert-success" ng-if="success">{{success}}</div>
+    <div class="alert alert-danger" ng-if="error">{{error}}</div>
 
-    <div class="panel panel-default shadow-card">
-      <div class="panel-heading">
-        <h3 class="panel-title">
-          <i class="glyphicon glyphicon-time"></i>
-          Global Work Time Policy
-        </h3>
+    <div class="worktime-header-card">
+      <div class="worktime-header-body">
+        <div>
+          <h2 class="worktime-header-title">Device Work Time Policies</h2>
+          <p class="worktime-header-copy">
+            Manage policy and exception behavior device by device. Policy changes and exception updates refresh automatically and are pushed to devices immediately.
+          </p>
+        </div>
+        <div class="worktime-live-pill">
+          <span class="worktime-live-dot"></span>
+          <span ng-if="lastRefreshAt">Live sync • {{lastRefreshAt | date:'mediumTime'}}</span>
+          <span ng-if="!lastRefreshAt">Live sync</span>
+        </div>
       </div>
+    </div>
 
-      <div class="panel-body">
-        <div class="alert alert-success" ng-if="success">{{success}}</div>
-        <div class="alert alert-danger" ng-if="error">{{error}}</div>
+    <div class="worktime-toolbar">
+      <div class="worktime-search">
+        <i class="glyphicon glyphicon-search"></i>
+        <input
+          type="text"
+          class="form-control"
+          ng-model="searchText"
+          placeholder="Search by device name or ID"
+        />
+      </div>
+      <button type="button" class="worktime-refresh" ng-click="refresh(true)" ng-disabled="refreshing || loading">
+        <i class="glyphicon glyphicon-refresh"></i>
+        <span ng-if="!refreshing">Refresh</span>
+        <span ng-if="refreshing">Refreshing...</span>
+      </button>
+    </div>
 
-        <!-- Enable -->
-        <div class="section">
-          <label>
-            <input type="checkbox" ng-model="policy.enabled" />
-            Enable enforcement
-          </label>
+    <div class="worktime-empty" ng-if="!loading && filteredDevices().length === 0">
+      <strong>No devices found.</strong>
+      <div style="margin-top: 8px;">Try changing the search filter or enroll a device first.</div>
+    </div>
 
-          <div class="status-grid" style="margin-top: 14px">
-            <div class="status-item">
-              <span class="status-label">Enable Enforcement:</span>
-              <span ng-if="policy.enabled" class="status-on">ON</span>
-              <span ng-if="!policy.enabled" class="status-off">OFF</span>
-            </div>
-            <div class="status-item">
-              <span class="status-label">Active Exceptions:</span>
-              <span ng-if="hasActiveExceptions" class="status-off"
-                >{{activeExceptionsCount}} Active</span
-              >
-              <span ng-if="!hasActiveExceptions" class="status-on">None</span>
-            </div>
+    <div class="worktime-empty" ng-if="loading">
+      <strong>Loading devices and policies...</strong>
+    </div>
+
+    <div class="worktime-list" ng-if="!loading && filteredDevices().length > 0">
+      <div class="worktime-device-card" ng-repeat="device in filteredDevices() track by device.deviceId">
+        <div class="worktime-device-top">
+          <div>
+            <h3 class="worktime-device-title">{{device.deviceName || ('Device ' + device.deviceId)}}</h3>
+            <div class="worktime-device-meta">Device ID: {{device.deviceId}}</div>
+          </div>
+
+          <div class="worktime-badges">
+            <span class="worktime-badge" ng-class="device.policy.enabled ? 'ok' : 'alert'">
+              {{device.policy.enabled ? 'Policy Enabled' : 'Policy Disabled'}}
+            </span>
+            <span class="worktime-badge" ng-class="device.hasActiveException ? 'alert' : 'ok'">
+              {{device.hasActiveException ? 'Active Exception' : 'No Active Exception'}}
+            </span>
           </div>
         </div>
 
-        <form ng-if="policy">
-          <!-- Time -->
-          <div class="section">
-            <h4 class="section-title">Working Hours</h4>
-            <div class="row">
-              <div class="col-sm-6">
-                <label>Start time</label>
-                <input
-                  type="text"
-                  class="form-control"
-                  ng-model="policy.startTime"
-                  placeholder="HH:mm"
-                />
-              </div>
-              <div class="col-sm-6">
-                <label>End time</label>
-                <input
-                  type="text"
-                  class="form-control"
-                  ng-model="policy.endTime"
-                  placeholder="HH:mm"
-                />
-              </div>
-            </div>
+        <div class="worktime-policy-grid">
+          <div class="worktime-stat">
+            <span class="worktime-stat-label">Work Hours</span>
+            <span class="worktime-stat-value">{{device.policy.startTime}} - {{device.policy.endTime}}</span>
           </div>
-
-          <!-- Days -->
-          <div class="section">
-            <h4 class="section-title">Working Days</h4>
-            <div class="day-toggle-group">
-              <button
-                type="button"
-                class="btn day-toggle"
-                ng-repeat="day in days"
-                ng-class="{'active-day': hasDay(day.id)}"
-                ng-click="toggleDay(day.id)"
-              >
-                {{day.label}}
-              </button>
-            </div>
+          <div class="worktime-stat">
+            <span class="worktime-stat-label">Days</span>
+            <span class="worktime-stat-value">{{formatDays(device.policy.daysOfWeek)}}</span>
           </div>
-
-          <!-- Apps During Work -->
-          <div class="section">
-            <h4 class="section-title">
-              Allowed during work
-              <span class="badge"
-                >{{countSelected(selectedAppsDuringWork)}}</span
-              >
-            </h4>
-
-            <input
-              type="text"
-              class="form-control"
-              ng-model="$parent.duringWorkSearchText"
-              placeholder="Search apps..."
-              style="margin-bottom: 10px"
-            />
-
-            <div class="app-container">
-              <!-- All apps -->
-              <label class="app-item">
-                <input
-                  type="checkbox"
-                  ng-model="selectedAppsDuringWork['*']"
-                  ng-change="toggleAllAppsDuringWork()"
-                />
-                <strong> All Apps</strong>
-              </label>
-
-              <label
-                class="app-item"
-                ng-repeat="app in getFilteredAppsDuringWork()"
-                ng-class="{'text-muted': selectedAppsDuringWork['*']}"
-              >
-                <input
-                  type="checkbox"
-                  ng-model="selectedAppsDuringWork[app.pkg]"
-                  ng-change="toggleIndividualAppDuringWork(app.pkg)"
-                  ng-disabled="selectedAppsDuringWork['*']"
-                />
-                <strong>{{app.name || app.pkg}}</strong>
-              </label>
-            </div>
+          <div class="worktime-stat">
+            <span class="worktime-stat-label">During Work</span>
+            <span class="worktime-stat-value">{{describeApps(device.policy.allowedAppsDuringWork)}}</span>
           </div>
-
-          <!-- Apps Outside Work -->
-          <div class="section">
-            <h4 class="section-title">
-              Allowed outside work
-              <span class="badge"
-                >{{countSelected(selectedAppsOutsideWork)}}</span
-              >
-            </h4>
-
-            <input
-              type="text"
-              class="form-control"
-              ng-model="$parent.outsideWorkSearchText"
-              placeholder="Search apps..."
-              style="margin-bottom: 10px"
-            />
-
-            <div class="app-container">
-              <label class="app-item">
-                <input
-                  type="checkbox"
-                  ng-model="selectedAppsOutsideWork['*']"
-                  ng-change="toggleAllAppsOutsideWork()"
-                />
-                <strong> All Apps</strong>
-              </label>
-
-              <label
-                class="app-item"
-                ng-repeat="app in getFilteredAppsOutsideWork()"
-                ng-class="{'text-muted': selectedAppsOutsideWork['*']}"
-              >
-                <input
-                  type="checkbox"
-                  ng-model="selectedAppsOutsideWork[app.pkg]"
-                  ng-change="toggleIndividualAppOutsideWork(app.pkg)"
-                  ng-disabled="selectedAppsOutsideWork['*']"
-                />
-                <strong>{{app.name || app.pkg}}</strong>
-              </label>
-            </div>
+          <div class="worktime-stat">
+            <span class="worktime-stat-label">After Work</span>
+            <span class="worktime-stat-value">{{describeApps(device.policy.allowedAppsOutsideWork)}}</span>
           </div>
+        </div>
 
-          <!-- Apply policy to groups -->
-          <div class="section">
-            <h4 class="section-title">
-              Apply policy to groups
-              <span class="badge">{{countSelectedGroups()}}</span>
-            </h4>
-
-            <p class="text-muted" style="font-size: 13px; margin-bottom: 10px">
-              Select the device groups this policy applies to. By default all
-              groups are selected (policy applies to everyone). Deselecting a
-              group disables the policy for every device in that group.
-            </p>
-
-            <div ng-if="groupsLoading" style="padding: 10px; color: #888">
-              <i
-                class="glyphicon glyphicon-refresh"
-                style="margin-right: 6px"
-              ></i
-              >Loading groups&hellip;
-            </div>
-
-            <div
-              ng-if="!groupsLoading && groups.length === 0"
-              class="text-muted"
-              style="padding: 10px"
-            >
-              No device groups configured.
-            </div>
-
-            <div
-              class="app-container"
-              ng-if="!groupsLoading && groups.length > 0"
-            >
-              <div
-                class="app-item"
-                style="display:flex; align-items:center; gap:10px; justify-content:space-between; cursor:default;"
-                ng-repeat="group in groups"
-                ng-class="{'text-muted': groupSaving}"
-              >
-                <!-- Checkbox — stopPropagation so click doesn't bubble anywhere else -->
-                <input
-                  type="checkbox"
-                  style="flex-shrink:0; cursor:pointer; margin:0;"
-                  ng-model="selectedGroups[group.id]"
-                  ng-change="toggleGroup(group)"
-                  ng-disabled="groupSaving"
-                  ng-click="$event.stopPropagation()"
-                />
-                <!-- Clickable text area — manually toggles model + calls toggleGroup -->
-                <span
-                  style="flex:1; cursor:pointer; user-select:none;"
-                  ng-click="onGroupTextClick(group)"
-                >
-                  <strong>{{group.name}}</strong>
-                  <span class="text-muted" style="font-weight:400; font-size:12px; margin-left:4px;">
-                    ({{getGroupDeviceCount(group)}} {{getGroupDeviceCount(group) === 1 ? 'device' : 'devices'}})
-                  </span>
-                </span>
-                <!-- Arrow button — isolated, stopPropagation prevents any side-effects -->
-                <button
-                  type="button"
-                  title="View devices in this group"
-                  ng-click="showGroupDevicesPopup(group, $event)"
-                  style="background:#f1f5fb; border:1px solid #c8d6e5; border-radius:6px; cursor:pointer; color:#7a9ab9; padding:4px 10px; font-size:14px; line-height:1; flex-shrink:0;"
-                >
-                  <span class="glyphicon glyphicon-chevron-right"></span>
-                </button>
-              </div>
-            </div>
-
-            <div
-              ng-if="groupSaving"
-              style="margin-top: 8px; font-size: 13px; color: #7a9ab9"
-            >
-              <i
-                class="glyphicon glyphicon-refresh"
-                style="margin-right: 4px"
-              ></i
-              >Applying group changes&hellip;
-            </div>
+        <div class="worktime-exception-strip" ng-if="device.exceptions.length > 0">
+          <div class="worktime-exception-title">
+            <i class="glyphicon glyphicon-warning-sign"></i>
+            <span>{{device.exceptions[0].active ? 'Exception Active' : 'Exception Scheduled'}}</span>
           </div>
+          <p class="worktime-exception-copy">
+            {{device.exceptions[0].dateFrom | date:'MMM d, yyyy'}} {{device.exceptions[0].timeFrom}}
+            to
+            {{device.exceptions[0].dateTo | date:'MMM d, yyyy'}} {{device.exceptions[0].timeTo}}
+          </p>
+        </div>
 
-          <!-- Group devices popup (inline overlay) -->
-          <div
-            ng-if="groupPopup"
-            style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.45); z-index:9999; display:flex; align-items:center; justify-content:center;"
-            ng-click="closeGroupPopup()"
-          >
-            <div
-              style="background:#fff; border-radius:14px; box-shadow:0 20px 50px rgba(0,0,0,0.2); width:420px; max-width:95%; max-height:80vh; display:flex; flex-direction:column; overflow:hidden;"
-              ng-click="$event.stopPropagation()"
-            >
-              <!-- popup header -->
-              <div style="background:#7a9ab9; color:#fff; padding:16px 20px; display:flex; align-items:center; justify-content:space-between;">
-                <span style="font-weight:600; font-size:16px;">
-                  <span class="glyphicon glyphicon-th-list" style="margin-right:8px;"></span>
-                  {{groupPopup.group.name}}
-                  <span style="font-weight:400; font-size:13px; opacity:0.85; margin-left:6px;">
-                    ({{groupPopup.devices.length}} {{groupPopup.devices.length === 1 ? 'device' : 'devices'}})
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  ng-click="closeGroupPopup()"
-                  style="background:none; border:none; color:#fff; font-size:20px; cursor:pointer; line-height:1; padding:0;"
-                  title="Close"
-                >&times;</button>
-              </div>
-              <!-- popup body -->
-              <div style="overflow-y:auto; padding:16px 20px; flex:1;">
-                <div
-                  ng-if="groupPopup.devices.length === 0"
-                  class="text-muted"
-                  style="padding:10px 0;"
-                >
-                  No devices in this group.
-                </div>
-                <ul style="list-style:none; padding:0; margin:0;" ng-if="groupPopup.devices.length > 0">
-                  <li
-                    ng-repeat="d in groupPopup.devices"
-                    style="padding:10px 0; border-bottom:1px solid #f0f0f0; display:flex; align-items:center; gap:10px;"
-                  >
-                    <span class="glyphicon glyphicon-phone" style="color:#7a9ab9;"></span>
-                    <span style="font-weight:500;">{{d.deviceName || 'Device ' + d.deviceId}}</span>
-                    <span
-                      ng-if="!d.enabled && d.endDateTime"
-                      style="margin-left:auto; font-size:11px; background:#f0ad4e; color:#fff; padding:2px 7px; border-radius:8px;"
-                    >Exception</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          <!-- Actions -->
-          <div class="form-actions text-right">
-            <button type="button" class="btn btn-default" ng-click="refresh()">
-              Reload
-            </button>
-            <button
-              type="button"
-              class="btn btn-success"
-              ng-click="save()"
-              ng-disabled="isSaving"
-            >
-              {{isSaving ? 'Saving...' : 'Save Policy'}}
-            </button>
-          </div>
-        </form>
+        <div class="worktime-actions">
+          <button type="button" class="worktime-btn-primary" ng-click="openPolicyModal(device)" ng-disabled="!canEdit">
+            <i class="glyphicon glyphicon-edit"></i>
+            Change Policy
+          </button>
+          <button type="button" class="worktime-btn-secondary" ng-click="openExceptionModal(device)" ng-disabled="!canEdit">
+            <i class="glyphicon glyphicon-time"></i>
+            Create Exception
+          </button>
+          <button type="button" class="worktime-btn-danger" ng-if="device.exceptions.length > 0" ng-click="deleteException(device)" ng-disabled="!canEdit">
+            <i class="glyphicon glyphicon-trash"></i>
+            Remove Exception
+          </button>
+        </div>
       </div>
     </div>
   </div>
+
+  <script type="text/ng-template" id="worktimePolicyModalTemplate.html">
+    <div class="worktime-modal-header">
+      <button type="button" class="close" ng-click="closePolicyModal()" style="color:#fff; opacity:0.92; text-shadow:none;">&times;</button>
+      <h4 class="worktime-modal-title">Change Policy for {{editingDevice.deviceName}}</h4>
+    </div>
+
+    <div class="worktime-modal-body">
+      <div class="worktime-form-card">
+        <h5 class="worktime-form-title">Policy Status</h5>
+        <label style="display:flex; align-items:center; gap:10px; font-weight:600; margin:0;">
+          <input type="checkbox" ng-model="editingPolicy.enabled" />
+          Enable work time enforcement for this device
+        </label>
+      </div>
+
+      <div class="worktime-form-card">
+        <h5 class="worktime-form-title">Working Window</h5>
+        <div class="row">
+          <div class="col-sm-6">
+            <label>Start Time</label>
+            <input type="text" class="form-control" ng-model="editingPolicy.startTime" placeholder="HH:mm" />
+          </div>
+          <div class="col-sm-6">
+            <label>End Time</label>
+            <input type="text" class="form-control" ng-model="editingPolicy.endTime" placeholder="HH:mm" />
+          </div>
+        </div>
+      </div>
+
+      <div class="worktime-form-card">
+        <h5 class="worktime-form-title">Working Days</h5>
+        <div class="worktime-day-picker">
+          <button
+            type="button"
+            class="worktime-day-btn"
+            ng-repeat="day in days"
+            ng-class="{'active': hasPolicyDay(day.id)}"
+            ng-click="togglePolicyDay(day.id)">
+            {{day.label}}
+          </button>
+        </div>
+      </div>
+
+      <div class="worktime-form-card">
+        <h5 class="worktime-form-title">
+          Allowed During Work
+          <span class="worktime-count-chip">{{countSelectedApps(selectedAppsDuringWork)}}</span>
+        </h5>
+        <input type="text" class="form-control" ng-model="policyDuringSearchText" placeholder="Search applications" style="margin-bottom:12px;" />
+        <div class="worktime-app-panel">
+          <label class="worktime-app-item">
+            <input type="checkbox" ng-model="selectedAppsDuringWork['*']" ng-change="toggleAllAppsDuringWork()" />
+            <strong style="margin-left:6px;">All Apps</strong>
+          </label>
+          <label
+            class="worktime-app-item"
+            ng-class="{'muted': selectedAppsDuringWork['*']}"
+            ng-repeat="app in getFilteredApps(policyDuringSearchText) track by app.pkg">
+            <input
+              type="checkbox"
+              ng-model="selectedAppsDuringWork[app.pkg]"
+              ng-change="toggleIndividualAppDuringWork()"
+              ng-disabled="selectedAppsDuringWork['*']" />
+            <strong style="margin-left:6px;">{{app.name || app.pkg}}</strong>
+            <div class="text-muted" style="margin-left:24px; font-size:12px;">{{app.pkg}}</div>
+          </label>
+        </div>
+      </div>
+
+      <div class="worktime-form-card" style="margin-bottom:0;">
+        <h5 class="worktime-form-title">
+          Allowed After Work
+          <span class="worktime-count-chip">{{countSelectedApps(selectedAppsOutsideWork)}}</span>
+        </h5>
+        <input type="text" class="form-control" ng-model="policyOutsideSearchText" placeholder="Search applications" style="margin-bottom:12px;" />
+        <div class="worktime-app-panel">
+          <label class="worktime-app-item">
+            <input type="checkbox" ng-model="selectedAppsOutsideWork['*']" ng-change="toggleAllAppsOutsideWork()" />
+            <strong style="margin-left:6px;">All Apps</strong>
+          </label>
+          <label
+            class="worktime-app-item"
+            ng-class="{'muted': selectedAppsOutsideWork['*']}"
+            ng-repeat="app in getFilteredApps(policyOutsideSearchText) track by app.pkg">
+            <input
+              type="checkbox"
+              ng-model="selectedAppsOutsideWork[app.pkg]"
+              ng-change="toggleIndividualAppOutsideWork()"
+              ng-disabled="selectedAppsOutsideWork['*']" />
+            <strong style="margin-left:6px;">{{app.name || app.pkg}}</strong>
+            <div class="text-muted" style="margin-left:24px; font-size:12px;">{{app.pkg}}</div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="worktime-modal-footer">
+      <button type="button" class="worktime-btn-secondary" ng-click="closePolicyModal()">Close</button>
+      <button type="button" class="worktime-btn-primary" ng-click="savePolicy()" ng-disabled="policySaving">
+        <span ng-if="!policySaving">Save Policy</span>
+        <span ng-if="policySaving">Saving...</span>
+      </button>
+    </div>
+  </script>
+
+  <script type="text/ng-template" id="worktimeExceptionModalTemplate.html">
+    <div class="worktime-modal-header">
+      <button type="button" class="close" ng-click="closeExceptionModal()" style="color:#fff; opacity:0.92; text-shadow:none;">&times;</button>
+      <h4 class="worktime-modal-title">Create Exception for {{editingDevice.deviceName}}</h4>
+    </div>
+
+    <div class="worktime-modal-body">
+      <div class="worktime-form-card">
+        <h5 class="worktime-form-title">Exception Window</h5>
+        <div class="alert alert-info" style="margin-bottom:14px; border-radius:12px; border:0; background:#eef6ff; color:#27537f;">
+          This exception temporarily disables work time enforcement for the selected device.
+        </div>
+
+        <div class="row">
+          <div class="col-sm-6">
+            <label>Start Date</label>
+            <input type="date" class="form-control" ng-model="editingException.dateFrom" />
+          </div>
+          <div class="col-sm-6">
+            <label>End Date</label>
+            <input type="date" class="form-control" ng-model="editingException.dateTo" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:14px;">
+          <div class="col-sm-6">
+            <label>Time From</label>
+            <input type="time" class="form-control" ng-model="editingException.timeFromInput" />
+          </div>
+          <div class="col-sm-6">
+            <label>Time To</label>
+            <input type="time" class="form-control" ng-model="editingException.timeToInput" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="worktime-modal-footer">
+      <button type="button" class="worktime-btn-secondary" ng-click="closeExceptionModal()">Close</button>
+      <button type="button" class="worktime-btn-primary" ng-click="saveException()" ng-disabled="exceptionSaving">
+        <span ng-if="!exceptionSaving">Save Exception</span>
+        <span ng-if="exceptionSaving">Saving...</span>
+      </button>
+    </div>
+  </script>
 </div>

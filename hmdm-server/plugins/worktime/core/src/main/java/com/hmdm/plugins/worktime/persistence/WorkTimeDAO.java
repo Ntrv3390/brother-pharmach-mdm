@@ -1,15 +1,17 @@
 package com.hmdm.plugins.worktime.persistence;
 
-import com.hmdm.plugins.worktime.model.WorkTimePolicy;
+import com.hmdm.plugins.worktime.model.WorkTimeDevicePolicy;
 import com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride;
 
 import java.util.List;
 
 public interface WorkTimeDAO {
 
-    WorkTimePolicy getGlobalPolicy(int customerId);
+    WorkTimeDevicePolicy getDevicePolicy(int customerId, int deviceId);
 
-    void saveGlobalPolicy(WorkTimePolicy policy);
+    List<WorkTimeDevicePolicy> getDevicePolicies(int customerId);
+
+    void saveDevicePolicy(WorkTimeDevicePolicy policy);
 
     // Device override management (admin only)
     List<WorkTimeDeviceOverride> getDeviceOverrides(int customerId);

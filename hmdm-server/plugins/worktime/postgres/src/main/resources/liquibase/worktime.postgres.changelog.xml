@@ -368,4 +368,243 @@
                 END
         </sql>
     </changeSet>
+
+    <!-- ========================================================= -->
+    <!-- New per-device policy model (no global/group policy)     -->
+    <!-- ========================================================= -->
+    <changeSet id="worktime-create-device-policy-2026-04-13" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="worktime_device_policy"/>
+            </not>
+        </preConditions>
+
+        <createTable tableName="worktime_device_policy">
+            <column name="id" type="SERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="customer_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="device_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="start_time" type="VARCHAR(5)" defaultValue="09:00">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="end_time" type="VARCHAR(5)" defaultValue="17:00">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="days_of_week" type="INT" defaultValueNumeric="31">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="allowed_apps_during_work" type="TEXT" defaultValue=""/>
+            <column name="allowed_apps_outside_work" type="TEXT" defaultValue="*"/>
+
+            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="worktime-device-policy-uniq-device-2026-04-13" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_device_policy"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*)
+                FROM information_schema.table_constraints
+                WHERE table_name = 'worktime_device_policy'
+                  AND constraint_name = 'uk_worktime_device_policy_customer_device'
+                  AND constraint_type = 'UNIQUE'
+            </sqlCheck>
+        </preConditions>
+        <addUniqueConstraint tableName="worktime_device_policy"
+                             columnNames="customer_id,device_id"
+                             constraintName="uk_worktime_device_policy_customer_device"/>
+    </changeSet>
+
+    <changeSet id="worktime-device-policy-indexes-2026-04-13" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_device_policy"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM pg_indexes
+                WHERE tablename = 'worktime_device_policy'
+                  AND indexname = 'idx_worktime_device_policy_customer'
+            </sqlCheck>
+        </preConditions>
+        <createIndex indexName="idx_worktime_device_policy_customer" tableName="worktime_device_policy">
+            <column name="customer_id"/>
+        </createIndex>
+        <createIndex indexName="idx_worktime_device_policy_device" tableName="worktime_device_policy">
+            <column name="device_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="worktime-device-policy-default-trigger-function-2026-04-13" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_device_policy"/>
+            <tableExists tableName="devices"/>
+        </preConditions>
+        <sql>
+            CREATE OR REPLACE FUNCTION worktime_create_default_device_policy()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                INSERT INTO worktime_device_policy (
+                    customer_id,
+                    device_id,
+                    start_time,
+                    end_time,
+                    days_of_week,
+                    allowed_apps_during_work,
+                    allowed_apps_outside_work,
+                    enabled,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    NEW.customerid,
+                    NEW.id,
+                    '09:00',
+                    '17:00',
+                    31,
+                    '',
+                    '*',
+                    TRUE,
+                    now(),
+                    now()
+                )
+                ON CONFLICT (customer_id, device_id) DO NOTHING;
+
+                RETURN NEW;
+            END;
+            $$;
+        </sql>
+    </changeSet>
+
+    <changeSet id="worktime-device-policy-default-trigger-2026-04-13" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_device_policy"/>
+            <tableExists tableName="devices"/>
+        </preConditions>
+        <sql>
+            DROP TRIGGER IF EXISTS trg_worktime_create_default_device_policy ON devices;
+            CREATE TRIGGER trg_worktime_create_default_device_policy
+            AFTER INSERT ON devices
+            FOR EACH ROW
+            EXECUTE FUNCTION worktime_create_default_device_policy();
+        </sql>
+    </changeSet>
+
+    <changeSet id="worktime-migrate-device-policy-from-global-2026-04-13" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_device_policy"/>
+            <tableExists tableName="devices"/>
+            <tableExists tableName="worktime_global_policy"/>
+        </preConditions>
+        <sql>
+            INSERT INTO worktime_device_policy (
+                customer_id,
+                device_id,
+                start_time,
+                end_time,
+                days_of_week,
+                allowed_apps_during_work,
+                allowed_apps_outside_work,
+                enabled,
+                created_at,
+                updated_at
+            )
+            SELECT
+                d.customerid,
+                d.id,
+                COALESCE(g.start_time, '09:00') AS start_time,
+                COALESCE(g.end_time, '17:00') AS end_time,
+                COALESCE(g.days_of_week, 31) AS days_of_week,
+                COALESCE(g.allowed_apps_during_work, '') AS allowed_apps_during_work,
+                COALESCE(g.allowed_apps_outside_work, '*') AS allowed_apps_outside_work,
+                COALESCE(g.enabled, TRUE) AS enabled,
+                now(),
+                now()
+            FROM devices d
+            LEFT JOIN LATERAL (
+                SELECT gp.*
+                FROM worktime_global_policy gp
+                WHERE gp.customer_id = d.customerid
+                ORDER BY gp.id
+                LIMIT 1
+            ) g ON TRUE
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM worktime_device_policy p
+                WHERE p.customer_id = d.customerid
+                  AND p.device_id = d.id
+            )
+        </sql>
+    </changeSet>
+
+    <changeSet id="worktime-migrate-device-policy-from-enabled-overrides-2026-04-13" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_device_policy"/>
+            <tableExists tableName="worktime_device_override"/>
+        </preConditions>
+        <sql>
+            UPDATE worktime_device_policy p
+            SET
+                start_time = COALESCE(NULLIF(TRIM(o.start_time), ''), p.start_time),
+                end_time = COALESCE(NULLIF(TRIM(o.end_time), ''), p.end_time),
+                days_of_week = COALESCE(
+                    CASE
+                        WHEN o.days_of_week IS NULL THEN NULL
+                        WHEN TRIM(o.days_of_week) = '' THEN NULL
+                        WHEN TRIM(o.days_of_week) ~ '^[0-9]+$' THEN CAST(TRIM(o.days_of_week) AS INT)
+                        ELSE NULL
+                    END,
+                    p.days_of_week
+                ),
+                allowed_apps_during_work = COALESCE(o.allowed_apps_during_work, p.allowed_apps_during_work),
+                allowed_apps_outside_work = COALESCE(o.allowed_apps_outside_work, p.allowed_apps_outside_work),
+                enabled = COALESCE(o.enabled, p.enabled),
+                updated_at = now()
+            FROM worktime_device_override o
+            WHERE o.enabled = TRUE
+              AND p.customer_id = o.customer_id
+              AND p.device_id = o.device_id
+        </sql>
+    </changeSet>
+
+    <changeSet id="worktime-remove-group-disable-overrides-2026-04-13" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_device_override"/>
+        </preConditions>
+        <sql>
+            DELETE FROM worktime_device_override
+            WHERE enabled = FALSE
+              AND start_datetime = TIMESTAMP '2000-01-01 00:00:00'
+              AND end_datetime = TIMESTAMP '2099-12-31 23:59:59'
+        </sql>
+    </changeSet>
+
+    <changeSet id="worktime-drop-global-override-2026-04-13" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_global_override"/>
+        </preConditions>
+        <dropTable tableName="worktime_global_override"/>
+    </changeSet>
+
+    <changeSet id="worktime-drop-global-policy-2026-04-13" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_global_policy"/>
+        </preConditions>
+        <dropTable tableName="worktime_global_policy"/>
+    </changeSet>
 </databaseChangeLog>

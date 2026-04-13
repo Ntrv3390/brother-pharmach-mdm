@@ -18,7 +18,6 @@ import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.Optional;
 
 /**
  * <p>Public REST resource for WorkTime plugin - accessible by Android devices.</p>
@@ -44,22 +43,6 @@ public class WorkTimePublicResource {
         this.unsecureDAO = unsecureDAO;
     }
 
-    /**
-     * Resolves customerId from authenticated user or query parameter.
-     */
-    private Integer resolveCustomerId(Integer customerIdParam) {
-        Optional<com.hmdm.persistence.domain.User> u = SecurityContext.get().getCurrentUser();
-        if (u.isPresent()) {
-            return u.get().getCustomerId();
-        }
-        if (customerIdParam != null) return customerIdParam;
-        throw new WebApplicationException("CustomerId required", 400);
-    }
-
-    private boolean isAuthenticated() {
-        return SecurityContext.get().getCurrentUser().isPresent();
-    }
-
     private Device resolveDevice(String deviceNumberOrId) {
         Device device = unsecureDAO.getDeviceByNumber(deviceNumberOrId);
         if (device != null) {
@@ -71,58 +54,6 @@ public class WorkTimePublicResource {
             return unsecureDAO.getDeviceById(internalId);
         } catch (Exception ignored) {
             return null;
-        }
-    }
-
-    // ==================================================================================
-    // User-based endpoints (for admin panel or when userId is known)
-    // ==================================================================================
-
-    @GET
-    @Path("/policy/effective/{userId}")
-    @ApiOperation(
-        value = "Get effective worktime policy for user",
-        notes = "Returns the resolved worktime policy for specified user (merges global policy with user overrides)"
-    )
-    public Response getEffectivePolicy(
-            @PathParam("userId") @ApiParam("User ID") int userId, 
-            @QueryParam("customerId") @ApiParam("Customer ID (required if not authenticated)") Integer customerId) {
-        if (!isAuthenticated()) {
-            return Response.PERMISSION_DENIED();
-        }
-        try {
-            int cid = resolveCustomerId(customerId);
-            EffectiveWorkTimePolicy p = workTimeService.resolveEffectivePolicy(cid, userId, LocalDateTime.now());
-            return Response.OK(p);
-        } catch (Exception e) {
-            log.error("Error getting effective policy for user {}", userId, e);
-            return Response.INTERNAL_ERROR();
-        }
-    }
-
-    @GET
-    @Path("/allowed")
-    @ApiOperation(
-        value = "Check if app is allowed for user",
-        notes = "Checks whether the specified app is allowed for the user at current server time"
-    )
-    public Response isAppAllowed(
-            @QueryParam("userId") @ApiParam("User ID") Integer userId,
-            @QueryParam("pkg") @ApiParam("App package name") String pkg,
-            @QueryParam("customerId") @ApiParam("Customer ID") Integer customerId) {
-        if (!isAuthenticated()) {
-            return Response.PERMISSION_DENIED();
-        }
-        if (userId == null || pkg == null || pkg.trim().isEmpty()) {
-            return Response.ERROR("userId and pkg query params required");
-        }
-        try {
-            int cid = resolveCustomerId(customerId);
-            boolean allowed = workTimeService.isAppAllowed(cid, userId, pkg, LocalDateTime.now());
-            return Response.OK(allowed);
-        } catch (Exception e) {
-            log.error("Error checking if app {} is allowed for user {}", pkg, userId, e);
-            return Response.INTERNAL_ERROR();
         }
     }
 
@@ -149,7 +80,6 @@ public class WorkTimePublicResource {
             int customerId = device.getCustomerId();
             int deviceId = device.getId();
             
-            // Use deviceId as userId for per-device policy resolution
             EffectiveWorkTimePolicy policy = workTimeService.resolveEffectivePolicy(
                 customerId, 
                 deviceId, 
