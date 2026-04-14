@@ -23,6 +23,7 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.location.Location;
@@ -50,7 +51,9 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class DeviceInfoProvider {
     public static DeviceInfo getDeviceInfo(Context context, boolean queryPermissions, boolean queryApps) {
@@ -71,6 +74,31 @@ public class DeviceInfoProvider {
         SettingsHelper config = SettingsHelper.getInstance(context);
         if (queryApps) {
             PackageManager packageManager = context.getPackageManager();
+            Set<String> seenPackages = new HashSet<>();
+
+            // Report all launchable installed apps so server-side selectors can use the actual device inventory.
+            List<ApplicationInfo> installedApps = packageManager.getInstalledApplications(0);
+            for (ApplicationInfo appInfo : installedApps) {
+                try {
+                    if (packageManager.getLaunchIntentForPackage(appInfo.packageName) == null) {
+                        continue;
+                    }
+
+                    PackageInfo packageInfo = packageManager.getPackageInfo(appInfo.packageName, 0);
+                    if (!seenPackages.add(packageInfo.packageName.toLowerCase())) {
+                        continue;
+                    }
+
+                    Application installedApp = new Application();
+                    installedApp.setName(appInfo.loadLabel(packageManager).toString());
+                    installedApp.setPkg(packageInfo.packageName);
+                    installedApp.setVersion(packageInfo.versionName);
+                    applications.add(installedApp);
+                } catch (Exception e) {
+                    Log.w(Const.LOG_TAG, "Failed to read installed app info for " + appInfo.packageName, e);
+                }
+            }
+
             if (config.getConfig() != null) {
                 List<Application> requiredApps = SettingsHelper.getInstance(context).getConfig().getApplications();
                 for (Application application : requiredApps) {
@@ -79,23 +107,15 @@ public class DeviceInfoProvider {
                     }
                     try {
                         PackageInfo packageInfo = packageManager.getPackageInfo(application.getPkg(), 0);
+                        if (!seenPackages.add(packageInfo.packageName.toLowerCase())) {
+                            continue;
+                        }
 
                         Application installedApp = new Application();
                         installedApp.setName(application.getName());
                         installedApp.setPkg(packageInfo.packageName);
                         installedApp.setVersion(packageInfo.versionName);
-
-                        // Verify there's no duplicates (due to different versions in config), otherwise it causes an error on the server
-                        boolean appPresents = false;
-                        for (Application a : applications) {
-                            if (a.getPkg().equalsIgnoreCase(installedApp.getPkg())) {
-                                appPresents = true;
-                                break;
-                            }
-                        }
-                        if (!appPresents) {
-                            applications.add(installedApp);
-                        }
+                        applications.add(installedApp);
                     } catch (PackageManager.NameNotFoundException e) {
                         // Application not installed
                     }

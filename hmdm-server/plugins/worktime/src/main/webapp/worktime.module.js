@@ -81,6 +81,11 @@ angular
       "/rest/private/applications/search/:value",
       { value: "@value" },
       {
+        getForDevice: {
+          method: "GET",
+          url: "/rest/plugins/worktime/private/device/:deviceId/applications",
+          params: { deviceId: "@deviceId" },
+        },
         getAll: {
           method: "GET",
           url: "/rest/private/applications/search",
@@ -541,14 +546,36 @@ angular
         loadFromAdminSearch();
       };
 
+      $scope.loadApplicationsForDevice = function (deviceId) {
+        if (!deviceId) {
+          $scope.applications = [];
+          $scope.appsLoading = false;
+          return;
+        }
+
+        $scope.appsLoading = true;
+
+        WorkTimeApplications.getForDevice(
+          { deviceId: deviceId },
+          function (response) {
+            var apps = normalizeApplicationsResponse(response);
+            $scope.applications = apps;
+            $scope.appsLoading = false;
+          },
+          function (error) {
+            console.error("Failed to load device applications", error);
+            $scope.applications = [];
+            $scope.appsLoading = false;
+          }
+        );
+      };
+
       $scope.openPolicyModal = function (device) {
         if (!$scope.canEdit) {
           return;
         }
 
-        if (!$scope.appsLoading && (!angular.isArray($scope.applications) || $scope.applications.length === 0)) {
-          $scope.loadApplications();
-        }
+        $scope.loadApplicationsForDevice(device.deviceId);
 
         $scope.error = null;
         $scope.editingDevice = device;
@@ -736,7 +763,6 @@ angular
         }
       });
 
-      $scope.loadApplications();
       $scope.refresh();
     }
   )

@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import com.hmdm.plugins.worktime.model.WorkTimeDevicePolicy;
 import com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride;
 import com.hmdm.plugins.worktime.persistence.WorkTimeDAO;
+import com.hmdm.persistence.domain.DeviceApplication;
 import com.hmdm.persistence.UserDAO;
 import com.hmdm.persistence.DeviceDAO;
 import com.hmdm.persistence.domain.User;
@@ -298,6 +299,28 @@ public class WorkTimeResource {
         }
 
         return Response.OK(result);
+    }
+
+    @GET
+    @Path("/device/{deviceId}/applications")
+    public Response getDeviceInstalledApplications(@PathParam("deviceId") int deviceId) {
+        User current = SecurityContext.get().getCurrentUser().orElse(null);
+        if (current == null) {
+            return Response.PERMISSION_DENIED();
+        }
+        if (!SecurityContext.get().isSuperAdmin() && !this.userDAO.isOrgAdmin(current)) {
+            return Response.PERMISSION_DENIED();
+        }
+        if (deviceId <= 0) {
+            return Response.ERROR("Invalid device ID");
+        }
+
+        if (getScopedDeviceOrNull(deviceId) == null) {
+            return Response.DEVICE_NOT_FOUND_ERROR();
+        }
+
+        List<DeviceApplication> applications = this.deviceDAO.getDeviceInstalledApplications(deviceId);
+        return Response.OK(applications);
     }
 
     @POST
