@@ -8,9 +8,15 @@ FROM eclipse-temurin:17-jdk AS android-builder
 ENV ANDROID_HOME=/opt/android-sdk
 ENV PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/35.0.0
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget unzip curl python3 \
-    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+        sed -i 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' /etc/apt/sources.list || true; \
+        find /etc/apt/sources.list.d -type f \( -name '*.list' -o -name '*.sources' \) -exec \
+            sed -i 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' {} + || true; \
+        rm -rf /var/lib/apt/lists/*; \
+        apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::No-Cache=true -o Acquire::https::No-Cache=true update \
+            || (rm -rf /var/lib/apt/lists/* && apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=5 update); \
+        apt-get install -y --no-install-recommends wget unzip curl python3; \
+        rm -rf /var/lib/apt/lists/*
 
 # Download Android SDK command-line tools
 RUN mkdir -p ${ANDROID_HOME}/cmdline-tools && \
@@ -49,9 +55,15 @@ RUN APK_PATH="app/build/outputs/apk/opensource/release/app-opensource-release.ap
 # =============================================================================
 FROM maven:3.8.8-eclipse-temurin-11 AS server-builder
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+        sed -i 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' /etc/apt/sources.list || true; \
+        find /etc/apt/sources.list.d -type f \( -name '*.list' -o -name '*.sources' \) -exec \
+            sed -i 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' {} + || true; \
+        rm -rf /var/lib/apt/lists/*; \
+        apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::No-Cache=true -o Acquire::https::No-Cache=true update \
+            || (rm -rf /var/lib/apt/lists/* && apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=5 update); \
+        apt-get install -y --no-install-recommends git; \
+        rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
@@ -144,12 +156,15 @@ LABEL maintainer="Brother Pharmamach DevOps" \
       version="1.0.0"
 
 # Install aapt (APK analysis) + postgresql-client (pg_isready) + python3 (hash)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    aapt \
-    postgresql-client \
-    python3 \
-    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+        sed -i 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' /etc/apt/sources.list || true; \
+        find /etc/apt/sources.list.d -type f \( -name '*.list' -o -name '*.sources' \) -exec \
+            sed -i 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' {} + || true; \
+        rm -rf /var/lib/apt/lists/*; \
+        apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::No-Cache=true -o Acquire::https::No-Cache=true update \
+            || (rm -rf /var/lib/apt/lists/* && apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=5 update); \
+        apt-get install -y --no-install-recommends curl aapt postgresql-client python3; \
+        rm -rf /var/lib/apt/lists/*
 
 # Remove default Tomcat webapps
 RUN rm -rf /usr/local/tomcat/webapps/*
