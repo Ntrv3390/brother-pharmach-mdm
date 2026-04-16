@@ -1042,7 +1042,7 @@ angular.module('headwind-kiosk')
                     $scope.filters = { type: '', search: '' };
                     $scope.pagination = {
                         page: 0,
-                        pageSize: 50,
+                        pageSize: 1000,
                         total: 0
                     };
 
