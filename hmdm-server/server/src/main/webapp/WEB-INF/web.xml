@@ -15,6 +15,11 @@
         <param-value>com.hmdm.plugins.calllog.persistence.postgres.CallLogPostgresPersistenceConfiguration</param-value>
     </context-param>
 
+    <context-param>
+        <param-name>plugin.smslog.persistence.config.class</param-name>
+        <param-value>com.hmdm.plugins.smslog.persistence.postgres.SmsLogPostgresPersistenceConfiguration</param-value>
+    </context-param>
+
     <filter>
         <filter-name>guice-filter</filter-name>
         <filter-class>com.google.inject.servlet.GuiceFilter</filter-class>

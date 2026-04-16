@@ -102,6 +102,7 @@ document.localization["en_US"] = {
   "button.notify.update": "Notify on update",
   "button.app.settings": "Application settings",
   "button.view.calllogs": "View Call Logs",
+  "button.view.smslogs": "View SMS Logs",
   "button.ok": "OK",
   "button.help": "Help",
   "button.new.app": "New application",

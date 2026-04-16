@@ -1,0 +1,298 @@
+<style>
+  .modern-modal .modal-content {
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+  }
+
+  .modern-modal .modal-header {
+    background: #7a9ab9;
+    color: white;
+    border-bottom: none;
+    padding: 18px 22px;
+  }
+
+  .modern-modal .modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .modern-modal .close {
+    color: white;
+    opacity: 0.85;
+  }
+
+  .modern-modal .close:hover {
+    opacity: 1;
+  }
+
+  .modern-panel {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    margin-bottom: 20px;
+  }
+
+  .modern-panel .panel-heading {
+    background: #f8f9fb;
+    border-bottom: 1px solid #eee;
+    border-radius: 10px 10px 0 0;
+    font-weight: 600;
+    padding: 12px 16px;
+  }
+
+  .modern-panel .panel-body {
+    padding: 16px;
+  }
+
+  .device-info strong {
+    display: inline-block;
+    min-width: 120px;
+    color: #555;
+  }
+
+  .modern-table thead th {
+    background: #f5f6fa;
+    border-bottom: 2px solid #e5e7eb;
+    font-weight: 600;
+    color: #444;
+  }
+
+  .modern-table tbody tr:hover {
+    background: #f9fafc;
+  }
+
+  .modern-label {
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    display: inline-block;
+  }
+
+  .label-success {
+    background: #e8f5e9;
+    color: #2e7d32;
+  }
+
+  .label-warning {
+    background: #fff8e1;
+    color: #f57c00;
+  }
+
+  .label-danger {
+    background: #fdecea;
+    color: #c62828;
+  }
+
+  .modern-footer {
+    border-top: 1px solid #eee;
+    padding: 14px 20px;
+    background: #fafafa;
+  }
+
+  .btn-modern {
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-weight: 500;
+  }
+
+  .btn-danger.btn-modern {
+    background: #e53935;
+    border: none;
+  }
+
+  .btn-danger.btn-modern:hover {
+    background: #d32f2f;
+  }
+
+  .pagination-controls {
+    margin-top: 15px;
+  }
+</style>
+
+<div class="modern-modal">
+  <!-- Header -->
+  <div class="modal-header">
+    <button type="button" class="close" ng-click="close()" aria-label="Close">
+      <span aria-hidden="true">&times;</span>
+    </button>
+    <h3 class="modal-title">
+      <span localized>plugin.smslog.modal.title</span> - {{device.number}}
+    </h3>
+  </div>
+
+  <div class="modal-body">
+    <!-- Device Info -->
+    <div class="panel modern-panel">
+      <div class="panel-heading">
+        <span localized>plugin.smslog.device.info</span>
+      </div>
+      <div class="panel-body device-info">
+        <div class="row">
+          <div class="col-sm-6">
+            <strong localized>plugin.smslog.device.number</strong>
+            {{device.number || 'N/A'}}
+          </div>
+          <div class="col-sm-6">
+            <strong localized>plugin.smslog.device.model</strong>
+            {{device.model || 'N/A'}}
+          </div>
+        </div>
+        <div class="row" style="margin-top: 10px">
+          <div class="col-sm-6">
+            <strong localized>plugin.smslog.device.imei</strong>
+            {{device.displayedIMEI || device.imei || 'N/A'}}
+          </div>
+          <div class="col-sm-6">
+            <strong localized>plugin.smslog.device.phone</strong>
+            {{device.displayedPhone || device.phone || 'N/A'}}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SMS Logs -->
+    <div class="panel modern-panel">
+      <div class="panel-heading">
+        <span localized>plugin.smslog.logs.title</span>
+        <button
+          class="btn btn-default btn-xs btn-modern pull-right"
+          ng-click="loadSmsLogs()"
+          ng-disabled="loading"
+          style="margin-left: 8px;"
+        >
+          Refresh
+        </button>
+        <button
+          class="btn btn-danger btn-xs btn-modern pull-right"
+          ng-click="deleteAllLogs()"
+          ng-disabled="loading || smsLogs.length === 0"
+        >
+          Delete All
+        </button>
+      </div>
+
+      <div class="panel-body">
+        <!-- Loading -->
+        <div ng-if="loading" class="text-center">
+          <i class="fa fa-spinner fa-spin fa-2x"></i>
+          <p localized>loading.data</p>
+        </div>
+
+        <div ng-if="!loading && errorMessage" class="alert alert-danger">
+          {{errorMessage}}
+        </div>
+
+        <!-- Empty -->
+        <div
+          ng-if="!loading && !errorMessage && smsLogs.length === 0"
+          class="text-center text-muted"
+        >
+          <p localized>plugin.smslog.no.logs</p>
+        </div>
+
+        <!-- Filters — always visible once we have loaded at least once -->
+        <div ng-show="!loading" style="margin-bottom: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <select class="form-control" style="width: auto; min-width: 140px;"
+            ng-model="filters.messageType"
+            ng-options="t.value as t.label for t in availableMessageTypes"
+            ng-change="applyFilter()">
+            <option value="" localized>plugin.smslog.filter.all.types</option>
+          </select>
+          <select class="form-control" style="width: auto; min-width: 120px;"
+            ng-model="filters.simSlot"
+            ng-options="s.value as s.label for s in availableSimSlots"
+            ng-change="applyFilter()">
+            <option value="" localized>plugin.smslog.filter.all.sims</option>
+          </select>
+          <input
+            type="text"
+            class="form-control"
+            style="flex: 1; min-width: 220px;"
+            ng-model="filters.search"
+            placeholder="Search by name, phone or message text"
+          />
+        </div>
+
+        <!-- Table -->
+        <div ng-if="!loading && smsLogs.length > 0">
+          <table class="table modern-table">
+            <thead>
+              <tr>
+                <th localized>plugin.smslog.table.date</th>
+                <th localized>plugin.smslog.table.type</th>
+                <th localized>plugin.smslog.table.sim</th>
+                <th localized>plugin.smslog.table.number</th>
+                <th localized>plugin.smslog.table.contact</th>
+                <th localized>plugin.smslog.table.message</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr ng-repeat="log in smsLogs">
+                <td>{{formatDate(log.smsTimestamp)}}</td>
+                <td>
+                  <span
+                    class="modern-label"
+                    ng-class="{
+                      'label-success': log.messageType === 1,
+                      'label-warning': log.messageType === 2
+                    }"
+                  >
+                    {{getMessageTypeName(log.messageType)}}
+                  </span>
+                </td>
+                <td>{{getSimLabel(log.simSlot)}}</td>
+                <td>{{log.phoneNumber || 'N/A'}}</td>
+                <td>{{log.contactName || '-'}}</td>
+                <td>{{log.messageBody || '-'}}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Pagination -->
+          <div
+            class="text-center pagination-controls"
+            ng-if="pagination.total > pagination.pageSize"
+          >
+            <button
+              class="btn btn-default btn-sm btn-modern"
+              ng-click="previousPage()"
+              ng-disabled="pagination.page === 0"
+            >
+              <span class="glyphicon glyphicon-chevron-left"></span>
+              <span localized>button.previous</span>
+            </button>
+
+            <span style="margin: 0 15px">
+              <span localized>plugin.smslog.page</span>
+              {{pagination.page + 1}} / {{getTotalPages()}}
+            </span>
+
+            <button
+              class="btn btn-default btn-sm btn-modern"
+              ng-click="nextPage()"
+              ng-disabled="(pagination.page + 1) * pagination.pageSize >= pagination.total"
+            >
+              <span localized>button.next</span>
+              <span class="glyphicon glyphicon-chevron-right"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="modal-footer modern-footer">
+    <button
+      type="button"
+      class="btn btn-default btn-modern"
+      ng-click="close()"
+    >
+      Close
+    </button>
+  </div>
+</div>

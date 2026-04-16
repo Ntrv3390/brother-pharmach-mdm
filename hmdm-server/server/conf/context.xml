@@ -31,6 +31,7 @@
     <Parameter name="plugin.devicelog.persistence.config.class" value="${plugin.devicelog.persistence.config.class}"/>
     <Parameter name="plugin.worktime.persistence.config.class" value="${plugin.worktime.persistence.config.class}"/>
     <Parameter name="plugin.calllog.persistence.config.class" value="${plugin.calllog.persistence.config.class}"/>
+     <Parameter name="plugin.smslog.persistence.config.class" value="${plugin.smslog.persistence.config.class}"/>
 
     <Parameter name="aapt.command" value="${aapt.command}"/>
 

@@ -34,6 +34,7 @@
     <Parameter name="plugin.devicelog.persistence.config.class" value="com.hmdm.plugins.devicelog.persistence.postgres.DeviceLogPostgresPersistenceConfiguration"/>
     <Parameter name="plugin.worktime.persistence.config.class" value="com.hmdm.plugins.worktime.persistence.postgres.WorkTimePostgresPersistenceConfiguration"/>
      <Parameter name="plugin.calllog.persistence.config.class" value="com.hmdm.plugins.calllog.persistence.postgres.CallLogPostgresPersistenceConfiguration"/>
+     <Parameter name="plugin.smslog.persistence.config.class" value="com.hmdm.plugins.smslog.persistence.postgres.SmsLogPostgresPersistenceConfiguration"/>
 
     <!-- Don't change this -->
     <Parameter name="role.orgadmin.id" value="2"/>

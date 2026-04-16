@@ -49,6 +49,7 @@ log4j.config=file:///log4j-hmdm.xml
 plugin.devicelog.persistence.config.class=com.hmdm.plugins.devicelog.persistence.postgres.DeviceLogPostgresPersistenceConfiguration
 plugin.worktime.persistence.config.class=com.hmdm.plugins.worktime.persistence.postgres.WorkTimePostgresPersistenceConfiguration
 plugin.calllog.persistence.config.class=com.hmdm.plugins.calllog.persistence.postgres.CallLogPostgresPersistenceConfiguration
+plugin.smslog.persistence.config.class=com.hmdm.plugins.smslog.persistence.postgres.SmsLogPostgresPersistenceConfiguration
 
 # MQTT notification server local URI
 mqtt.server.uri=localhost:31000

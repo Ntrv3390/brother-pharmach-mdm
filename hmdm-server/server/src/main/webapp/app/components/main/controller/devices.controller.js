@@ -1195,6 +1195,22 @@ angular.module('headwind-kiosk')
             });
         };
 
+        $scope.viewSmsLogs = function (device) {
+            var modalInstance = $modal.open({
+                templateUrl: 'app/components/plugins/smslog/views/modal.html',
+                controller: 'PluginSmsLogModalController',
+                size: 'lg',
+                resolve: {
+                    device: function () {
+                        return device;
+                    }
+                }
+            });
+
+            modalInstance.result.then(function () {
+            });
+        };
+
         var hiddenDevicePlugins = ['messaging'];
         pluginService.getAvailablePlugins(function (response) {
             if (response.status === 'OK') {

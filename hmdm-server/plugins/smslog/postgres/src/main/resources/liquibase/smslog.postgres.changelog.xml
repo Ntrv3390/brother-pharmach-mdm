@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.0.xsd">
+
+    <!-- ========================================================= -->
+    <!-- Create SMS log data table                                -->
+    <!-- ========================================================= -->
+    <changeSet id="smslog-create-data-table" author="smslog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="plugin_smslog_data"/>
+            </not>
+        </preConditions>
+
+        <sql>
+            CREATE TABLE plugin_smslog_data (
+                id SERIAL PRIMARY KEY,
+                deviceid INT NOT NULL,
+                phonenumber VARCHAR(50),
+                contactname VARCHAR(255),
+                messagetype INT NOT NULL,
+                messagebody TEXT,
+                messagesimslot INT,
+                smstimestamp BIGINT NOT NULL,
+                smsdate VARCHAR(50),
+                createtime BIGINT,
+                customerid INT NOT NULL
+            );
+
+            CREATE INDEX idx_smslog_device
+                ON plugin_smslog_data (deviceid, customerid);
+
+            CREATE INDEX idx_smslog_timestamp
+                ON plugin_smslog_data (smstimestamp);
+
+            CREATE INDEX idx_smslog_simslot
+                ON plugin_smslog_data (messagesimslot);
+
+            CREATE INDEX idx_smslog_customer
+                ON plugin_smslog_data (customerid);
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
+    <!-- Create settings table                                    -->
+    <!-- ========================================================= -->
+    <changeSet id="smslog-create-settings-table" author="smslog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="plugin_smslog_settings"/>
+            </not>
+        </preConditions>
+
+        <sql>
+            CREATE TABLE plugin_smslog_settings (
+                id SERIAL PRIMARY KEY,
+                customerid INT NOT NULL UNIQUE,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                retentiondays INT NOT NULL DEFAULT 90
+            );
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
+    <!-- Register plugin                                          -->
+    <!-- ========================================================= -->
+    <changeSet id="smslog-register-plugin" author="smslog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="plugins"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM plugins WHERE identifier = 'smslog'
+            </sqlCheck>
+        </preConditions>
+
+        <sql>
+            INSERT INTO plugins (
+                identifier,
+                name,
+                description,
+                javascriptmodulefile,
+                functionsviewtemplate,
+                settingsviewtemplate,
+                namelocalizationkey,
+                settingspermission,
+                functionspermission,
+                devicefunctionspermission,
+                disabled
+            )
+            VALUES (
+                'smslog',
+                'plugin.smslog.localization.plugin.name',
+                '',
+                'app/components/plugins/smslog/smslog.module.js',
+                'app/components/plugins/smslog/views/modal.html',
+                'app/components/plugins/smslog/views/settings.html',
+                'plugin.smslog.localization.plugin.name',
+                'plugin_smslog_access',
+                'plugin_smslog_access',
+                'plugin_smslog_access',
+                false
+            );
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
+    <!-- Create permission                                        -->
+    <!-- ========================================================= -->
+    <changeSet id="smslog-create-permission" author="smslog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="permissions"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM permissions WHERE name = 'plugin_smslog_access'
+            </sqlCheck>
+        </preConditions>
+
+        <sql>
+            INSERT INTO permissions (name, description)
+            VALUES ('plugin_smslog_access', 'Access to SMS Log Plugin');
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
+    <!-- Grant permission to Super-Admin                          -->
+    <!-- ========================================================= -->
+    <changeSet id="smslog-grant-permission-superadmin" author="smslog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="userrolepermissions"/>
+        </preConditions>
+
+        <sql>
+            INSERT INTO userrolepermissions (roleid, permissionid)
+            SELECT ur.id, p.id
+            FROM userroles ur, permissions p
+            WHERE ur.name = 'Super-Admin'
+              AND p.name = 'plugin_smslog_access';
+        </sql>
+
+    </changeSet>
+
+</databaseChangeLog>

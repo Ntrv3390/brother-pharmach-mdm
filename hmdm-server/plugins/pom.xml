@@ -47,6 +47,7 @@
         <module>xtra</module>
         <module>worktime</module>
         <module>calllog</module>
+        <module>smslog</module>
     </modules>
 
     <dependencies>

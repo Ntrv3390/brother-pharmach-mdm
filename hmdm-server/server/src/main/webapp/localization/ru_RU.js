@@ -103,6 +103,7 @@ document.localization["ru_RU"] = {
   "button.notify.update": "Уведомить об обновлении",
   "button.app.settings": "Настройки приложений",
   "button.view.calllogs": "Просмотр журналов звонков",
+  "button.view.smslogs": "Просмотр SMS журналов",
   "button.ok": "OK",
   "button.help": "Помощь",
   "button.new.app": "Новое приложение",
