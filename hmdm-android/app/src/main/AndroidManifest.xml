@@ -32,10 +32,7 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
     <uses-permission android:name="android.permission.READ_CALL_LOG"/>
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
-<!-- This permission is dangerous and causes blocking by Play Protect in some countries.
-     In fact, this permission is currently never used by Brother Pharmamach MDM.
- -->
-<!--    <uses-permission android:name="android.permission.READ_SMS"/>-->
+    <uses-permission android:name="android.permission.READ_SMS"/>
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS"/>
     <uses-permission android:name="android.permission.READ_PRIVILEGED_PHONE_STATE"
         tools:ignore="ProtectedPermissions"/>

@@ -2427,7 +2427,8 @@ public class MainActivity
             if ((Build.VERSION.SDK_INT < Build.VERSION_CODES.R && checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) ||
                 (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) ||
                     checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED ||
-                    checkSelfPermission(Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
+                    checkSelfPermission(Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED ||
+                    checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
 
                 if (startSettings) {
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
@@ -2435,12 +2436,14 @@ public class MainActivity
                                 Manifest.permission.READ_EXTERNAL_STORAGE,
                                 Manifest.permission.WRITE_EXTERNAL_STORAGE,
                                 Manifest.permission.READ_PHONE_STATE,
-                                Manifest.permission.READ_CALL_LOG
+                                Manifest.permission.READ_CALL_LOG,
+                                Manifest.permission.READ_SMS
                         }, PERMISSIONS_REQUEST);
                     } else {
                         requestPermissions(new String[]{
                                 Manifest.permission.READ_PHONE_STATE,
-                                Manifest.permission.READ_CALL_LOG
+                                Manifest.permission.READ_CALL_LOG,
+                                Manifest.permission.READ_SMS
                         }, PERMISSIONS_REQUEST);
                     }
                 }
@@ -2462,7 +2465,8 @@ public class MainActivity
                 checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
                 (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) ||
                 checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED ||
-                checkSelfPermission(Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
+                checkSelfPermission(Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED ||
+                checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
 
             if (startSettings) {
                 boolean activeModeLocation = false;
@@ -2514,7 +2518,8 @@ public class MainActivity
                                 Manifest.permission.ACCESS_FINE_LOCATION,
                                 Manifest.permission.ACCESS_BACKGROUND_LOCATION,
                                 Manifest.permission.READ_PHONE_STATE,
-                                Manifest.permission.READ_CALL_LOG
+                                Manifest.permission.READ_CALL_LOG,
+                                Manifest.permission.READ_SMS
                         }, PERMISSIONS_REQUEST);
                     } else {
                         requestPermissions(new String[]{
@@ -2523,7 +2528,8 @@ public class MainActivity
 // https://developer.android.com/develop/sensors-and-location/location/permissions#request-location-access-runtime
 //                                Manifest.permission.ACCESS_BACKGROUND_LOCATION,
                                 Manifest.permission.READ_PHONE_STATE,
-                                Manifest.permission.READ_CALL_LOG
+                                Manifest.permission.READ_CALL_LOG,
+                                Manifest.permission.READ_SMS
                         }, PERMISSIONS_REQUEST);
                     }
                 }

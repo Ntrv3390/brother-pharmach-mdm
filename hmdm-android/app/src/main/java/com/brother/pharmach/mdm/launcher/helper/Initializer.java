@@ -32,6 +32,7 @@ import com.brother.pharmach.mdm.launcher.util.Utils;
 import com.brother.pharmach.mdm.launcher.worker.PushNotificationWorker;
 import com.brother.pharmach.mdm.launcher.worker.ScheduledAppUpdateWorker;
 import com.brother.pharmach.mdm.launcher.worker.SendDeviceInfoWorker;
+import com.brother.pharmach.mdm.launcher.worker.SmsLogUploadWorker;
 
 import org.eclipse.paho.android.service.MqttAndroidClient;
 
@@ -72,6 +73,7 @@ public class Initializer {
                     PushNotificationWorker.schedule(context);
                 }
                 ScheduledAppUpdateWorker.schedule(context);
+                SmsLogUploadWorker.schedule(context);
 
                 // Run completion in the UI thread
                 uiHandler.post(completion);

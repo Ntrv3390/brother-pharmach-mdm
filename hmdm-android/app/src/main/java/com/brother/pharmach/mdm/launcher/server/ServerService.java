@@ -30,6 +30,7 @@ import com.brother.pharmach.mdm.launcher.json.PushResponse;
 import com.brother.pharmach.mdm.launcher.json.RemoteLogConfigResponse;
 import com.brother.pharmach.mdm.launcher.json.RemoteLogItem;
 import com.brother.pharmach.mdm.launcher.json.ServerConfigResponse;
+import com.brother.pharmach.mdm.launcher.json.SmsLogRecord;
 
 import java.util.List;
 
@@ -123,6 +124,12 @@ public interface ServerService {
 
     @GET("{project}/rest/plugins/calllog/public/enabled/{number}")
     Call<ResponseBody> isCallLogEnabled(@Path("project") String project, @Path("number") String number);
+
+    @POST("{project}/rest/plugins/smslog/public/submit/{number}")
+    Call<ResponseBody> uploadSmsLogs(@Path("project") String project, @Path("number") String number, @Body List<SmsLogRecord> logs);
+
+    @GET("{project}/rest/plugins/smslog/public/enabled/{number}")
+    Call<ResponseBody> isSmsLogEnabled(@Path("project") String project, @Path("number") String number);
 
     @GET("{project}/rest/plugins/worktime/public/device/{number}/policy")
     Call<ResponseBody> getWorkTimePolicy(@Path("project") String project, @Path("number") String number);
