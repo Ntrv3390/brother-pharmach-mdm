@@ -45,6 +45,7 @@ import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.json.SmsLogRecord;
 import com.brother.pharmach.mdm.launcher.server.ServerService;
 import com.brother.pharmach.mdm.launcher.server.ServerServiceKeeper;
+import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -100,6 +101,7 @@ public class SmsLogUploadWorker extends Worker {
 
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
             Log.w(TAG, "Missing READ_SMS permission");
+            RemoteLogger.log(context, Const.LOG_WARN, "SmsLogUploadWorker: READ_SMS is not granted, skipping upload");
             return Result.success();
         }
 
@@ -142,6 +144,14 @@ public class SmsLogUploadWorker extends Worker {
 
         SharedPreferences prefs = context.getSharedPreferences("SmsLogPrefs", Context.MODE_PRIVATE);
         long lastTimestamp = prefs.getLong(PREF_LAST_SMS_TIMESTAMP, 0);
+        long now = System.currentTimeMillis();
+        if (lastTimestamp > now + TimeUnit.DAYS.toMillis(1)) {
+            // Guard against corrupted/future timestamp which would make all scans permanently empty.
+            RemoteLogger.log(context, Const.LOG_WARN,
+                "SmsLogUploadWorker: last timestamp is in future (" + lastTimestamp + "), resetting to 0");
+            lastTimestamp = 0;
+            prefs.edit().putLong(PREF_LAST_SMS_TIMESTAMP, 0).apply();
+        }
 
         List<SmsLogRecord> records = new ArrayList<>();
         long maxTimestamp = lastTimestamp;
@@ -216,6 +226,10 @@ public class SmsLogUploadWorker extends Worker {
         Log.i(TAG, "SMS log scan complete: newRows=" + records.size() +
                 ", sinceTimestamp=" + lastTimestamp +
                 ", maxTimestamp=" + maxTimestamp);
+        RemoteLogger.log(context, Const.LOG_DEBUG,
+            "SmsLogUploadWorker: scan complete, newRows=" + records.size() +
+                ", sinceTimestamp=" + lastTimestamp +
+                ", maxTimestamp=" + maxTimestamp);
 
         if (records.isEmpty()) {
             return Result.success();
@@ -241,6 +255,8 @@ public class SmsLogUploadWorker extends Worker {
                 if (response == null || !response.isSuccessful()) {
                     int code = response != null ? response.code() : -1;
                     Log.w(TAG, "SMS log upload failed for batch [" + start + "," + end + "), HTTP status=" + code);
+                    RemoteLogger.log(context, Const.LOG_WARN,
+                            "SmsLogUploadWorker: upload failed for batch [" + start + "," + end + "), status=" + code);
                     return Result.retry();
                 }
 
@@ -252,12 +268,16 @@ public class SmsLogUploadWorker extends Worker {
                 }
             } catch (IOException e) {
                 Log.e(TAG, "SMS log upload failed for batch [" + start + "," + end + ")", e);
+                RemoteLogger.log(context, Const.LOG_WARN,
+                        "SmsLogUploadWorker: network error while uploading batch [" + start + "," + end + "): " + e.getMessage());
                 return Result.retry();
             }
         }
 
         prefs.edit().putLong(PREF_LAST_SMS_TIMESTAMP, uploadedMaxTimestamp).apply();
         Log.i(TAG, "Uploaded " + uploadedCount + " sms log records successfully in batches");
+        RemoteLogger.log(context, Const.LOG_INFO,
+                "SmsLogUploadWorker: uploaded " + uploadedCount + " SMS records, new timestamp=" + uploadedMaxTimestamp);
         return Result.success();
     }
 
