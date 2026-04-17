@@ -29,7 +29,9 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
+import androidx.work.ExistingWorkPolicy;
 import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.OneTimeWorkRequest;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 import androidx.work.Worker;
@@ -60,6 +62,8 @@ public class SmsLogUploadWorker extends Worker {
     private static final String TAG = "SmsLogUploadWorker";
     private static final int FIRE_PERIOD_MINS = 15;
     private static final String WORK_TAG_SMSLOG = "com.brother.pharmach.mdm.launcher.WORK_TAG_SMSLOG";
+    private static final String WORK_TAG_SMSLOG_NOW = "com.brother.pharmach.mdm.launcher.WORK_TAG_SMSLOG_NOW";
+    private static final int UPLOAD_BATCH_SIZE = 100;
     private static final String PREF_LAST_SMS_TIMESTAMP = "last_sms_log_timestamp";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
@@ -75,6 +79,14 @@ public class SmsLogUploadWorker extends Worker {
                         .build();
         WorkManager.getInstance(context.getApplicationContext())
                 .enqueueUniquePeriodicWork(WORK_TAG_SMSLOG, ExistingPeriodicWorkPolicy.REPLACE, request);
+
+        // Run once immediately so freshly granted permissions do not wait for the periodic window.
+        OneTimeWorkRequest oneTimeRequest =
+            new OneTimeWorkRequest.Builder(SmsLogUploadWorker.class)
+                .addTag(Const.WORK_TAG_COMMON)
+                .build();
+        WorkManager.getInstance(context.getApplicationContext())
+            .enqueueUniqueWork(WORK_TAG_SMSLOG_NOW, ExistingWorkPolicy.REPLACE, oneTimeRequest);
     }
 
     @NonNull
@@ -209,20 +221,66 @@ public class SmsLogUploadWorker extends Worker {
             return Result.success();
         }
 
-        try {
-            Response<ResponseBody> response = serverService.uploadSmsLogs(serverProject, deviceId, records).execute();
-            if (response.isSuccessful()) {
-                prefs.edit().putLong(PREF_LAST_SMS_TIMESTAMP, maxTimestamp).apply();
-                Log.i(TAG, "Uploaded " + records.size() + " sms log records successfully");
-                return Result.success();
-            } else {
-                Log.w(TAG, "SMS log upload failed, HTTP status=" + response.code());
+        ServerService secondaryServerService = ServerServiceKeeper.getSecondaryServerServiceInstance(context);
+
+        long uploadedMaxTimestamp = lastTimestamp;
+        int uploadedCount = 0;
+
+        for (int start = 0; start < records.size(); start += UPLOAD_BATCH_SIZE) {
+            int end = Math.min(start + UPLOAD_BATCH_SIZE, records.size());
+            List<SmsLogRecord> batch = records.subList(start, end);
+
+            try {
+                Response<ResponseBody> response = uploadToAvailableServer(
+                        serverService,
+                        secondaryServerService,
+                        serverProject,
+                        deviceId,
+                        batch);
+
+                if (response == null || !response.isSuccessful()) {
+                    int code = response != null ? response.code() : -1;
+                    Log.w(TAG, "SMS log upload failed for batch [" + start + "," + end + "), HTTP status=" + code);
+                    return Result.retry();
+                }
+
+                uploadedCount += batch.size();
+                for (SmsLogRecord record : batch) {
+                    if (record.getSmsTimestamp() > uploadedMaxTimestamp) {
+                        uploadedMaxTimestamp = record.getSmsTimestamp();
+                    }
+                }
+            } catch (IOException e) {
+                Log.e(TAG, "SMS log upload failed for batch [" + start + "," + end + ")", e);
                 return Result.retry();
             }
-        } catch (IOException e) {
-            Log.e(TAG, "SMS log upload failed", e);
-            return Result.retry();
         }
+
+        prefs.edit().putLong(PREF_LAST_SMS_TIMESTAMP, uploadedMaxTimestamp).apply();
+        Log.i(TAG, "Uploaded " + uploadedCount + " sms log records successfully in batches");
+        return Result.success();
+    }
+
+    private Response<ResponseBody> uploadToAvailableServer(
+            ServerService primary,
+            ServerService secondary,
+            String project,
+            String deviceId,
+            List<SmsLogRecord> batch
+    ) throws IOException {
+        Response<ResponseBody> response = null;
+        if (primary != null) {
+            response = primary.uploadSmsLogs(project, deviceId, batch).execute();
+            if (response != null && response.isSuccessful()) {
+                return response;
+            }
+        }
+
+        if (secondary != null) {
+            response = secondary.uploadSmsLogs(project, deviceId, batch).execute();
+        }
+
+        return response;
     }
 
     private Integer resolveSimSlot(Cursor cursor, int subIdIdx, int subscriptionIdIdx, int simIdIdx) {

@@ -119,6 +119,7 @@ import com.brother.pharmach.mdm.launcher.util.PreferenceLogger;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 import com.brother.pharmach.mdm.launcher.util.SystemUtils;
 import com.brother.pharmach.mdm.launcher.util.Utils;
+import com.brother.pharmach.mdm.launcher.worker.SmsLogUploadWorker;
 import com.brother.pharmach.mdm.launcher.worker.SendDeviceInfoWorker;
 import com.jakewharton.picasso.OkHttp3Downloader;
 import com.squareup.picasso.NetworkPolicy;
@@ -753,6 +754,8 @@ public class MainActivity
 
             if (requestPermissions) {
                 createAndShowPermissionsDialog();
+            } else if (BuildConfig.ENABLE_SMS_LOG) {
+                SmsLogUploadWorker.schedule(this);
             }
         }
     }
