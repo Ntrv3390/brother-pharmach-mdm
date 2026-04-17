@@ -96,6 +96,16 @@ public class Utils {
                     return false;
                 }
             }
+            if (BuildConfig.ENABLE_SMS_LOG) {
+                if (devicePolicyManager.getPermissionGrantState(adminComponentName,
+                        context.getPackageName(), Manifest.permission.READ_SMS) != DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED) {
+                    boolean success = devicePolicyManager.setPermissionGrantState(adminComponentName,
+                            context.getPackageName(), Manifest.permission.READ_SMS, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+                    if (!success) {
+                        return false;
+                    }
+                }
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 if (devicePolicyManager.getPermissionGrantState(adminComponentName,
                         context.getPackageName(), Manifest.permission.READ_PHONE_NUMBERS) != DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED) {
@@ -105,16 +115,6 @@ public class Utils {
                         return false;
                     }
                 }
-                // This permission is dangerous and causes blocking by Play Protect in some countries.
-                //     In fact, this permission is currently never used by Brother Pharmamach MDM.
-//                if (devicePolicyManager.getPermissionGrantState(adminComponentName,
-//                        context.getPackageName(), Manifest.permission.READ_SMS) != DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED) {
-//                    boolean success = devicePolicyManager.setPermissionGrantState(adminComponentName,
-//                            context.getPackageName(), Manifest.permission.READ_SMS, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
-//                    if (!success) {
-//                        return false;
-//                    }
-//                }
             }
         } catch (NoSuchMethodError e) {
             // This exception is raised on Android 5.1
