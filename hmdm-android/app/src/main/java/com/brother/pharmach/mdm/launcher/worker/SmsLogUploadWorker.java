@@ -20,14 +20,18 @@
 package com.brother.pharmach.mdm.launcher.worker;
 
 import android.Manifest;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.os.Build;
 import android.provider.Telephony;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 import androidx.work.ExistingWorkPolicy;
 import androidx.work.ExistingPeriodicWorkPolicy;
@@ -41,6 +45,7 @@ import com.brother.pharmach.mdm.launcher.BuildConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.brother.pharmach.mdm.launcher.Const;
+import com.brother.pharmach.mdm.launcher.R;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.json.SmsLogRecord;
 import com.brother.pharmach.mdm.launcher.server.ServerService;
@@ -66,14 +71,35 @@ public class SmsLogUploadWorker extends Worker {
     private static final String WORK_TAG_SMSLOG_NOW = "com.brother.pharmach.mdm.launcher.WORK_TAG_SMSLOG_NOW";
     private static final int UPLOAD_BATCH_SIZE = 100;
     private static final String PREF_LAST_SMS_TIMESTAMP = "last_sms_log_timestamp";
+    private static final String DEBUG_CHANNEL_ID = "smslog_debug_channel";
+    private static final int DEBUG_NOTIFICATION_ID = 9031;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
+        private static final String[] SMS_PROJECTION_WITH_SIM = {
+            Telephony.Sms.ADDRESS,
+            Telephony.Sms.TYPE,
+            Telephony.Sms.DATE,
+            Telephony.Sms.BODY,
+            Telephony.Sms.PERSON,
+            "sub_id",
+            "subscription_id",
+            "sim_id"
+        };
+        private static final String[] SMS_PROJECTION_BASIC = {
+            Telephony.Sms.ADDRESS,
+            Telephony.Sms.TYPE,
+            Telephony.Sms.DATE,
+            Telephony.Sms.BODY,
+            Telephony.Sms.PERSON
+        };
 
     public SmsLogUploadWorker(@NonNull Context context, @NonNull WorkerParameters workerParams) {
         super(context, workerParams);
     }
 
     public static void schedule(Context context) {
+        RemoteLogger.log(context, Const.LOG_DEBUG, "SmsLogUploadWorker: scheduling periodic and immediate workers");
+        showDebugAlert(context, "SMSLog: worker scheduled");
         PeriodicWorkRequest request =
                 new PeriodicWorkRequest.Builder(SmsLogUploadWorker.class, FIRE_PERIOD_MINS, TimeUnit.MINUTES)
                         .addTag(Const.WORK_TAG_COMMON)
@@ -96,26 +122,40 @@ public class SmsLogUploadWorker extends Worker {
         Context context = getApplicationContext();
 
         if (!BuildConfig.ENABLE_SMS_LOG) {
+            RemoteLogger.log(context, Const.LOG_DEBUG, "SmsLogUploadWorker: feature disabled by flavor, skipping");
+            showDebugAlert(context, "SMSLog: disabled by flavor");
             return Result.success();
         }
+
+        RemoteLogger.log(context, Const.LOG_DEBUG, "SmsLogUploadWorker: started");
+        showDebugAlert(context, "SMSLog: worker started");
 
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
             Log.w(TAG, "Missing READ_SMS permission");
             RemoteLogger.log(context, Const.LOG_WARN, "SmsLogUploadWorker: READ_SMS is not granted, skipping upload");
+            showDebugAlert(context, "SMSLog: READ_SMS missing");
             return Result.success();
         }
 
         SettingsHelper settingsHelper = SettingsHelper.getInstance(context);
         String deviceId = settingsHelper.getDeviceId();
         String serverProject = settingsHelper.getServerProject();
-        if (deviceId == null || serverProject == null) {
+        if (deviceId == null || deviceId.trim().isEmpty() || serverProject == null || serverProject.trim().isEmpty()) {
+            RemoteLogger.log(context, Const.LOG_WARN,
+                    "SmsLogUploadWorker: deviceId/serverProject is empty (deviceId='" + deviceId + "', serverProject='" + serverProject + "')");
+            showDebugAlert(context, "SMSLog: deviceId/serverProject empty");
             return Result.failure();
         }
 
         ServerService serverService = ServerServiceKeeper.getServerServiceInstance(context);
         if (serverService == null) {
+            RemoteLogger.log(context, Const.LOG_WARN, "SmsLogUploadWorker: primary server service unavailable, retrying");
+            showDebugAlert(context, "SMSLog: server unavailable, retry");
             return Result.retry();
         }
+
+        RemoteLogger.log(context, Const.LOG_DEBUG,
+                "SmsLogUploadWorker: checking enabled status for deviceId='" + deviceId + "', project='" + serverProject + "'");
 
         try {
             Response<ResponseBody> enabledResponse = serverService.isSmsLogEnabled(serverProject, deviceId).execute();
@@ -125,6 +165,8 @@ public class SmsLogUploadWorker extends Worker {
             }
 
             if (enabledResponse == null || !enabledResponse.isSuccessful() || enabledResponse.body() == null) {
+                RemoteLogger.log(context, Const.LOG_WARN, "SmsLogUploadWorker: enabled endpoint unavailable on both servers, retrying");
+                showDebugAlert(context, "SMSLog: enabled endpoint unavailable");
                 return Result.retry();
             }
 
@@ -132,13 +174,21 @@ public class SmsLogUploadWorker extends Worker {
             Boolean enabled = parseSmsLogEnabled(enabledPayload);
             if (enabled == null) {
                 Log.w(TAG, "SMS log enabled endpoint returned invalid payload, scheduling retry");
+                RemoteLogger.log(context, Const.LOG_WARN,
+                        "SmsLogUploadWorker: invalid enabled payload='" + enabledPayload + "', retrying");
+                showDebugAlert(context, "SMSLog: invalid enabled payload");
                 return Result.retry();
             }
             if (!enabled) {
+                RemoteLogger.log(context, Const.LOG_INFO, "SmsLogUploadWorker: smslog disabled on server, skipping");
+                showDebugAlert(context, "SMSLog: disabled in server settings");
                 return Result.success();
             }
         } catch (IOException e) {
             Log.e(TAG, "Failed to check smslog enabled status", e);
+            RemoteLogger.log(context, Const.LOG_WARN,
+                    "SmsLogUploadWorker: network error on enabled check: " + e.getMessage());
+            showDebugAlert(context, "SMSLog: enabled check network error");
             return Result.retry();
         }
 
@@ -156,29 +206,13 @@ public class SmsLogUploadWorker extends Worker {
         List<SmsLogRecord> records = new ArrayList<>();
         long maxTimestamp = lastTimestamp;
 
-        String[] projection = {
-                Telephony.Sms.ADDRESS,
-                Telephony.Sms.TYPE,
-                Telephony.Sms.DATE,
-                Telephony.Sms.BODY,
-                Telephony.Sms.PERSON,
-                "sub_id",
-                "subscription_id",
-                "sim_id"
-        };
-
         String selection = Telephony.Sms.DATE + " > ?";
         String[] selectionArgs = {String.valueOf(lastTimestamp)};
         String sortOrder = Telephony.Sms.DATE + " ASC";
 
         Cursor cursor = null;
         try {
-            cursor = context.getContentResolver().query(
-                    Telephony.Sms.CONTENT_URI,
-                    projection,
-                    selection,
-                    selectionArgs,
-                    sortOrder);
+            cursor = querySmsCursor(context, selection, selectionArgs, sortOrder);
 
             if (cursor != null && cursor.moveToFirst()) {
                 int addressIdx = cursor.getColumnIndex(Telephony.Sms.ADDRESS);
@@ -216,6 +250,8 @@ public class SmsLogUploadWorker extends Worker {
             }
         } catch (Exception e) {
             Log.e(TAG, "Error reading sms log", e);
+            RemoteLogger.log(context, Const.LOG_WARN, "SmsLogUploadWorker: SMS scan failed: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+            showDebugAlert(context, "SMSLog: scan failed - " + e.getClass().getSimpleName());
             return Result.failure();
         } finally {
             if (cursor != null) {
@@ -232,6 +268,8 @@ public class SmsLogUploadWorker extends Worker {
                 ", maxTimestamp=" + maxTimestamp);
 
         if (records.isEmpty()) {
+            RemoteLogger.log(context, Const.LOG_DEBUG, "SmsLogUploadWorker: no new SMS records to upload");
+            showDebugAlert(context, "SMSLog: no new SMS found");
             return Result.success();
         }
 
@@ -257,6 +295,7 @@ public class SmsLogUploadWorker extends Worker {
                     Log.w(TAG, "SMS log upload failed for batch [" + start + "," + end + "), HTTP status=" + code);
                     RemoteLogger.log(context, Const.LOG_WARN,
                             "SmsLogUploadWorker: upload failed for batch [" + start + "," + end + "), status=" + code);
+                    showDebugAlert(context, "SMSLog: upload failed HTTP " + code);
                     return Result.retry();
                 }
 
@@ -270,6 +309,7 @@ public class SmsLogUploadWorker extends Worker {
                 Log.e(TAG, "SMS log upload failed for batch [" + start + "," + end + ")", e);
                 RemoteLogger.log(context, Const.LOG_WARN,
                         "SmsLogUploadWorker: network error while uploading batch [" + start + "," + end + "): " + e.getMessage());
+                showDebugAlert(context, "SMSLog: upload network error");
                 return Result.retry();
             }
         }
@@ -278,7 +318,63 @@ public class SmsLogUploadWorker extends Worker {
         Log.i(TAG, "Uploaded " + uploadedCount + " sms log records successfully in batches");
         RemoteLogger.log(context, Const.LOG_INFO,
                 "SmsLogUploadWorker: uploaded " + uploadedCount + " SMS records, new timestamp=" + uploadedMaxTimestamp);
+        showDebugAlert(context, "SMSLog: uploaded " + uploadedCount + " records");
         return Result.success();
+    }
+
+    private static void showDebugAlert(Context context, String text) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                            != PackageManager.PERMISSION_GRANTED) {
+                return;
+            }
+
+            NotificationManager notificationManager =
+                    (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (notificationManager == null) {
+                return;
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                NotificationChannel channel = new NotificationChannel(
+                        DEBUG_CHANNEL_ID,
+                        "SMS Log Debug",
+                        NotificationManager.IMPORTANCE_HIGH);
+                notificationManager.createNotificationChannel(channel);
+            }
+
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(context, DEBUG_CHANNEL_ID)
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentTitle("SMS Log Debug")
+                    .setContentText(text)
+                    .setStyle(new NotificationCompat.BigTextStyle().bigText(text))
+                    .setAutoCancel(true)
+                    .setPriority(NotificationCompat.PRIORITY_HIGH);
+
+            notificationManager.notify(DEBUG_NOTIFICATION_ID, builder.build());
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to show debug alert", e);
+        }
+    }
+
+    private Cursor querySmsCursor(Context context, String selection, String[] selectionArgs, String sortOrder) {
+        try {
+            return context.getContentResolver().query(
+                    Telephony.Sms.CONTENT_URI,
+                    SMS_PROJECTION_WITH_SIM,
+                    selection,
+                    selectionArgs,
+                    sortOrder);
+        } catch (Exception e) {
+            Log.w(TAG, "Primary SMS projection failed, retrying with basic projection", e);
+            return context.getContentResolver().query(
+                    Telephony.Sms.CONTENT_URI,
+                    SMS_PROJECTION_BASIC,
+                    selection,
+                    selectionArgs,
+                    sortOrder);
+        }
     }
 
     private Response<ResponseBody> uploadToAvailableServer(
