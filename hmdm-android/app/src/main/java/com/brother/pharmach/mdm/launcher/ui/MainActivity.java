@@ -188,6 +188,7 @@ public class MainActivity
     private BottomAppListAdapter bottomAppListAdapter;
     private int spanCount;
     private StatusBarUpdater statusBarUpdater = new StatusBarUpdater();
+    private Boolean settingsLockedByWorkTime = null;
 
     private static boolean configInitialized = false;
     // This flag is used to exit kiosk to avoid looping in onResume()
@@ -1722,6 +1723,7 @@ public class MainActivity
             return;
         }
         applyLatePolicies(config);
+        applyWorkTimeSettingsRestriction();
 
         sendDeviceInfoAfterReconfigure();
         scheduleDeviceInfoSending();
@@ -2743,6 +2745,19 @@ public class MainActivity
     public boolean onLongClick( View v ) {
         createAndShowEnterPasswordDialog();
         return true;
+    }
+
+    private void applyWorkTimeSettingsRestriction() {
+        boolean shouldLockSettings = com.brother.pharmach.mdm.launcher.util.WorkTimeManager
+                .getInstance()
+                .shouldLockSettingsNow();
+
+        if (settingsLockedByWorkTime != null && settingsLockedByWorkTime == shouldLockSettings) {
+            return;
+        }
+
+        settingsLockedByWorkTime = shouldLockSettings;
+        Utils.lockPackages(this, Const.SETTINGS_PACKAGE_NAME, shouldLockSettings);
     }
 
     @Override

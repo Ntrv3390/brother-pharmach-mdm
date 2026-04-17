@@ -205,6 +205,17 @@ public class WorkTimeManager {
         }
     }
 
+    /**
+     * Returns true only while WorkTime enforcement is active now (no exception)
+     * and current time is inside configured WorkTime window.
+     */
+    public boolean shouldLockSettingsNow() {
+        if (policy == null) {
+            return false;
+        }
+        return isEnforcementActiveNow() && isCurrentTimeWorkTime();
+    }
+
     private boolean isPackageAllowed(String packageName, List<String> list) {
         if (list == null) return false;
         if (list.contains("*")) return true;
