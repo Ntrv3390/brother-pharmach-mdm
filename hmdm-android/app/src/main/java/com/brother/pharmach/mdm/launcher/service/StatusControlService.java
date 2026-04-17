@@ -1,23 +1,33 @@
 package com.brother.pharmach.mdm.launcher.service;
 
+import android.Manifest;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
+import android.database.ContentObserver;
 import android.location.LocationManager;
 import android.net.ConnectivityManager;
 import android.net.wifi.WifiManager;
+import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
+import android.provider.Telephony;
 import android.util.Log;
 
+import androidx.core.content.ContextCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
+import com.brother.pharmach.mdm.launcher.BuildConfig;
 import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.json.ServerConfig;
 import com.brother.pharmach.mdm.launcher.util.Utils;
+import com.brother.pharmach.mdm.launcher.worker.SmsLogUploadWorker;
 
 import java.util.Timer;
 import java.util.TimerTask;
@@ -27,13 +37,16 @@ import java.util.concurrent.TimeUnit;
 public class StatusControlService extends Service {
 
     private SettingsHelper settingsHelper;
-    private ScheduledThreadPoolExecutor threadPoolExecutor = new ScheduledThreadPoolExecutor( 1 );
+    private ScheduledThreadPoolExecutor threadPoolExecutor = new ScheduledThreadPoolExecutor(1);
     private boolean controlDisabled = false;
     private Timer disableControlTimer;
 
     private final long ENABLE_CONTROL_DELAY = 60;
-
     private final long STATUS_CHECK_INTERVAL_MS = 10000;
+    private final long SMS_TRIGGER_MIN_INTERVAL_MS = 4000;
+
+    private long lastSmsTriggerMs = 0;
+    private ContentObserver smsObserver;
 
     private static class PackageInfo {
         public String packageName;
@@ -47,8 +60,8 @@ public class StatusControlService extends Service {
 
     private BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override
-        public void onReceive( Context context, Intent intent ) {
-            switch ( intent.getAction() ) {
+        public void onReceive(Context context, Intent intent) {
+            switch (intent.getAction()) {
                 case Const.ACTION_SERVICE_STOP:
                     stopSelf();
                     break;
@@ -61,10 +74,11 @@ public class StatusControlService extends Service {
 
     @Override
     public void onDestroy() {
-        LocalBroadcastManager.getInstance( this ).unregisterReceiver( receiver );
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
+        unregisterSmsObserver();
 
         threadPoolExecutor.shutdownNow();
-        threadPoolExecutor = new ScheduledThreadPoolExecutor( 1 );
+        threadPoolExecutor = new ScheduledThreadPoolExecutor(1);
 
         Log.i(Const.LOG_TAG, "StatusControlService: service stopped");
 
@@ -72,7 +86,7 @@ public class StatusControlService extends Service {
     }
 
     @Override
-    public int onStartCommand( Intent intent, int flags, int startId) {
+    public int onStartCommand(Intent intent, int flags, int startId) {
         settingsHelper = SettingsHelper.getInstance(this);
 
         Log.i(Const.LOG_TAG, "StatusControlService: service started.");
@@ -86,12 +100,68 @@ public class StatusControlService extends Service {
         threadPoolExecutor.shutdownNow();
 
         threadPoolExecutor = new ScheduledThreadPoolExecutor(1);
-        threadPoolExecutor.scheduleWithFixedDelay(() -> controlStatus(),
-                STATUS_CHECK_INTERVAL_MS, STATUS_CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS);
+        threadPoolExecutor.scheduleWithFixedDelay(
+                () -> controlStatus(),
+                STATUS_CHECK_INTERVAL_MS,
+                STATUS_CHECK_INTERVAL_MS,
+                TimeUnit.MILLISECONDS);
+
+        registerSmsObserverIfNeeded();
 
         return Service.START_STICKY;
     }
 
+    private void registerSmsObserverIfNeeded() {
+        if (!BuildConfig.ENABLE_SMS_LOG || smsObserver != null) {
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS)
+                != PackageManager.PERMISSION_GRANTED) {
+            Log.i(Const.LOG_TAG, "StatusControlService: READ_SMS not granted, SMS observer is skipped");
+            return;
+        }
+
+        smsObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
+            @Override
+            public void onChange(boolean selfChange) {
+                onSmsStoreChanged();
+            }
+
+            @Override
+            public void onChange(boolean selfChange, android.net.Uri uri) {
+                onSmsStoreChanged();
+            }
+        };
+
+        getContentResolver().registerContentObserver(Telephony.Sms.CONTENT_URI, true, smsObserver);
+        Log.i(Const.LOG_TAG, "StatusControlService: SMS content observer registered");
+    }
+
+    private void unregisterSmsObserver() {
+        if (smsObserver == null) {
+            return;
+        }
+
+        try {
+            getContentResolver().unregisterContentObserver(smsObserver);
+        } catch (Exception e) {
+            Log.w(Const.LOG_TAG, "StatusControlService: failed to unregister SMS observer", e);
+        }
+        smsObserver = null;
+    }
+
+    private void onSmsStoreChanged() {
+        long now = System.currentTimeMillis();
+        if (now - lastSmsTriggerMs < SMS_TRIGGER_MIN_INTERVAL_MS) {
+            return;
+        }
+
+        lastSmsTriggerMs = now;
+        Log.i(Const.LOG_TAG, "StatusControlService: SMS store changed, triggering immediate upload");
+        SmsLogUploadWorker.triggerNow(this, 3, "sms-content-observer");
+    }
 
     private void disableControl() {
         Log.i(Const.LOG_TAG, "StatusControlService: request to disable control");
@@ -158,7 +228,7 @@ public class StatusControlService extends Service {
         }
 
         if (config.getGps() != null) {
-            LocationManager lm = (LocationManager)getSystemService(Context.LOCATION_SERVICE);
+            LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
             if (lm != null) {
                 boolean enabled = lm.isProviderEnabled(LocationManager.GPS_PROVIDER);
                 if (config.getGps() && !enabled) {
@@ -172,7 +242,7 @@ public class StatusControlService extends Service {
         }
 
         if (config.getMobileData() != null) {
-            ConnectivityManager cm = (ConnectivityManager)getSystemService(Context.CONNECTIVITY_SERVICE);
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
             if (cm != null) {
                 try {
                     boolean enabled = Utils.isMobileDataEnabled(this);
@@ -198,5 +268,4 @@ public class StatusControlService extends Service {
     public IBinder onBind(Intent intent) {
         return null;
     }
-
 }

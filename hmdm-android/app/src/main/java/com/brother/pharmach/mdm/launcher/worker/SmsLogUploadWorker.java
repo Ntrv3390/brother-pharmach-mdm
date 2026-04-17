@@ -106,10 +106,16 @@ public class SmsLogUploadWorker extends Worker {
                         .build();
         WorkManager.getInstance(context.getApplicationContext())
                 .enqueueUniquePeriodicWork(WORK_TAG_SMSLOG, ExistingPeriodicWorkPolicy.REPLACE, request);
+        triggerNow(context, 0, "schedule");
+        }
 
-        // Run once immediately so freshly granted permissions do not wait for the periodic window.
+        public static void triggerNow(Context context, long delaySeconds, String source) {
+        long safeDelay = Math.max(0, delaySeconds);
+        RemoteLogger.log(context, Const.LOG_DEBUG,
+            "SmsLogUploadWorker: triggerNow source='" + source + "', delaySeconds=" + safeDelay);
         OneTimeWorkRequest oneTimeRequest =
             new OneTimeWorkRequest.Builder(SmsLogUploadWorker.class)
+                .setInitialDelay(safeDelay, TimeUnit.SECONDS)
                 .addTag(Const.WORK_TAG_COMMON)
                 .build();
         WorkManager.getInstance(context.getApplicationContext())
