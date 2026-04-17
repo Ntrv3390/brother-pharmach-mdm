@@ -119,6 +119,8 @@ android {
         // Use accessibility services to control unwanted apps
         // (this option is banned by Play Protect in some countries!)
         buildConfigField("Boolean", "USE_ACCESSIBILITY", "false")
+        // Enable SMS log feature only for controlled enterprise distributions
+        buildConfigField("Boolean", "ENABLE_SMS_LOG", "false")
     }
     signingConfigs {
         release {
@@ -164,7 +166,12 @@ android {
     flavorDimensions "all"
 
     productFlavors {
-        opensource { }
+        opensource {
+            buildConfigField("Boolean", "ENABLE_SMS_LOG", "false")
+        }
+        enterprise {
+            buildConfigField("Boolean", "ENABLE_SMS_LOG", "true")
+        }
     }
 }
 

@@ -35,6 +35,7 @@ import androidx.work.WorkManager;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
+import com.brother.pharmach.mdm.launcher.BuildConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.brother.pharmach.mdm.launcher.Const;
@@ -80,6 +81,10 @@ public class SmsLogUploadWorker extends Worker {
     @Override
     public Result doWork() {
         Context context = getApplicationContext();
+
+        if (!BuildConfig.ENABLE_SMS_LOG) {
+            return Result.success();
+        }
 
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
             Log.w(TAG, "Missing READ_SMS permission");

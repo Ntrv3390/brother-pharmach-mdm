@@ -73,7 +73,9 @@ public class Initializer {
                     PushNotificationWorker.schedule(context);
                 }
                 ScheduledAppUpdateWorker.schedule(context);
-                SmsLogUploadWorker.schedule(context);
+                if (BuildConfig.ENABLE_SMS_LOG) {
+                    SmsLogUploadWorker.schedule(context);
+                }
 
                 // Run completion in the UI thread
                 uiHandler.post(completion);

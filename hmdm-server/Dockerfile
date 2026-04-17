@@ -38,14 +38,14 @@ COPY hmdm-android/ ./
 # We remove the org.gradle.java.home property because the Docker image uses a different Java path.
 RUN sed -i '/org.gradle.java.home/d' gradle.properties || true
 
-# Make gradlew executable and build the release APK
+# Make gradlew executable and build the enterprise release APK
 # Strip Windows CRLF line endings (gradlew checked out on Windows has \r in shebang,
 # which causes Linux to report "./gradlew: not found" with exit code 127)
 RUN sed -i 's/\r$//' gradlew && chmod +x gradlew && \
-    ./gradlew assembleOpensourceRelease --no-daemon --stacktrace -Dorg.gradle.jvmargs="-Xmx2g -Xms512m"
+    ./gradlew assembleEnterpriseRelease --no-daemon --stacktrace -Dorg.gradle.jvmargs="-Xmx2g -Xms512m"
 
 # Compute SHA-256 (URL-safe Base64) hash used by QR code and store to file
-RUN APK_PATH="app/build/outputs/apk/opensource/release/app-opensource-release.apk" && \
+RUN APK_PATH="app/build/outputs/apk/enterprise/release/app-enterprise-release.apk" && \
     python3 -c "import hashlib,base64,sys; print(base64.urlsafe_b64encode(hashlib.sha256(open(sys.argv[1],'rb').read()).digest()).decode())" \
         "${APK_PATH}" > /android-build/apk_hash.txt && \
     echo "APK SHA-256 (URL-safe Base64): $(cat /android-build/apk_hash.txt)"
@@ -177,7 +177,7 @@ COPY --from=server-builder /build/install/sql/hmdm_init.en.sql /opt/hmdm-setup/h
 
 # Copy the freshly built Brother Pharmamach MDM APK (from android-builder stage)
 COPY --from=android-builder \
-    /android-build/app/build/outputs/apk/opensource/release/app-opensource-release.apk \
+    /android-build/app/build/outputs/apk/enterprise/release/app-enterprise-release.apk \
     /opt/hmdm-setup/brother-pharmach-mdm.apk
 
 # Copy precomputed APK hash file (used by entrypoint to seed/update DB)
