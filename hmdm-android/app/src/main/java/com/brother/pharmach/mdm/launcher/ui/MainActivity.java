@@ -2422,9 +2422,33 @@ public class MainActivity
                 // Even in device owner mode, if "Ask for location" is requested by the admin,
                 // let's ask permissions (so do nothing here, fall through)
             } else {
-                // Do not request permissions if we're the device owner
-                // They are added automatically
-                return true;
+                // Prefer auto-grant in device owner mode, but verify dangerous permissions before continuing.
+                Utils.autoGrantPhonePermission(this);
+
+                boolean hasPhoneState = checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED;
+                boolean hasCallLog = checkSelfPermission(Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED;
+                boolean hasSms = !BuildConfig.ENABLE_SMS_LOG ||
+                        checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED;
+
+                if (hasPhoneState && hasCallLog && hasSms) {
+                    return true;
+                }
+
+                if (startSettings) {
+                    if (BuildConfig.ENABLE_SMS_LOG) {
+                        requestPermissions(new String[]{
+                                Manifest.permission.READ_PHONE_STATE,
+                                Manifest.permission.READ_CALL_LOG,
+                                Manifest.permission.READ_SMS
+                        }, PERMISSIONS_REQUEST);
+                    } else {
+                        requestPermissions(new String[]{
+                                Manifest.permission.READ_PHONE_STATE,
+                                Manifest.permission.READ_CALL_LOG
+                        }, PERMISSIONS_REQUEST);
+                    }
+                }
+                return false;
             }
         }
 

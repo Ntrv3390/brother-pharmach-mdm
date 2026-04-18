@@ -145,7 +145,6 @@ public class SmsLogUploadWorker extends Worker {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
             Log.w(TAG, "Missing READ_SMS permission");
             RemoteLogger.log(context, Const.LOG_WARN, "SmsLogUploadWorker: READ_SMS is not granted, skipping upload");
-            showDebugAlert(context, "SMSLog: READ_SMS missing");
             return Result.success();
         }
 
