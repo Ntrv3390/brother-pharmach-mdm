@@ -79,16 +79,30 @@ public class SmsLogUploadWorker extends Worker {
     private static final String PREF_LAST_SMS_TIMESTAMP = "last_sms_log_timestamp";
     private static final String DEBUG_CHANNEL_ID = "smslog_debug_channel";
     private static final int DEBUG_NOTIFICATION_ID = 9031;
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
-        private static final String[] SMS_PROJECTION_WITH_SIM = {
+        private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+        private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
+        private static final String[] SMS_PROJECTION_WITH_SUB_ID = {
             Telephony.Sms.ADDRESS,
             Telephony.Sms.TYPE,
             Telephony.Sms.DATE,
             Telephony.Sms.BODY,
             Telephony.Sms.PERSON,
-            "sub_id",
-            "subscription_id",
+            "sub_id"
+        };
+        private static final String[] SMS_PROJECTION_WITH_SUBSCRIPTION_ID = {
+            Telephony.Sms.ADDRESS,
+            Telephony.Sms.TYPE,
+            Telephony.Sms.DATE,
+            Telephony.Sms.BODY,
+            Telephony.Sms.PERSON,
+            "subscription_id"
+        };
+        private static final String[] SMS_PROJECTION_WITH_SIM_ID = {
+            Telephony.Sms.ADDRESS,
+            Telephony.Sms.TYPE,
+            Telephony.Sms.DATE,
+            Telephony.Sms.BODY,
+            Telephony.Sms.PERSON,
             "sim_id"
         };
         private static final String[] SMS_PROJECTION_BASIC = {
@@ -378,21 +392,48 @@ public class SmsLogUploadWorker extends Worker {
     }
 
     private Cursor querySmsCursor(Context context, String selection, String[] selectionArgs, String sortOrder) {
+        Cursor cursor = tryQuerySmsCursor(context, SMS_PROJECTION_WITH_SUB_ID, selection, selectionArgs, sortOrder, "sub_id");
+        if (cursor != null) {
+            return cursor;
+        }
+
+        cursor = tryQuerySmsCursor(context, SMS_PROJECTION_WITH_SUBSCRIPTION_ID, selection, selectionArgs, sortOrder, "subscription_id");
+        if (cursor != null) {
+            return cursor;
+        }
+
+        cursor = tryQuerySmsCursor(context, SMS_PROJECTION_WITH_SIM_ID, selection, selectionArgs, sortOrder, "sim_id");
+        if (cursor != null) {
+            return cursor;
+        }
+
+        Log.w(TAG, "All SIM-aware SMS projections failed, retrying with basic projection");
+        return context.getContentResolver().query(
+                Telephony.Sms.CONTENT_URI,
+                SMS_PROJECTION_BASIC,
+                selection,
+                selectionArgs,
+                sortOrder);
+    }
+
+    private Cursor tryQuerySmsCursor(
+            Context context,
+            String[] projection,
+            String selection,
+            String[] selectionArgs,
+            String sortOrder,
+            String projectionName
+    ) {
         try {
             return context.getContentResolver().query(
                     Telephony.Sms.CONTENT_URI,
-                    SMS_PROJECTION_WITH_SIM,
+                    projection,
                     selection,
                     selectionArgs,
                     sortOrder);
         } catch (Exception e) {
-            Log.w(TAG, "Primary SMS projection failed, retrying with basic projection", e);
-            return context.getContentResolver().query(
-                    Telephony.Sms.CONTENT_URI,
-                    SMS_PROJECTION_BASIC,
-                    selection,
-                    selectionArgs,
-                    sortOrder);
+            Log.w(TAG, "SMS projection with " + projectionName + " failed", e);
+            return null;
         }
     }
 
