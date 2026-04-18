@@ -45,6 +45,7 @@ import com.brother.pharmach.mdm.launcher.server.ServerServiceKeeper;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import okhttp3.ResponseBody;
 import retrofit2.Response;
@@ -139,6 +140,8 @@ public class CallLogUploadWorker extends Worker {
                 int subscriptionIdIdx = cursor.getColumnIndex("subscription_id");
                 int simIdIdx = cursor.getColumnIndex("sim_id");
                 int phoneAccountIdIdx = cursor.getColumnIndex(CallLog.Calls.PHONE_ACCOUNT_ID);
+                int phoneAccountAddressIdx = cursor.getColumnIndex("phone_account_address");
+                int phoneAccountComponentNameIdx = cursor.getColumnIndex(CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME);
 
                 do {
                     String number = cursor.getString(numberIdx);
@@ -153,7 +156,15 @@ public class CallLogUploadWorker extends Worker {
                     record.setCallTimestamp(date);
                     record.setDuration(duration);
                     record.setContactName(name);
-                    record.setSimSlot(resolveSimSlot(context, cursor, subIdIdx, subscriptionIdIdx, simIdIdx, phoneAccountIdIdx));
+                        record.setSimSlot(resolveSimSlot(
+                            context,
+                            cursor,
+                            subIdIdx,
+                            subscriptionIdIdx,
+                            simIdIdx,
+                            phoneAccountIdIdx,
+                            phoneAccountAddressIdx,
+                            phoneAccountComponentNameIdx));
 
                     records.add(record);
 
@@ -240,7 +251,9 @@ public class CallLogUploadWorker extends Worker {
             int subIdIdx,
             int subscriptionIdIdx,
             int simIdIdx,
-            int phoneAccountIdIdx
+            int phoneAccountIdIdx,
+            int phoneAccountAddressIdx,
+            int phoneAccountComponentNameIdx
     ) {
         Integer raw = null;
         if (subIdIdx != -1 && !cursor.isNull(subIdIdx)) {
@@ -270,6 +283,22 @@ public class CallLogUploadWorker extends Worker {
             Integer mappedFromAccount = mapPhoneAccountToSimSlot(context, phoneAccountId);
             if (mappedFromAccount != null) {
                 return mappedFromAccount;
+            }
+        }
+
+        if (phoneAccountAddressIdx != -1 && !cursor.isNull(phoneAccountAddressIdx)) {
+            String phoneAccountAddress = cursor.getString(phoneAccountAddressIdx);
+            Integer mappedFromAddress = mapPhoneAccountToSimSlot(context, phoneAccountAddress);
+            if (mappedFromAddress != null) {
+                return mappedFromAddress;
+            }
+        }
+
+        if (phoneAccountComponentNameIdx != -1 && !cursor.isNull(phoneAccountComponentNameIdx)) {
+            String componentName = cursor.getString(phoneAccountComponentNameIdx);
+            Integer mappedFromComponent = inferSlotFromLabel(componentName);
+            if (mappedFromComponent != null) {
+                return mappedFromComponent;
             }
         }
 
@@ -324,6 +353,27 @@ public class CallLogUploadWorker extends Worker {
             return null;
         }
 
+        String normalizedAccountId = phoneAccountId.trim();
+
+        Integer numericAccountId = parseInteger(normalizedAccountId);
+        if (numericAccountId != null) {
+            Integer mappedNumeric = mapSubscriptionIdToSimSlot(context, numericAccountId);
+            if (mappedNumeric != null) {
+                return mappedNumeric;
+            }
+            if (numericAccountId == 0) {
+                return 1;
+            }
+            if (numericAccountId == 1 || numericAccountId == 2) {
+                return numericAccountId;
+            }
+        }
+
+        Integer fromLabel = inferSlotFromLabel(normalizedAccountId);
+        if (fromLabel != null) {
+            return fromLabel;
+        }
+
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
             return null;
         }
@@ -352,9 +402,21 @@ public class CallLogUploadWorker extends Worker {
 
                 String iccId = info.getIccId();
                 String carrierName = info.getCarrierName() != null ? info.getCarrierName().toString() : null;
+                String displayName = info.getDisplayName() != null ? info.getDisplayName().toString() : null;
+                String number = info.getNumber();
 
-                if ((iccId != null && iccId.equalsIgnoreCase(phoneAccountId))
-                        || (carrierName != null && carrierName.equalsIgnoreCase(phoneAccountId))) {
+                if (equalsIgnoreCaseSafe(iccId, normalizedAccountId)
+                        || equalsIgnoreCaseSafe(carrierName, normalizedAccountId)
+                        || equalsIgnoreCaseSafe(displayName, normalizedAccountId)
+                        || phoneNumberLooseMatch(number, normalizedAccountId)) {
+                    int slotIndex = info.getSimSlotIndex();
+                    if (slotIndex >= 0) {
+                        return slotIndex + 1;
+                    }
+                }
+
+                if (phoneNumberLooseMatch(normalizedAccountId, iccId)
+                        || phoneNumberLooseMatch(normalizedAccountId, number)) {
                     int slotIndex = info.getSimSlotIndex();
                     if (slotIndex >= 0) {
                         return slotIndex + 1;
@@ -368,5 +430,62 @@ public class CallLogUploadWorker extends Worker {
         }
 
         return null;
+    }
+
+    private Integer parseInteger(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private Integer inferSlotFromLabel(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String normalized = value.toLowerCase(Locale.US);
+        if (normalized.contains("sim1") || normalized.contains("sim 1") || normalized.contains("slot1") || normalized.contains("slot 1")) {
+            return 1;
+        }
+        if (normalized.contains("sim2") || normalized.contains("sim 2") || normalized.contains("slot2") || normalized.contains("slot 2")) {
+            return 2;
+        }
+        return null;
+    }
+
+    private boolean equalsIgnoreCaseSafe(String a, String b) {
+        return a != null && b != null && a.equalsIgnoreCase(b);
+    }
+
+    private boolean phoneNumberLooseMatch(String a, String b) {
+        String na = normalizeDigits(a);
+        String nb = normalizeDigits(b);
+
+        if (na.isEmpty() || nb.isEmpty()) {
+            return false;
+        }
+
+        if (na.equals(nb)) {
+            return true;
+        }
+
+        return na.endsWith(nb) || nb.endsWith(na);
+    }
+
+    private String normalizeDigits(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            if (Character.isDigit(ch)) {
+                sb.append(ch);
+            }
+        }
+        return sb.toString();
     }
 }
