@@ -45,6 +45,26 @@
 
 
     <!-- ========================================================= -->
+    <!-- Add SIM slot column for call logs                        -->
+    <!-- ========================================================= -->
+    <changeSet id="calllog-add-callsimslot" author="calllog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="plugin_calllog_data"/>
+            <not>
+                <columnExists tableName="plugin_calllog_data" columnName="callsimslot"/>
+            </not>
+        </preConditions>
+
+        <sql>
+            ALTER TABLE plugin_calllog_data ADD COLUMN callsimslot INT;
+            CREATE INDEX IF NOT EXISTS idx_calllog_simslot ON plugin_calllog_data (callsimslot);
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
     <!-- Create settings table                                    -->
     <!-- ========================================================= -->
     <changeSet id="calllog-create-settings-table" author="calllog-plugin">

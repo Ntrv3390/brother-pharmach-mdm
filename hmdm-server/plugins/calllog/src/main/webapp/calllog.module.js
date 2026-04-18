@@ -89,8 +89,13 @@ angular.module('headwind-kiosk')
             { value: 5, label: 'Rejected' },
             { value: 6, label: 'Blocked' }
         ];
+        $scope.availableSimSlots = [
+            { value: '', label: 'All SIMs' },
+            { value: 1, label: 'SIM 1' },
+            { value: 2, label: 'SIM 2' }
+        ];
         // Use object (dot notation) so ng-if child scopes don't shadow these
-        $scope.filters = { type: '', search: '' };
+        $scope.filters = { type: '', simSlot: '', search: '' };
 
         $scope.pagination = {
             page: 0,
@@ -131,6 +136,13 @@ angular.module('headwind-kiosk')
             return date.toLocaleString();
         };
 
+        $scope.getSimLabel = function (simSlot) {
+            if (simSlot === null || simSlot === undefined || simSlot === '') {
+                return 'Unknown';
+            }
+            return 'SIM ' + simSlot;
+        };
+
         $scope.applyFilter = function () {
             $scope.rebuildFiltered();
         };
@@ -145,6 +157,9 @@ angular.module('headwind-kiosk')
                     // cast both to int for safe comparison
                     if (parseInt(log.callType) !== parseInt(typeFilter)) return false;
                 }
+                if ($scope.filters.simSlot !== null && $scope.filters.simSlot !== undefined && $scope.filters.simSlot !== '') {
+                    if (parseInt(log.simSlot) !== parseInt($scope.filters.simSlot)) return false;
+                }
                 if (q) {
                     var okPhone = (log.phoneNumber || '').toLowerCase().indexOf(q) !== -1;
                     var okName  = (log.contactName  || '').toLowerCase().indexOf(q) !== -1;
@@ -156,6 +171,7 @@ angular.module('headwind-kiosk')
 
         // $watch as a backup (works because filters is a dot-notation object on the parent scope)
         $scope.$watch('filters.type',   function () { $scope.rebuildFiltered(); });
+        $scope.$watch('filters.simSlot', function () { $scope.rebuildFiltered(); });
         $scope.$watch('filters.search', function () { $scope.rebuildFiltered(); });
 
         $scope.loadCallLogs = function () {
@@ -163,7 +179,10 @@ angular.module('headwind-kiosk')
             pluginCallLogService.getCallLogs({
                 deviceId: device.id,
                 page: $scope.pagination.page,
-                pageSize: $scope.pagination.pageSize
+                pageSize: $scope.pagination.pageSize,
+                callType: $scope.filters.type || undefined,
+                simSlot: $scope.filters.simSlot || undefined,
+                search: ($scope.filters.search || '').trim() || undefined
             }, function (response) {
                 $scope.loading = false;
                 if (response.status === 'OK' && response.data) {

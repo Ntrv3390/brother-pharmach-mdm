@@ -69,6 +69,7 @@ public class CallLogResource {
             @ApiParam("Page number (0-based)") @QueryParam("page") @DefaultValue("0") int page,
             @ApiParam("Page size") @QueryParam("pageSize") @DefaultValue("50") int pageSize,
             @ApiParam("Filter by call type (1=incoming,2=outgoing,3=missed,...)") @QueryParam("callType") Integer callType,
+            @ApiParam("Filter by SIM slot (1 or 2)") @QueryParam("simSlot") Integer simSlot,
             @ApiParam("Search by phone number or contact name") @QueryParam("search") @DefaultValue("") String search
     ) {
         if (!checkPermission()) {
@@ -96,8 +97,8 @@ public class CallLogResource {
         List<CallLogRecord> logs;
         int total;
         try {
-            logs = callLogDAO.getCallLogsByDevicePagedFiltered(deviceId, customerId, callType, search, pageSize, offset);
-            total = callLogDAO.getCallLogsCountByDeviceFiltered(deviceId, customerId, callType, search);
+            logs = callLogDAO.getCallLogsByDevicePagedFiltered(deviceId, customerId, callType, simSlot, search, pageSize, offset);
+            total = callLogDAO.getCallLogsCountByDeviceFiltered(deviceId, customerId, callType, simSlot, search);
         } catch (Exception e) {
             log.error("Failed to load call logs for device {} and customer {}", deviceId, customerId, e);
             return Response.ERROR("plugin.calllog.error.backend.not.ready");

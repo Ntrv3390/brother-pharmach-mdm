@@ -53,12 +53,13 @@ public class CallLogPostgresDAO implements CallLogDAO {
 
     @Override
     public List<CallLogRecord> getCallLogsByDevicePagedFiltered(int deviceId, int customerId,
-                                                                 Integer callType, String search,
+                                                                 Integer callType, Integer simSlot, String search,
                                                                  int limit, int offset) {
         Map<String, Object> params = new HashMap<>();
         params.put("deviceId", deviceId);
         params.put("customerId", customerId);
         params.put("callType", callType);
+        params.put("simSlot", simSlot);
         params.put("search", (search != null && !search.trim().isEmpty()) ? search.trim() : null);
         params.put("limit", limit);
         params.put("offset", offset);
@@ -71,11 +72,12 @@ public class CallLogPostgresDAO implements CallLogDAO {
     }
 
     @Override
-    public int getCallLogsCountByDeviceFiltered(int deviceId, int customerId, Integer callType, String search) {
+    public int getCallLogsCountByDeviceFiltered(int deviceId, int customerId, Integer callType, Integer simSlot, String search) {
         Map<String, Object> params = new HashMap<>();
         params.put("deviceId", deviceId);
         params.put("customerId", customerId);
         params.put("callType", callType);
+        params.put("simSlot", simSlot);
         params.put("search", (search != null && !search.trim().isEmpty()) ? search.trim() : null);
         return mapper.getCallLogsCountByDeviceFiltered(params);
     }

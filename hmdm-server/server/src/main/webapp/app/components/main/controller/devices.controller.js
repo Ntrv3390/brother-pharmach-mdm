@@ -1022,16 +1022,16 @@ angular.module('headwind-kiosk')
                         useMockData = true;
                         // Mock data from database for testing
                         var mockCallLogs = [
-                            {id: 1, deviceId: device.id, phoneNumber: '+1-555-1234', contactName: 'John Doe', callType: 1, duration: 180, callTimestamp: 1707484800000, callDate: '2024-02-09 10:00:00'},
-                            {id: 2, deviceId: device.id, phoneNumber: '+1-555-5678', contactName: 'Jane Smith', callType: 2, duration: 240, callTimestamp: 1707488400000, callDate: '2024-02-09 11:00:00'},
-                            {id: 3, deviceId: device.id, phoneNumber: '+1-555-9012', contactName: 'Bob Johnson', callType: 3, duration: 0, callTimestamp: 1707492000000, callDate: '2024-02-09 12:00:00'},
-                            {id: 4, deviceId: device.id, phoneNumber: '+1-555-3456', contactName: 'Alice Williams', callType: 1, duration: 120, callTimestamp: 1707495600000, callDate: '2024-02-09 13:00:00'},
-                            {id: 5, deviceId: device.id, phoneNumber: '+1-555-7890', contactName: 'Charlie Brown', callType: 2, duration: 300, callTimestamp: 1707499200000, callDate: '2024-02-09 14:00:00'},
-                            {id: 6, deviceId: device.id, phoneNumber: '+1-555-2468', contactName: 'Diana Prince', callType: 4, duration: 0, callTimestamp: 1707502800000, callDate: '2024-02-09 15:00:00'},
-                            {id: 7, deviceId: device.id, phoneNumber: '+1-555-1357', contactName: 'Eve Anderson', callType: 1, duration: 90, callTimestamp: 1707506400000, callDate: '2024-02-09 16:00:00'},
-                            {id: 8, deviceId: device.id, phoneNumber: '+1-555-8642', contactName: 'Frank Miller', callType: 2, duration: 456, callTimestamp: 1707510000000, callDate: '2024-02-09 17:00:00'},
-                            {id: 9, deviceId: device.id, phoneNumber: '+1-555-9753', contactName: 'Grace Lee', callType: 1, duration: 234, callTimestamp: 1707513600000, callDate: '2024-02-09 18:00:00'},
-                            {id: 10, deviceId: device.id, phoneNumber: '+1-555-1472', contactName: 'Henry Wilson', callType: 3, duration: 0, callTimestamp: 1707517200000, callDate: '2024-02-09 19:00:00'}
+                            {id: 1, deviceId: device.id, phoneNumber: '+1-555-1234', contactName: 'John Doe', callType: 1, duration: 180, simSlot: 1, callTimestamp: 1707484800000, callDate: '2024-02-09 10:00:00'},
+                            {id: 2, deviceId: device.id, phoneNumber: '+1-555-5678', contactName: 'Jane Smith', callType: 2, duration: 240, simSlot: 2, callTimestamp: 1707488400000, callDate: '2024-02-09 11:00:00'},
+                            {id: 3, deviceId: device.id, phoneNumber: '+1-555-9012', contactName: 'Bob Johnson', callType: 3, duration: 0, simSlot: null, callTimestamp: 1707492000000, callDate: '2024-02-09 12:00:00'},
+                            {id: 4, deviceId: device.id, phoneNumber: '+1-555-3456', contactName: 'Alice Williams', callType: 1, duration: 120, simSlot: 1, callTimestamp: 1707495600000, callDate: '2024-02-09 13:00:00'},
+                            {id: 5, deviceId: device.id, phoneNumber: '+1-555-7890', contactName: 'Charlie Brown', callType: 2, duration: 300, simSlot: 2, callTimestamp: 1707499200000, callDate: '2024-02-09 14:00:00'},
+                            {id: 6, deviceId: device.id, phoneNumber: '+1-555-2468', contactName: 'Diana Prince', callType: 4, duration: 0, simSlot: null, callTimestamp: 1707502800000, callDate: '2024-02-09 15:00:00'},
+                            {id: 7, deviceId: device.id, phoneNumber: '+1-555-1357', contactName: 'Eve Anderson', callType: 1, duration: 90, simSlot: 1, callTimestamp: 1707506400000, callDate: '2024-02-09 16:00:00'},
+                            {id: 8, deviceId: device.id, phoneNumber: '+1-555-8642', contactName: 'Frank Miller', callType: 2, duration: 456, simSlot: 2, callTimestamp: 1707510000000, callDate: '2024-02-09 17:00:00'},
+                            {id: 9, deviceId: device.id, phoneNumber: '+1-555-9753', contactName: 'Grace Lee', callType: 1, duration: 234, simSlot: 1, callTimestamp: 1707513600000, callDate: '2024-02-09 18:00:00'},
+                            {id: 10, deviceId: device.id, phoneNumber: '+1-555-1472', contactName: 'Henry Wilson', callType: 3, duration: 0, simSlot: null, callTimestamp: 1707517200000, callDate: '2024-02-09 19:00:00'}
                         ];
                     }
                     
@@ -1046,7 +1046,12 @@ angular.module('headwind-kiosk')
                         {value: 5, label: 'Rejected'},
                         {value: 6, label: 'Blocked'}
                     ];
-                    $scope.filters = { type: '', search: '' };
+                    $scope.availableSimSlots = [
+                        {value: '', label: 'All SIMs'},
+                        {value: 1, label: 'SIM 1'},
+                        {value: 2, label: 'SIM 2'}
+                    ];
+                    $scope.filters = { type: '', simSlot: '', search: '' };
                     $scope.pagination = {
                         page: 0,
                         pageSize: 50,
@@ -1082,6 +1087,13 @@ angular.module('headwind-kiosk')
                         }
                     };
 
+                    $scope.getSimLabel = function (simSlot) {
+                        if (simSlot === null || simSlot === undefined || simSlot === '') {
+                            return 'Unknown';
+                        }
+                        return 'SIM ' + simSlot;
+                    };
+
                     $scope.formatDuration = function (seconds) {
                         if (seconds === 0) return '0s';
                         var hours = Math.floor(seconds / 3600);
@@ -1111,6 +1123,9 @@ angular.module('headwind-kiosk')
                         if ($scope.filters.type !== '' && $scope.filters.type !== null && $scope.filters.type !== undefined) {
                             params.callType = $scope.filters.type;
                         }
+                        if ($scope.filters.simSlot !== '' && $scope.filters.simSlot !== null && $scope.filters.simSlot !== undefined) {
+                            params.simSlot = $scope.filters.simSlot;
+                        }
                         if ($scope.filters.search && $scope.filters.search.trim() !== '') {
                             params.search = $scope.filters.search.trim();
                         }
@@ -1137,7 +1152,7 @@ angular.module('headwind-kiosk')
                         pluginCallLogService.deleteCallLogs({deviceId: device.id}, function (response) {
                             $scope.loading = false;
                             if (response.status === 'OK') {
-                                $scope.filters = { type: '', search: '' };
+                                $scope.filters = { type: '', simSlot: '', search: '' };
                                 $scope.availableTypes = [
                                     {value: '', label: 'All Types'},
                                     {value: 1, label: 'Incoming'},
@@ -1145,6 +1160,11 @@ angular.module('headwind-kiosk')
                                     {value: 3, label: 'Missed'},
                                     {value: 5, label: 'Rejected'},
                                     {value: 6, label: 'Blocked'}
+                                ];
+                                $scope.availableSimSlots = [
+                                    {value: '', label: 'All SIMs'},
+                                    {value: 1, label: 'SIM 1'},
+                                    {value: 2, label: 'SIM 2'}
                                 ];
                                 $scope.pagination.page = 0;
                                 $scope.loadCallLogs();

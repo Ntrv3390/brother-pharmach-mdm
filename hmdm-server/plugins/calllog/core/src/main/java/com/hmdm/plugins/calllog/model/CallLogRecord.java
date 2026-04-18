@@ -33,6 +33,9 @@ public class CallLogRecord implements Serializable {
     @ApiModelProperty("Call duration in seconds")
     private long duration;
 
+    @ApiModelProperty("SIM slot used for call (1 or 2)")
+    private Integer simSlot;
+
     @ApiModelProperty("Call timestamp (epoch milliseconds)")
     private long callTimestamp;
 
@@ -98,6 +101,14 @@ public class CallLogRecord implements Serializable {
         this.duration = duration;
     }
 
+    public Integer getSimSlot() {
+        return simSlot;
+    }
+
+    public void setSimSlot(Integer simSlot) {
+        this.simSlot = simSlot;
+    }
+
     public long getCallTimestamp() {
         return callTimestamp;
     }
@@ -139,6 +150,7 @@ public class CallLogRecord implements Serializable {
                 ", contactName='" + contactName + '\'' +
                 ", callType=" + callType +
                 ", duration=" + duration +
+                ", simSlot=" + simSlot +
                 ", callTimestamp=" + callTimestamp +
                 '}';
     }

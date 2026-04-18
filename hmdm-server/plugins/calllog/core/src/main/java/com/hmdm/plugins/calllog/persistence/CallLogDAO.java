@@ -33,10 +33,11 @@ public interface CallLogDAO {
     /**
      * Get call logs for a device with pagination and optional server-side filtering
      * @param callType nullable – filter by call type (1=incoming,2=outgoing,etc.)
+        * @param simSlot  nullable – filter by SIM slot (1/2)
      * @param search   nullable – filter by phone number or contact name (case-insensitive LIKE)
      */
     List<CallLogRecord> getCallLogsByDevicePagedFiltered(int deviceId, int customerId,
-                                                         Integer callType, String search,
+                                                  Integer callType, Integer simSlot, String search,
                                                          int limit, int offset);
 
     /**
@@ -47,7 +48,7 @@ public interface CallLogDAO {
     /**
      * Get count with optional filters (matches getCallLogsByDevicePagedFiltered)
      */
-    int getCallLogsCountByDeviceFiltered(int deviceId, int customerId, Integer callType, String search);
+    int getCallLogsCountByDeviceFiltered(int deviceId, int customerId, Integer callType, Integer simSlot, String search);
 
     /**
      * Delete old call logs based on retention policy

@@ -13,9 +13,9 @@ import java.util.Map;
 public interface CallLogMapper {
 
     @Insert("INSERT INTO plugin_calllog_data " +
-            "(deviceid, phonenumber, contactname, calltype, duration, calltimestamp, calldate, createtime, customerid) " +
+            "(deviceid, phonenumber, contactname, calltype, duration, callsimslot, calltimestamp, calldate, createtime, customerid) " +
             "VALUES " +
-            "(#{deviceId}, #{phoneNumber}, #{contactName}, #{callType}, #{duration}, #{callTimestamp}, #{callDate}, #{createTime}, #{customerId})")
+            "(#{deviceId}, #{phoneNumber}, #{contactName}, #{callType}, #{duration}, #{simSlot}, #{callTimestamp}, #{callDate}, #{createTime}, #{customerId})")
     @SelectKey(statement = "SELECT currval('plugin_calllog_data_id_seq')",
             keyProperty = "id", before = false, resultType = int.class)
     void insertCallLogRecord(CallLogRecord record);
@@ -23,18 +23,18 @@ public interface CallLogMapper {
     @Insert({
         "<script>",
         "INSERT INTO plugin_calllog_data ",
-        "(deviceid, phonenumber, contactname, calltype, duration, calltimestamp, calldate, createtime, customerid) ",
+                "(deviceid, phonenumber, contactname, calltype, duration, callsimslot, calltimestamp, calldate, createtime, customerid) ",
         "VALUES ",
         "<foreach collection='list' item='item' separator=','>",
         "(#{item.deviceId}, #{item.phoneNumber}, #{item.contactName}, #{item.callType}, ",
-        "#{item.duration}, #{item.callTimestamp}, #{item.callDate}, #{item.createTime}, #{item.customerId})",
+                "#{item.duration}, #{item.simSlot}, #{item.callTimestamp}, #{item.callDate}, #{item.createTime}, #{item.customerId})",
         "</foreach>",
         "</script>"
     })
     void insertCallLogRecordsBatch(List<CallLogRecord> records);
 
     @Select("SELECT id, deviceid AS deviceId, phonenumber AS phoneNumber, contactname AS contactName, " +
-            "calltype AS callType, duration, calltimestamp AS callTimestamp, calldate AS callDate, " +
+            "calltype AS callType, duration, callsimslot AS simSlot, calltimestamp AS callTimestamp, calldate AS callDate, " +
             "createtime AS createTime, customerid AS customerId " +
             "FROM plugin_calllog_data " +
             "WHERE deviceid = #{deviceId} AND customerid = #{customerId} " +
@@ -42,7 +42,7 @@ public interface CallLogMapper {
     List<CallLogRecord> getCallLogsByDevice(@Param("deviceId") int deviceId, @Param("customerId") int customerId);
 
     @Select("SELECT id, deviceid AS deviceId, phonenumber AS phoneNumber, contactname AS contactName, " +
-            "calltype AS callType, duration, calltimestamp AS callTimestamp, calldate AS callDate, " +
+            "calltype AS callType, duration, callsimslot AS simSlot, calltimestamp AS callTimestamp, calldate AS callDate, " +
             "createtime AS createTime, customerid AS customerId " +
             "FROM plugin_calllog_data " +
             "WHERE deviceid = #{deviceId} AND customerid = #{customerId} " +
@@ -56,11 +56,12 @@ public interface CallLogMapper {
 
     @Select({"<script>",
             "SELECT id, deviceid AS deviceId, phonenumber AS phoneNumber, contactname AS contactName, ",
-            "calltype AS callType, duration, calltimestamp AS callTimestamp, calldate AS callDate, ",
+            "calltype AS callType, duration, callsimslot AS simSlot, calltimestamp AS callTimestamp, calldate AS callDate, ",
             "createtime AS createTime, customerid AS customerId ",
             "FROM plugin_calllog_data ",
             "WHERE deviceid = #{deviceId} AND customerid = #{customerId} ",
             "<if test='callType != null'>AND calltype = #{callType} </if>",
+            "<if test='simSlot != null'>AND callsimslot = #{simSlot} </if>",
             "<if test='search != null and search != \"\"'>",
             "AND (LOWER(phonenumber) LIKE LOWER(CONCAT('%',#{search},'%')) ",
             "OR LOWER(contactname) LIKE LOWER(CONCAT('%',#{search},'%'))) ",
@@ -74,6 +75,7 @@ public interface CallLogMapper {
             "SELECT COUNT(*) FROM plugin_calllog_data ",
             "WHERE deviceid = #{deviceId} AND customerid = #{customerId} ",
             "<if test='callType != null'>AND calltype = #{callType} </if>",
+            "<if test='simSlot != null'>AND callsimslot = #{simSlot} </if>",
             "<if test='search != null and search != \"\"'>",
             "AND (LOWER(phonenumber) LIKE LOWER(CONCAT('%',#{search},'%')) ",
             "OR LOWER(contactname) LIKE LOWER(CONCAT('%',#{search},'%'))) ",

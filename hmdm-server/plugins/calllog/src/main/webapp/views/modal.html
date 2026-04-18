@@ -201,6 +201,11 @@
             ng-options="t.value as t.label for t in availableTypes"
             ng-change="applyFilter()">
           </select>
+          <select class="form-control" style="width: auto; min-width: 120px;"
+            ng-model="filters.simSlot"
+            ng-options="s.value as s.label for s in availableSimSlots"
+            ng-change="applyFilter()">
+          </select>
           <input
             type="text"
             class="form-control"
@@ -217,6 +222,7 @@
               <tr>
                 <th localized>plugin.calllog.table.date</th>
                 <th localized>plugin.calllog.table.type</th>
+                <th>SIM</th>
                 <th localized>plugin.calllog.table.number</th>
                 <th localized>plugin.calllog.table.contact</th>
                 <th localized>plugin.calllog.table.duration</th>
@@ -237,6 +243,7 @@
                     {{getCallTypeName(log.callType)}}
                   </span>
                 </td>
+                <td>{{getSimLabel(log.simSlot)}}</td>
                 <td>{{log.phoneNumber || 'N/A'}}</td>
                 <td>{{log.contactName || '-'}}</td>
                 <td>{{formatDuration(log.duration)}}</td>
