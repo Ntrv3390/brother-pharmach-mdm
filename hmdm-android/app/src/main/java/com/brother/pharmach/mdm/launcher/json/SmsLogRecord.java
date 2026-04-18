@@ -26,7 +26,6 @@ public class SmsLogRecord {
     private String phoneNumber;
     private String contactName;
     private int messageType;
-    private String messageBody;
     private Integer simSlot;
     private long smsTimestamp;
     private String smsDate;
@@ -56,14 +55,6 @@ public class SmsLogRecord {
 
     public void setMessageType(int messageType) {
         this.messageType = messageType;
-    }
-
-    public String getMessageBody() {
-        return messageBody;
-    }
-
-    public void setMessageBody(String messageBody) {
-        this.messageBody = messageBody;
     }
 
     public Integer getSimSlot() {

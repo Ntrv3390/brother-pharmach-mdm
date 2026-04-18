@@ -49,6 +49,23 @@
 
 
     <!-- ========================================================= -->
+    <!-- Remove SMS message body column                            -->
+    <!-- ========================================================= -->
+    <changeSet id="smslog-drop-messagebody" author="smslog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="plugin_smslog_data"/>
+            <columnExists tableName="plugin_smslog_data" columnName="messagebody"/>
+        </preConditions>
+
+        <sql>
+            ALTER TABLE plugin_smslog_data DROP COLUMN messagebody;
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
     <!-- Create settings table                                    -->
     <!-- ========================================================= -->
     <changeSet id="smslog-create-settings-table" author="smslog-plugin">

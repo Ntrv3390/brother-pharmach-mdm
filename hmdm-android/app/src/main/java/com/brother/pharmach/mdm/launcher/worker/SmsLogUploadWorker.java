@@ -85,7 +85,6 @@ public class SmsLogUploadWorker extends Worker {
             Telephony.Sms.ADDRESS,
             Telephony.Sms.TYPE,
             Telephony.Sms.DATE,
-            Telephony.Sms.BODY,
             Telephony.Sms.PERSON,
             "sub_id"
         };
@@ -93,7 +92,6 @@ public class SmsLogUploadWorker extends Worker {
             Telephony.Sms.ADDRESS,
             Telephony.Sms.TYPE,
             Telephony.Sms.DATE,
-            Telephony.Sms.BODY,
             Telephony.Sms.PERSON,
             "subscription_id"
         };
@@ -101,7 +99,6 @@ public class SmsLogUploadWorker extends Worker {
             Telephony.Sms.ADDRESS,
             Telephony.Sms.TYPE,
             Telephony.Sms.DATE,
-            Telephony.Sms.BODY,
             Telephony.Sms.PERSON,
             "sim_id"
         };
@@ -109,7 +106,6 @@ public class SmsLogUploadWorker extends Worker {
             Telephony.Sms.ADDRESS,
             Telephony.Sms.TYPE,
             Telephony.Sms.DATE,
-            Telephony.Sms.BODY,
             Telephony.Sms.PERSON
         };
 
@@ -252,7 +248,6 @@ public class SmsLogUploadWorker extends Worker {
                 int addressIdx = cursor.getColumnIndex(Telephony.Sms.ADDRESS);
                 int typeIdx = cursor.getColumnIndex(Telephony.Sms.TYPE);
                 int dateIdx = cursor.getColumnIndex(Telephony.Sms.DATE);
-                int bodyIdx = cursor.getColumnIndex(Telephony.Sms.BODY);
                 int subIdIdx = cursor.getColumnIndex("sub_id");
                 int subscriptionIdIdx = cursor.getColumnIndex("subscription_id");
                 int simIdIdx = cursor.getColumnIndex("sim_id");
@@ -271,7 +266,6 @@ public class SmsLogUploadWorker extends Worker {
                     record.setPhoneNumber(phoneNumber);
                     record.setContactName(resolveContactName(context, phoneNumber, contactNameCache));
                     record.setMessageType(messageType);
-                    record.setMessageBody(bodyIdx != -1 ? cursor.getString(bodyIdx) : null);
                     record.setSmsTimestamp(timestamp);
                     record.setSmsDate(DATE_FORMAT.format(new Date(timestamp)));
                     record.setSimSlot(resolveSimSlot(context, cursor, subIdIdx, subscriptionIdIdx, simIdIdx));

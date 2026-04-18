@@ -81,16 +81,20 @@ angular.module('headwind-kiosk')
         $scope.loading = true;
         $scope.callLogs = [];
         $scope.filteredLogs = [];
-        $scope.availableTypes = [];
+        $scope.availableTypes = [
+            { value: '', label: 'All Types' },
+            { value: 1, label: 'Incoming' },
+            { value: 2, label: 'Outgoing' },
+            { value: 3, label: 'Missed' },
+            { value: 5, label: 'Rejected' },
+            { value: 6, label: 'Blocked' }
+        ];
         // Use object (dot notation) so ng-if child scopes don't shadow these
         $scope.filters = { type: '', search: '' };
 
-        // Hardcoded labels – avoids localization timing issues in the $resource callback
-        var CALL_TYPE_LABELS = { 1: 'Incoming', 2: 'Outgoing', 3: 'Missed', 4: 'Rejected', 5: 'Rejected', 6: 'Blocked' };
-
         $scope.pagination = {
             page: 0,
-            pageSize: 1000,  // load all records for client-side filtering
+            pageSize: 50,
             total: 0
         };
 
@@ -127,6 +131,10 @@ angular.module('headwind-kiosk')
             return date.toLocaleString();
         };
 
+        $scope.applyFilter = function () {
+            $scope.rebuildFiltered();
+        };
+
         // Exposed on $scope so ng-change can call it directly (avoids ng-if child-scope watch issues)
         $scope.rebuildFiltered = function () {
             var typeFilter = $scope.filters.type;
@@ -161,17 +169,6 @@ angular.module('headwind-kiosk')
                 if (response.status === 'OK' && response.data) {
                     $scope.callLogs = response.data.items || [];
                     $scope.pagination.total = response.data.total || 0;
-                    // Build type dropdown using hardcoded labels (no localization dependency)
-                    var typeSet = {};
-                    $scope.callLogs.forEach(function (log) {
-                        if (log.callType !== undefined && log.callType !== null) {
-                            typeSet[log.callType] = true;
-                        }
-                    });
-                    $scope.availableTypes = Object.keys(typeSet).map(function (k) {
-                        var v = parseInt(k);
-                        return { value: v, label: CALL_TYPE_LABELS[v] || ('Type ' + k) };
-                    }).sort(function (a, b) { return a.value - b.value; });
                     $scope.rebuildFiltered();
                 }
             }, function (error) {

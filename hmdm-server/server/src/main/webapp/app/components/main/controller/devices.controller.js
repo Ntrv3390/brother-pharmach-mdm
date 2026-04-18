@@ -1038,15 +1038,20 @@ angular.module('headwind-kiosk')
                     $scope.device = device;
                     $scope.loading = true;
                     $scope.callLogs = [];
-                    $scope.availableTypes = [];
+                    $scope.availableTypes = [
+                        {value: '', label: 'All Types'},
+                        {value: 1, label: 'Incoming'},
+                        {value: 2, label: 'Outgoing'},
+                        {value: 3, label: 'Missed'},
+                        {value: 5, label: 'Rejected'},
+                        {value: 6, label: 'Blocked'}
+                    ];
                     $scope.filters = { type: '', search: '' };
                     $scope.pagination = {
                         page: 0,
-                        pageSize: 1000,
+                        pageSize: 50,
                         total: 0
                     };
-
-                    var CALL_TYPE_LABELS = {1:'Incoming',2:'Outgoing',3:'Missed',4:'Rejected',5:'Rejected',6:'Blocked'};
 
                     // Called by ng-change on the type dropdown (instant)
                     $scope.applyFilter = function () {
@@ -1115,19 +1120,6 @@ angular.module('headwind-kiosk')
                             if (response.status === 'OK') {
                                 $scope.callLogs = response.data.items || [];
                                 $scope.pagination.total = response.data.total || 0;
-                                // Populate type dropdown from full unfiltered result only on first load
-                                if ($scope.availableTypes.length === 0) {
-                                    var typeSet = {};
-                                    $scope.callLogs.forEach(function (log) {
-                                        if (log.callType !== undefined) typeSet[log.callType] = true;
-                                    });
-                                    $scope.availableTypes = [{value: '', label: 'All Types'}].concat(
-                                    Object.keys(typeSet).map(function (k) {
-                                        var v = parseInt(k);
-                                        return {value: v, label: CALL_TYPE_LABELS[v] || ('Type ' + k)};
-                                    }).sort(function (a, b) { return a.value - b.value; })
-                                );
-                                }
                             } else {
                                 $scope.errorMessage = response.message || 'Failed to load call logs';
                             }
@@ -1146,7 +1138,14 @@ angular.module('headwind-kiosk')
                             $scope.loading = false;
                             if (response.status === 'OK') {
                                 $scope.filters = { type: '', search: '' };
-                                $scope.availableTypes = [];
+                                $scope.availableTypes = [
+                                    {value: '', label: 'All Types'},
+                                    {value: 1, label: 'Incoming'},
+                                    {value: 2, label: 'Outgoing'},
+                                    {value: 3, label: 'Missed'},
+                                    {value: 5, label: 'Rejected'},
+                                    {value: 6, label: 'Blocked'}
+                                ];
                                 $scope.pagination.page = 0;
                                 $scope.loadCallLogs();
                             } else {

@@ -70,7 +70,7 @@ public class SmsLogResource {
             @ApiParam("Page size") @QueryParam("pageSize") @DefaultValue("50") int pageSize,
             @ApiParam("Filter by message type (1=incoming,2=outgoing)") @QueryParam("messageType") Integer messageType,
             @ApiParam("Filter by SIM slot (1 or 2)") @QueryParam("simSlot") Integer simSlot,
-            @ApiParam("Search by phone number, contact name or message text") @QueryParam("search") @DefaultValue("") String search
+                @ApiParam("Search by phone number or contact name") @QueryParam("search") @DefaultValue("") String search
     ) {
         if (!checkPermission()) {
             log.error("Unauthorized attempt to access SMS logs");

@@ -200,20 +200,18 @@
             ng-model="filters.messageType"
             ng-options="t.value as t.label for t in availableMessageTypes"
             ng-change="applyFilter()">
-            <option value="" localized>plugin.smslog.filter.all.types</option>
           </select>
           <select class="form-control" style="width: auto; min-width: 120px;"
             ng-model="filters.simSlot"
             ng-options="s.value as s.label for s in availableSimSlots"
             ng-change="applyFilter()">
-            <option value="" localized>plugin.smslog.filter.all.sims</option>
           </select>
           <input
             type="text"
             class="form-control"
             style="flex: 1; min-width: 220px;"
             ng-model="filters.search"
-            placeholder="Search by name, phone or message text"
+            placeholder="Search by name or phone number"
           />
         </div>
 
@@ -227,7 +225,6 @@
                 <th localized>plugin.smslog.table.sim</th>
                 <th localized>plugin.smslog.table.number</th>
                 <th localized>plugin.smslog.table.contact</th>
-                <th localized>plugin.smslog.table.message</th>
               </tr>
             </thead>
             <tbody>
@@ -247,7 +244,6 @@
                 <td>{{getSimLabel(log.simSlot)}}</td>
                 <td>{{log.phoneNumber || 'N/A'}}</td>
                 <td>{{log.contactName || '-'}}</td>
-                <td>{{log.messageBody || '-'}}</td>
               </tr>
             </tbody>
           </table>

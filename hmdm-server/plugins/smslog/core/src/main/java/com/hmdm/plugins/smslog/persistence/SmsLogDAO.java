@@ -34,7 +34,7 @@ public interface SmsLogDAO {
     * Get SMS logs for a device with pagination and optional server-side filtering
     * @param messageType nullable - filter by message type (1=incoming,2=outgoing)
     * @param simSlot nullable - filter by SIM slot (1/2)
-    * @param search nullable - filter by phone number, contact name or message body (case-insensitive LIKE)
+    * @param search nullable - filter by phone number or contact name (case-insensitive LIKE)
      */
     List<SmsLogRecord> getSmsLogsByDevicePagedFiltered(int deviceId, int customerId,
                                               Integer messageType, Integer simSlot, String search,

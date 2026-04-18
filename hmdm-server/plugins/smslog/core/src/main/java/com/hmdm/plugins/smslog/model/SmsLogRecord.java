@@ -30,9 +30,6 @@ public class SmsLogRecord implements Serializable {
     @ApiModelProperty("Message type: 1=incoming, 2=outgoing")
     private int messageType;
 
-    @ApiModelProperty("SMS message body")
-    private String messageBody;
-
     @ApiModelProperty("SIM slot used for SMS (1 or 2)")
     private Integer simSlot;
 
@@ -91,14 +88,6 @@ public class SmsLogRecord implements Serializable {
 
     public void setMessageType(int messageType) {
         this.messageType = messageType;
-    }
-
-    public String getMessageBody() {
-        return messageBody;
-    }
-
-    public void setMessageBody(String messageBody) {
-        this.messageBody = messageBody;
     }
 
     public Integer getSimSlot() {

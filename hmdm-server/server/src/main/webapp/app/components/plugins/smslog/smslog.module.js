@@ -80,17 +80,22 @@ angular.module('headwind-kiosk')
         $scope.device = device;
         $scope.loading = true;
         $scope.smsLogs = [];
-        $scope.availableMessageTypes = [];
-        $scope.availableSimSlots = [];
+        $scope.availableMessageTypes = [
+            { value: '', label: 'All Types' },
+            { value: 1, label: 'Incoming' },
+            { value: 2, label: 'Outgoing' }
+        ];
+        $scope.availableSimSlots = [
+            { value: '', label: 'All SIMs' },
+            { value: 1, label: 'SIM 1' },
+            { value: 2, label: 'SIM 2' }
+        ];
         // Use object (dot notation) so ng-if child scopes don't shadow these
         $scope.filters = { messageType: '', simSlot: '', search: '' };
 
-        // Hardcoded labels – avoids localization timing issues in the $resource callback
-        var MESSAGE_TYPE_LABELS = { 1: 'Incoming', 2: 'Outgoing' };
-
         $scope.pagination = {
             page: 0,
-            pageSize: 1000,  // load all records for client-side filtering
+            pageSize: 50,
             total: 0
         };
 
@@ -151,25 +156,6 @@ angular.module('headwind-kiosk')
                 if (response.status === 'OK' && response.data) {
                     $scope.smsLogs = response.data.items || [];
                     $scope.pagination.total = response.data.total || 0;
-                    // Build type/SIM dropdown options from current result
-                    var typeSet = {};
-                    var simSet = {};
-                    $scope.smsLogs.forEach(function (log) {
-                        if (log.messageType !== undefined && log.messageType !== null) {
-                            typeSet[log.messageType] = true;
-                        }
-                        if (log.simSlot !== undefined && log.simSlot !== null) {
-                            simSet[log.simSlot] = true;
-                        }
-                    });
-                    $scope.availableMessageTypes = Object.keys(typeSet).map(function (k) {
-                        var v = parseInt(k);
-                        return { value: v, label: MESSAGE_TYPE_LABELS[v] || ('Type ' + k) };
-                    }).sort(function (a, b) { return a.value - b.value; });
-                    $scope.availableSimSlots = Object.keys(simSet).map(function (k) {
-                        var v = parseInt(k);
-                        return { value: v, label: 'SIM ' + v };
-                    }).sort(function (a, b) { return a.value - b.value; });
                 }
             }, function (error) {
                 $scope.loading = false;
