@@ -151,11 +151,14 @@ public class SmsLogUploadWorker extends Worker {
         SettingsHelper settingsHelper = SettingsHelper.getInstance(context);
         String deviceId = settingsHelper.getDeviceId();
         String serverProject = settingsHelper.getServerProject();
-        if (deviceId == null || deviceId.trim().isEmpty() || serverProject == null || serverProject.trim().isEmpty()) {
+        if (serverProject == null) {
+            serverProject = "";
+        }
+
+        if (deviceId == null || deviceId.trim().isEmpty()) {
             RemoteLogger.log(context, Const.LOG_WARN,
-                    "SmsLogUploadWorker: deviceId/serverProject is empty (deviceId='" + deviceId + "', serverProject='" + serverProject + "')");
-            showDebugAlert(context, "SMSLog: deviceId/serverProject empty");
-            return Result.failure();
+                    "SmsLogUploadWorker: deviceId is empty, skipping upload until enrollment completes");
+            return Result.success();
         }
 
         ServerService serverService = ServerServiceKeeper.getServerServiceInstance(context);
