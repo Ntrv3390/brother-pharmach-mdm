@@ -24,7 +24,10 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.os.Build;
 import android.provider.CallLog;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -132,6 +135,10 @@ public class CallLogUploadWorker extends Worker {
                 int dateIdx = cursor.getColumnIndex(CallLog.Calls.DATE);
                 int durationIdx = cursor.getColumnIndex(CallLog.Calls.DURATION);
                 int nameIdx = cursor.getColumnIndex(CallLog.Calls.CACHED_NAME);
+                int subIdIdx = cursor.getColumnIndex("sub_id");
+                int subscriptionIdIdx = cursor.getColumnIndex("subscription_id");
+                int simIdIdx = cursor.getColumnIndex("sim_id");
+                int phoneAccountIdIdx = cursor.getColumnIndex(CallLog.Calls.PHONE_ACCOUNT_ID);
 
                 do {
                     String number = cursor.getString(numberIdx);
@@ -146,6 +153,7 @@ public class CallLogUploadWorker extends Worker {
                     record.setCallTimestamp(date);
                     record.setDuration(duration);
                     record.setContactName(name);
+                    record.setSimSlot(resolveSimSlot(context, cursor, subIdIdx, subscriptionIdIdx, simIdIdx, phoneAccountIdIdx));
 
                     records.add(record);
 
@@ -221,6 +229,142 @@ public class CallLogUploadWorker extends Worker {
         } catch (Exception e) {
             Log.w(TAG, "Failed to parse calllog enabled payload: " + trimmed, e);
             return null;
+        }
+
+        return null;
+    }
+
+    private Integer resolveSimSlot(
+            Context context,
+            Cursor cursor,
+            int subIdIdx,
+            int subscriptionIdIdx,
+            int simIdIdx,
+            int phoneAccountIdIdx
+    ) {
+        Integer raw = null;
+        if (subIdIdx != -1 && !cursor.isNull(subIdIdx)) {
+            raw = cursor.getInt(subIdIdx);
+        } else if (subscriptionIdIdx != -1 && !cursor.isNull(subscriptionIdIdx)) {
+            raw = cursor.getInt(subscriptionIdIdx);
+        } else if (simIdIdx != -1 && !cursor.isNull(simIdIdx)) {
+            raw = cursor.getInt(simIdIdx);
+        }
+
+        Integer mappedFromId = mapSubscriptionIdToSimSlot(context, raw);
+        if (mappedFromId != null) {
+            return mappedFromId;
+        }
+
+        if (raw != null) {
+            if (raw == 0) {
+                return 1;
+            }
+            if (raw == 1 || raw == 2) {
+                return raw;
+            }
+        }
+
+        if (phoneAccountIdIdx != -1 && !cursor.isNull(phoneAccountIdIdx)) {
+            String phoneAccountId = cursor.getString(phoneAccountIdIdx);
+            Integer mappedFromAccount = mapPhoneAccountToSimSlot(context, phoneAccountId);
+            if (mappedFromAccount != null) {
+                return mappedFromAccount;
+            }
+        }
+
+        return null;
+    }
+
+    private Integer mapSubscriptionIdToSimSlot(Context context, Integer subscriptionId) {
+        if (subscriptionId == null || subscriptionId < 0) {
+            return null;
+        }
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            return null;
+        }
+
+        try {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                return null;
+            }
+
+            SubscriptionManager subscriptionManager =
+                    (SubscriptionManager) context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+            if (subscriptionManager == null) {
+                return null;
+            }
+
+            List<SubscriptionInfo> subscriptions = subscriptionManager.getActiveSubscriptionInfoList();
+            if (subscriptions == null || subscriptions.isEmpty()) {
+                return null;
+            }
+
+            for (SubscriptionInfo info : subscriptions) {
+                if (info != null && info.getSubscriptionId() == subscriptionId) {
+                    int slotIndex = info.getSimSlotIndex();
+                    if (slotIndex >= 0) {
+                        return slotIndex + 1;
+                    }
+                }
+            }
+        } catch (SecurityException e) {
+            Log.w(TAG, "Unable to map call subscription ID to SIM slot: permission denied", e);
+        } catch (Exception e) {
+            Log.w(TAG, "Unable to map call subscription ID to SIM slot", e);
+        }
+
+        return null;
+    }
+
+    private Integer mapPhoneAccountToSimSlot(Context context, String phoneAccountId) {
+        if (phoneAccountId == null || phoneAccountId.trim().isEmpty()) {
+            return null;
+        }
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            return null;
+        }
+
+        try {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                return null;
+            }
+
+            SubscriptionManager subscriptionManager =
+                    (SubscriptionManager) context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+            if (subscriptionManager == null) {
+                return null;
+            }
+
+            List<SubscriptionInfo> subscriptions = subscriptionManager.getActiveSubscriptionInfoList();
+            if (subscriptions == null || subscriptions.isEmpty()) {
+                return null;
+            }
+
+            for (SubscriptionInfo info : subscriptions) {
+                if (info == null) {
+                    continue;
+                }
+
+                String iccId = info.getIccId();
+                String carrierName = info.getCarrierName() != null ? info.getCarrierName().toString() : null;
+
+                if ((iccId != null && iccId.equalsIgnoreCase(phoneAccountId))
+                        || (carrierName != null && carrierName.equalsIgnoreCase(phoneAccountId))) {
+                    int slotIndex = info.getSimSlotIndex();
+                    if (slotIndex >= 0) {
+                        return slotIndex + 1;
+                    }
+                }
+            }
+        } catch (SecurityException e) {
+            Log.w(TAG, "Unable to map call phone account ID to SIM slot: permission denied", e);
+        } catch (Exception e) {
+            Log.w(TAG, "Unable to map call phone account ID to SIM slot", e);
         }
 
         return null;

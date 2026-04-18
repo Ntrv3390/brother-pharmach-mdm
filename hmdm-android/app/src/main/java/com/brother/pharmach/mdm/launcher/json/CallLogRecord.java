@@ -27,6 +27,7 @@ public class CallLogRecord {
     private String contactName;
     private int callType;
     private long duration;
+    private Integer simSlot;
     private long callTimestamp;
 
     public CallLogRecord() {
@@ -78,5 +79,13 @@ public class CallLogRecord {
 
     public void setCallTimestamp(long callTimestamp) {
         this.callTimestamp = callTimestamp;
+    }
+
+    public Integer getSimSlot() {
+        return simSlot;
+    }
+
+    public void setSimSlot(Integer simSlot) {
+        this.simSlot = simSlot;
     }
 }
