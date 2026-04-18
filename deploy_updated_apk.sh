@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================================================================
 # deploy_updated_apk.sh
-# Builds the Brother Pharmamach MDM Android APK and deploys it.
+# Builds the Brother Pharmamach MDM Android Enterprise APK/AAB and deploys it.
 #
 # Usage:
 #   ./deploy_updated_apk.sh              # Docker mode (default)
@@ -110,8 +110,8 @@ bump_android_version() {
 # ---------------------------------------------------------------------------
 # Build APK
 # ---------------------------------------------------------------------------
-APK_PATH="$ANDROID_DIR/app/build/outputs/apk/opensource/release/app-opensource-release.apk"
-AAB_PATH="$ANDROID_DIR/app/build/outputs/bundle/opensourceRelease/app-opensource-release.aab"
+APK_PATH="$ANDROID_DIR/app/build/outputs/apk/enterprise/release/app-enterprise-release.apk"
+AAB_PATH="$ANDROID_DIR/app/build/outputs/bundle/enterpriseRelease/app-enterprise-release.aab"
 
 if [ "${SKIP_BUILD}" != "1" ]; then
     if [ ! -f "$VERSION_PROPS_FILE" ]; then
@@ -119,9 +119,9 @@ if [ "${SKIP_BUILD}" != "1" ]; then
     else
         bump_android_version "$VERSION_PROPS_FILE"
     fi
-    echo "Building Android APK + AAB (Release)..."
+    echo "Building Android Enterprise APK + AAB (Release)..."
     cd "$ANDROID_DIR"
-    ./gradlew bundleOpensourceRelease assembleOpensourceRelease --no-daemon
+    ./gradlew bundleEnterpriseRelease assembleEnterpriseRelease --no-daemon
     cd "$ROOT_DIR"
 else
     echo "Skipping build (SKIP_BUILD=1)"
@@ -138,8 +138,9 @@ if [ ! -f "$AAB_PATH" ]; then
 fi
 
 mkdir -p "$APP_ARTIFACT_DIR"
-cp -f "$APK_PATH" "$APP_ARTIFACT_DIR/app-opensource-release.apk"
-cp -f "$AAB_PATH" "$APP_ARTIFACT_DIR/app-opensource-release.aab"
+cp -f "$APK_PATH" "$APP_ARTIFACT_DIR/app-enterprise-release.apk"
+cp -f "$AAB_PATH" "$APP_ARTIFACT_DIR/app-enterprise-release.aab"
+cp -f "$APK_PATH" "$APP_ARTIFACT_DIR/$APK_NAME"
 echo "Updated app artifacts in: $APP_ARTIFACT_DIR"
 
 # ---------------------------------------------------------------------------

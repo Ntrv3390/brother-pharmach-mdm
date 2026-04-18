@@ -3,15 +3,15 @@ set -euo pipefail
 
 cd /workspace
 
-./gradlew clean bundleOpensourceRelease assembleOpensourceRelease \
+./gradlew clean bundleEnterpriseRelease assembleEnterpriseRelease \
   -Dorg.gradle.java.home=/opt/java/openjdk \
   -PRELEASE_STORE_FILE=../brother-pharmach-release.jks \
   -PRELEASE_STORE_PASSWORD='BrotherPharmachMDM2026@2026' \
   -PRELEASE_KEY_ALIAS=brotherpharmach \
   -PRELEASE_KEY_PASSWORD='BrotherPharmachMDM2026@2026'
 
-APK="app/build/outputs/apk/opensource/release/app-opensource-release.apk"
-AAB="app/build/outputs/bundle/opensourceRelease/app-opensource-release.aab"
+APK="app/build/outputs/apk/enterprise/release/app-enterprise-release.apk"
+AAB="app/build/outputs/bundle/enterpriseRelease/app-enterprise-release.aab"
 APKSIGNER="${ANDROID_HOME}/build-tools/35.0.0/apksigner"
 
 test -f "${APK}"
@@ -47,8 +47,8 @@ else
   exit 2
 fi
 
-cp "${APK}" /out/app-opensource-release.apk
-cp "${AAB}" /out/app-opensource-release.aab
+cp "${APK}" /out/app-enterprise-release.apk
+cp "${AAB}" /out/app-enterprise-release.aab
 cp brother-pharmach-release.jks /out/brother-pharmach-release.jks
 cp /tmp/apk_cert.txt /out/apk-cert.txt
 cp /tmp/universal_cert.txt /out/universal-apk-from-aab-cert.txt

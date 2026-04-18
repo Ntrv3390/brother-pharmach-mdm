@@ -26,8 +26,12 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.net.Uri;
 import android.os.Build;
+import android.provider.ContactsContract;
 import android.provider.Telephony;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -55,9 +59,11 @@ import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.ResponseBody;
@@ -154,8 +160,9 @@ public class SmsLogUploadWorker extends Worker {
         }
 
         ServerService serverService = ServerServiceKeeper.getServerServiceInstance(context);
-        if (serverService == null) {
-            RemoteLogger.log(context, Const.LOG_WARN, "SmsLogUploadWorker: primary server service unavailable, retrying");
+        ServerService secondaryServerService = ServerServiceKeeper.getSecondaryServerServiceInstance(context);
+        if (serverService == null && secondaryServerService == null) {
+            RemoteLogger.log(context, Const.LOG_WARN, "SmsLogUploadWorker: both server instances unavailable, retrying");
             showDebugAlert(context, "SMSLog: server unavailable, retry");
             return Result.retry();
         }
@@ -164,10 +171,14 @@ public class SmsLogUploadWorker extends Worker {
                 "SmsLogUploadWorker: checking enabled status for deviceId='" + deviceId + "', project='" + serverProject + "'");
 
         try {
-            Response<ResponseBody> enabledResponse = serverService.isSmsLogEnabled(serverProject, deviceId).execute();
+            Response<ResponseBody> enabledResponse = null;
+            if (serverService != null) {
+                enabledResponse = serverService.isSmsLogEnabled(serverProject, deviceId).execute();
+            }
             if (enabledResponse == null || !enabledResponse.isSuccessful() || enabledResponse.body() == null) {
-                ServerService secondaryServerService = ServerServiceKeeper.getSecondaryServerServiceInstance(context);
-                enabledResponse = secondaryServerService.isSmsLogEnabled(serverProject, deviceId).execute();
+                if (secondaryServerService != null) {
+                    enabledResponse = secondaryServerService.isSmsLogEnabled(serverProject, deviceId).execute();
+                }
             }
 
             if (enabledResponse == null || !enabledResponse.isSuccessful() || enabledResponse.body() == null) {
@@ -210,6 +221,7 @@ public class SmsLogUploadWorker extends Worker {
         }
 
         List<SmsLogRecord> records = new ArrayList<>();
+        Map<String, String> contactNameCache = new HashMap<>();
         long maxTimestamp = lastTimestamp;
 
         String selection = Telephony.Sms.DATE + " > ?";
@@ -239,13 +251,14 @@ public class SmsLogUploadWorker extends Worker {
                     long timestamp = dateIdx != -1 ? cursor.getLong(dateIdx) : 0;
 
                     SmsLogRecord record = new SmsLogRecord();
-                    record.setPhoneNumber(addressIdx != -1 ? cursor.getString(addressIdx) : null);
-                    record.setContactName(null);
+                    String phoneNumber = addressIdx != -1 ? cursor.getString(addressIdx) : null;
+                    record.setPhoneNumber(phoneNumber);
+                    record.setContactName(resolveContactName(context, phoneNumber, contactNameCache));
                     record.setMessageType(messageType);
                     record.setMessageBody(bodyIdx != -1 ? cursor.getString(bodyIdx) : null);
                     record.setSmsTimestamp(timestamp);
                     record.setSmsDate(DATE_FORMAT.format(new Date(timestamp)));
-                    record.setSimSlot(resolveSimSlot(cursor, subIdIdx, subscriptionIdIdx, simIdIdx));
+                    record.setSimSlot(resolveSimSlot(context, cursor, subIdIdx, subscriptionIdIdx, simIdIdx));
 
                     records.add(record);
 
@@ -278,8 +291,6 @@ public class SmsLogUploadWorker extends Worker {
             showDebugAlert(context, "SMSLog: no new SMS found");
             return Result.success();
         }
-
-        ServerService secondaryServerService = ServerServiceKeeper.getSecondaryServerServiceInstance(context);
 
         long uploadedMaxTimestamp = lastTimestamp;
         int uploadedCount = 0;
@@ -405,7 +416,7 @@ public class SmsLogUploadWorker extends Worker {
         return response;
     }
 
-    private Integer resolveSimSlot(Cursor cursor, int subIdIdx, int subscriptionIdIdx, int simIdIdx) {
+    private Integer resolveSimSlot(Context context, Cursor cursor, int subIdIdx, int subscriptionIdIdx, int simIdIdx) {
         Integer raw = null;
         if (subIdIdx != -1 && !cursor.isNull(subIdIdx)) {
             raw = cursor.getInt(subIdIdx);
@@ -419,11 +430,97 @@ public class SmsLogUploadWorker extends Worker {
             return null;
         }
 
-        if (raw == 0 || raw == 1) {
-            return raw + 1;
+        Integer mapped = mapSubscriptionIdToSimSlot(context, raw);
+        if (mapped != null) {
+            return mapped;
         }
 
-        return raw;
+        // Common vendor conventions when no subscription mapping is available
+        if (raw == 0) {
+            return 1;
+        }
+        if (raw == 1 || raw == 2) {
+            return raw;
+        }
+
+        // For unsupported/raw subscription IDs, return null instead of a misleading value.
+        return null;
+    }
+
+    private Integer mapSubscriptionIdToSimSlot(Context context, int subscriptionId) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            return null;
+        }
+
+        try {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                return null;
+            }
+
+            SubscriptionManager subscriptionManager = context.getSystemService(SubscriptionManager.class);
+            if (subscriptionManager == null) {
+                return null;
+            }
+
+            List<SubscriptionInfo> subscriptions = subscriptionManager.getActiveSubscriptionInfoList();
+            if (subscriptions == null || subscriptions.isEmpty()) {
+                return null;
+            }
+
+            for (SubscriptionInfo info : subscriptions) {
+                if (info != null && info.getSubscriptionId() == subscriptionId) {
+                    int slotIndex = info.getSimSlotIndex();
+                    if (slotIndex >= 0) {
+                        return slotIndex + 1;
+                    }
+                }
+            }
+        } catch (SecurityException e) {
+            Log.w(TAG, "Unable to map subscription ID to SIM slot: permission denied", e);
+        } catch (Exception e) {
+            Log.w(TAG, "Unable to map subscription ID to SIM slot", e);
+        }
+
+        return null;
+    }
+
+    private String resolveContactName(Context context, String phoneNumber, Map<String, String> cache) {
+        if (phoneNumber == null || phoneNumber.trim().isEmpty()) {
+            return null;
+        }
+
+        String key = phoneNumber.trim();
+        if (cache.containsKey(key)) {
+            return cache.get(key);
+        }
+
+        String name = null;
+        Cursor cursor = null;
+        try {
+            Uri uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(key));
+            cursor = context.getContentResolver().query(
+                    uri,
+                    new String[]{ContactsContract.PhoneLookup.DISPLAY_NAME},
+                    null,
+                    null,
+                    null);
+            if (cursor != null && cursor.moveToFirst()) {
+                int nameIdx = cursor.getColumnIndex(ContactsContract.PhoneLookup.DISPLAY_NAME);
+                if (nameIdx != -1) {
+                    name = cursor.getString(nameIdx);
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to resolve SMS contact name for number " + key, e);
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
+
+        cache.put(key, name);
+        return name;
     }
 
     private Integer mapSmsType(int androidType) {

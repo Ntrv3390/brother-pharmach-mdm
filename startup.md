@@ -61,7 +61,7 @@ After setup:
 - APK is copied to server files directory
 - DB is updated with local APK URL and APK hash
 - QR code uses your URL:
-  - `https://brothes-mdm.com/files/brother-pharmach-mdm.apk`
+  - `https://brothers-mdm.com/files/brother-pharmach-mdm.apk`
 
 ## 7. One-time setup rule
 
