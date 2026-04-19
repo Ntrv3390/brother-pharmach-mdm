@@ -566,7 +566,9 @@
         detectBtn.disabled = isBusy;
         precheckBtn.disabled = isBusy;
         installBtn.disabled = isBusy;
-        removeBtn.disabled = isBusy;
+        if (removeBtn) {
+          removeBtn.disabled = isBusy;
+        }
       }
 
       function chip(text, cls = "") {
@@ -878,7 +880,9 @@
       detectBtn.addEventListener("click", detectDevices);
       precheckBtn.addEventListener("click", precheckSelected);
       installBtn.addEventListener("click", installSelected);
-      removeBtn.addEventListener("click", removeSelected);
+      if (removeBtn) {
+        removeBtn.addEventListener("click", removeSelected);
+      }
       closeActionCardBtn.addEventListener("click", closeActionCard);
       actionCancelBtn.addEventListener("click", closeActionCard);
       actionConfirmBtn.addEventListener("click", async () => {
