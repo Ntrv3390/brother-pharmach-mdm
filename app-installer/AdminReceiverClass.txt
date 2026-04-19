@@ -1,0 +1,1 @@
+com.brother.pharmach.mdm.launcher/.AdminReceiver

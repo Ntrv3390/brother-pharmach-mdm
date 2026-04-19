@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Brother Pharmach App Installer</title>
+    <style>
+      :root {
+        --bg: #f4f1ea;
+        --panel: #ffffff;
+        --ink: #1f2328;
+        --muted: #5f6974;
+        --accent: #0f766e;
+        --accent-2: #d97706;
+        --danger: #b42318;
+        --ok: #0f7b0f;
+        --line: #d8d2c8;
+        --terminal: #10131a;
+        --terminal-ink: #d0f6ff;
+        --terminal-muted: #89b8c2;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 0% 0%, #fdf8ee 0%, transparent 35%),
+          radial-gradient(circle at 100% 100%, #e4f1eb 0%, transparent 40%),
+          var(--bg);
+        min-height: 100vh;
+      }
+
+      .shell {
+        width: min(1100px, 100% - 32px);
+        margin: 24px auto;
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        gap: 16px;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: 0 10px 30px rgba(16, 19, 26, 0.08);
+        overflow: hidden;
+      }
+
+      .card-head {
+        padding: 16px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(95deg, #f8f5ee, #f0faf7);
+      }
+
+      .card-head h1,
+      .card-head h2 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+      }
+
+      .card-body {
+        padding: 16px;
+      }
+
+      .muted {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+      }
+
+      .top-notice {
+        border: 1px solid #f0c188;
+        background: linear-gradient(155deg, #fff8ed, #fff3dc);
+        color: #7a3e00;
+        border-radius: 12px;
+        padding: 11px 13px;
+        margin-bottom: 12px;
+        box-shadow: 0 3px 10px rgba(221, 126, 9, 0.12);
+      }
+
+      .top-notice-title {
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+
+      .top-notice-list {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      button {
+        border: 0;
+        padding: 11px 15px;
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+        transition:
+          transform 120ms ease,
+          opacity 120ms ease,
+          box-shadow 140ms ease;
+      }
+
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 14px rgba(16, 24, 40, 0.16);
+      }
+
+      .btn-primary {
+        background: linear-gradient(145deg, #0c8a7f, #06746a);
+        color: #fff;
+      }
+
+      .btn-warning {
+        background: linear-gradient(145deg, #eb8b0f, #ca720a);
+        color: #fff;
+      }
+
+      .btn-danger {
+        background: var(--danger);
+        color: #fff;
+      }
+
+      .chip {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        border: 1px solid var(--line);
+        background: #fff;
+        margin-right: 8px;
+        margin-bottom: 8px;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+      }
+
+      .chip.ok {
+        border-color: #a7d7a7;
+        background: #ecfaec;
+        color: var(--ok);
+      }
+
+      .chip.bad {
+        border-color: #efb4b4;
+        background: #fff1f1;
+        color: var(--danger);
+      }
+
+      #deviceList {
+        margin-top: 12px;
+        display: grid;
+        gap: 8px;
+        max-height: 280px;
+        overflow: auto;
+        padding-right: 4px;
+      }
+
+      .device-item {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        background: linear-gradient(180deg, #fff, #fefdfa);
+      }
+
+      .device-left {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        min-width: 0;
+      }
+
+      .serial {
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 13px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 190px;
+      }
+
+      .state {
+        font-size: 12px;
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.2px;
+      }
+
+      .state.device {
+        background: #ebf9ee;
+        color: #146b2f;
+        border: 1px solid #a1d9af;
+      }
+
+      .state.unauthorized,
+      .state.offline {
+        background: #fff4e8;
+        color: #995305;
+        border: 1px solid #f0c188;
+      }
+
+      .state.unknown {
+        background: #f6f7f9;
+        color: #4d5660;
+        border: 1px solid #d4dae0;
+      }
+
+      .terminal-wrap {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+
+      #terminal {
+        background: var(--terminal);
+        color: var(--terminal-ink);
+        border-radius: 0;
+        height: 70vh;
+        overflow: auto;
+        padding: 14px;
+        margin: 0;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 13px;
+        line-height: 1.52;
+        border-top: 1px solid #0f2026;
+      }
+
+      .line {
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .line.info {
+        color: var(--terminal-ink);
+      }
+      .line.warn {
+        color: #ffd58f;
+      }
+      .line.error {
+        color: #ff9a9a;
+      }
+      .line.success {
+        color: #8df0ac;
+      }
+
+      .terminal-note {
+        color: var(--terminal-muted);
+        margin-top: 6px;
+        font-size: 12px;
+      }
+
+      .action-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(16, 19, 26, 0.48);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 1000;
+      }
+
+      .action-overlay.hidden {
+        display: none;
+      }
+
+      .action-card {
+        width: min(760px, 100%);
+        max-height: min(82vh, 760px);
+        overflow: auto;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        box-shadow: 0 14px 40px rgba(16, 19, 26, 0.24);
+      }
+
+      .action-head {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(95deg, #fff4ea, #fff9f3);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .action-head h3 {
+        margin: 0;
+        font-size: 22px;
+      }
+
+      .action-close {
+        background: #f3f4f6;
+        color: #111827;
+        border: 1px solid #d1d5db;
+        padding: 8px 12px;
+        border-radius: 10px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .action-body {
+        padding: 14px 16px 18px;
+      }
+
+      .action-message {
+        color: #374151;
+        font-size: 15px;
+        line-height: 1.6;
+        margin-bottom: 14px;
+      }
+
+      .action-item {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px;
+        margin-bottom: 10px;
+        background: #fffefb;
+      }
+
+      .action-serial {
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 13px;
+        color: #111827;
+        margin-bottom: 8px;
+        font-weight: 700;
+      }
+
+      .action-observed {
+        color: #6b7280;
+        font-size: 13px;
+        margin-bottom: 8px;
+      }
+
+      .action-steps {
+        margin: 0;
+        padding-left: 20px;
+        line-height: 1.6;
+      }
+
+      .action-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      @media (max-width: 920px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+
+        #terminal {
+          height: 50vh;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <section class="card">
+        <div class="card-head">
+          <h1>App Installer</h1>
+        </div>
+        <div class="card-body">
+          <div class="top-notice">
+            <div class="top-notice-title">Before You Start</div>
+            <ol class="top-notice-list">
+              <li>Enable Developer Options and USB Debugging.</li>
+              <li>Keep phone unlocked.</li>
+            </ol>
+          </div>
+
+          <div id="statusChips"></div>
+
+          <div class="row">
+            <button class="btn-primary" id="detectBtn">Detect Devices</button>
+            <button class="btn-primary" id="precheckBtn">
+              Pre-check Owner
+            </button>
+            <button class="btn-warning" id="installBtn">
+              Install Apps
+            </button>
+            <!-- <button class="btn-danger" id="removeBtn">Remove Apps</button> -->
+          </div>
+
+          <div id="deviceList"></div>
+
+          <p class="muted" style="margin-top: 12px">
+            If a device is shown as <strong>unauthorized</strong>, unlock phone
+            and tap <strong>Allow USB debugging</strong>, then click Detect
+            Devices again.
+          </p>
+        </div>
+      </section>
+
+      <section class="card terminal-wrap">
+        <div class="card-head">
+          <h2>Live Logs</h2>
+        </div>
+        <pre id="terminal"></pre>
+      </section>
+    </div>
+
+    <div
+      id="actionOverlay"
+      class="action-overlay hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="actionTitle"
+    >
+      <div class="action-card">
+        <div class="action-head">
+          <h3 id="actionTitle">Action Required</h3>
+          <button class="action-close" id="closeActionCard" type="button">
+            Close
+          </button>
+        </div>
+        <div class="action-body" id="actionBody"></div>
+        <div class="action-body action-actions hidden" id="actionConfirmBar">
+          <button class="action-close" id="actionCancelBtn" type="button">
+            Cancel
+          </button>
+          <button class="btn-danger" id="actionConfirmBtn" type="button">
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const detectBtn = document.getElementById("detectBtn");
+      const precheckBtn = document.getElementById("precheckBtn");
+      const installBtn = document.getElementById("installBtn");
+      const removeBtn = document.getElementById("removeBtn");
+      const deviceList = document.getElementById("deviceList");
+      const terminal = document.getElementById("terminal");
+      const statusChips = document.getElementById("statusChips");
+      const actionOverlay = document.getElementById("actionOverlay");
+      const actionBody = document.getElementById("actionBody");
+      const closeActionCardBtn = document.getElementById("closeActionCard");
+      const actionTitle = document.getElementById("actionTitle");
+      const actionConfirmBar = document.getElementById("actionConfirmBar");
+      const actionCancelBtn = document.getElementById("actionCancelBtn");
+      const actionConfirmBtn = document.getElementById("actionConfirmBtn");
+
+      let currentDevices = [];
+      let pendingConfirmAction = null;
+
+      function appendLog(message, level = "info") {
+        if (!terminal) {
+          console.log(`[${level}] ${message}`);
+          return;
+        }
+        const div = document.createElement("div");
+        div.className = `line ${level}`;
+        div.textContent = message;
+        terminal.appendChild(div);
+        terminal.scrollTop = terminal.scrollHeight;
+      }
+
+      function serverOfflineHint(actionName, error) {
+        const message =
+          error && error.message
+            ? error.message
+            : String(error || "Unknown error");
+        return `[UI] ${actionName} failed: ${message}. If this says Failed to fetch, the local installer server is not reachable. Keep the installer terminal window open, then rerun start-installer.bat.`;
+      }
+
+      function closeActionCard() {
+        actionOverlay.classList.add("hidden");
+        actionBody.innerHTML = "";
+        actionConfirmBar.classList.add("hidden");
+        closeActionCardBtn.classList.remove("hidden");
+        pendingConfirmAction = null;
+      }
+
+      function showActionCard(title, entries) {
+        if (!Array.isArray(entries) || entries.length === 0) {
+          return;
+        }
+
+        actionTitle.textContent = title || "Action Required";
+        actionBody.innerHTML = "";
+        actionConfirmBar.classList.add("hidden");
+        closeActionCardBtn.classList.remove("hidden");
+
+        for (const entry of entries) {
+          const wrap = document.createElement("section");
+          wrap.className = "action-item";
+
+          if (entry.serial) {
+            const serial = document.createElement("div");
+            serial.className = "action-serial";
+            serial.textContent = `Device: ${entry.serial}`;
+            wrap.appendChild(serial);
+          }
+
+          if (entry.observed) {
+            const observed = document.createElement("div");
+            observed.className = "action-observed";
+            observed.textContent = `Observed -> users: ${entry.observed.users}, accounts: ${entry.observed.accounts}, packageInstalled: ${entry.observed.packageInstalled}`;
+            wrap.appendChild(observed);
+          }
+
+          const steps = Array.isArray(entry.steps) ? entry.steps : [];
+          if (steps.length > 0) {
+            const ol = document.createElement("ol");
+            ol.className = "action-steps";
+            for (const step of steps) {
+              const li = document.createElement("li");
+              li.textContent = step;
+              ol.appendChild(li);
+            }
+            wrap.appendChild(ol);
+          }
+
+          actionBody.appendChild(wrap);
+        }
+
+        actionOverlay.classList.remove("hidden");
+      }
+
+      function showConfirmCard(title, message, onConfirm) {
+        actionTitle.textContent = title || "Please Confirm";
+        actionBody.innerHTML = "";
+
+        const msg = document.createElement("div");
+        msg.className = "action-message";
+        msg.textContent = message;
+        actionBody.appendChild(msg);
+
+        closeActionCardBtn.classList.add("hidden");
+        actionConfirmBar.classList.remove("hidden");
+        pendingConfirmAction = onConfirm;
+        actionOverlay.classList.remove("hidden");
+      }
+
+      function setBusy(isBusy) {
+        detectBtn.disabled = isBusy;
+        precheckBtn.disabled = isBusy;
+        installBtn.disabled = isBusy;
+        removeBtn.disabled = isBusy;
+      }
+
+      function chip(text, cls = "") {
+        const span = document.createElement("span");
+        span.className = `chip ${cls}`.trim();
+        span.textContent = text;
+        return span;
+      }
+
+      function renderStatus(status) {
+        statusChips.innerHTML = "";
+        statusChips.appendChild(
+          chip(
+            `APK: ${status.apkExists ? "Found" : "Missing"}`,
+            status.apkExists ? "ok" : "bad",
+          ),
+        );
+        statusChips.appendChild(chip(`ADB: ${status.adbPath}`));
+        statusChips.appendChild(
+          chip(`Admin: ${status.adminComponent || "Not set"}`),
+        );
+      }
+
+      function renderDevices(devices) {
+        currentDevices = devices || [];
+        deviceList.innerHTML = "";
+
+        if (!currentDevices.length) {
+          const empty = document.createElement("p");
+          empty.className = "muted";
+          empty.textContent = "No devices found.";
+          deviceList.appendChild(empty);
+          return;
+        }
+
+        for (const device of currentDevices) {
+          const item = document.createElement("label");
+          item.className = "device-item";
+
+          const left = document.createElement("div");
+          left.className = "device-left";
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = device.authorized;
+          checkbox.disabled = !device.authorized;
+          checkbox.dataset.serial = device.serial;
+
+          const serial = document.createElement("div");
+          serial.className = "serial";
+          serial.title = device.raw;
+          serial.textContent = device.serial;
+
+          left.appendChild(checkbox);
+          left.appendChild(serial);
+
+          const state = document.createElement("div");
+          state.className = `state ${device.state || "unknown"}`;
+          state.textContent = device.state || "unknown";
+
+          item.appendChild(left);
+          item.appendChild(state);
+
+          deviceList.appendChild(item);
+        }
+      }
+
+      async function loadStatus() {
+        const res = await fetch("/api/status");
+        const data = await res.json();
+        if (data.ok) {
+          renderStatus(data);
+        }
+      }
+
+      async function detectDevices() {
+        setBusy(true);
+        try {
+          const res = await fetch("/api/devices");
+          const data = await res.json();
+          if (!data.ok) {
+            appendLog(`[UI] ${data.error}`, "error");
+            renderDevices([]);
+            return;
+          }
+          renderDevices(data.devices);
+          const authCount = data.devices.filter((d) => d.authorized).length;
+          appendLog(
+            `[UI] Device scan complete. Authorized: ${authCount}/${data.devices.length}.`,
+            "info",
+          );
+        } catch (error) {
+          appendLog(serverOfflineHint("Detect", error), "error");
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      function selectedSerials() {
+        const checked = [
+          ...deviceList.querySelectorAll("input[type=checkbox]:checked"),
+        ];
+        return checked.map((c) => c.dataset.serial);
+      }
+
+      async function installSelected() {
+        const serials = selectedSerials();
+        if (!serials.length) {
+          appendLog(
+            "[UI] Select at least one authorized device first.",
+            "warn",
+          );
+          return;
+        }
+
+        setBusy(true);
+        appendLog(
+          `[UI] Starting install for ${serials.length} device(s)...`,
+          "info",
+        );
+
+        try {
+          const res = await fetch("/api/install", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ serials }),
+          });
+
+          const data = await res.json();
+          if (!data.ok) {
+            appendLog(`[UI] Install request failed: ${data.error}`, "error");
+            return;
+          }
+
+          const okCount = data.results.filter((r) => r.ok).length;
+          appendLog(
+            `[UI] Install flow completed. Success: ${okCount}/${data.results.length}.`,
+            "success",
+          );
+
+          const actionEntries = [];
+          for (const result of data.results) {
+            if (
+              !result.ok &&
+              Array.isArray(result.steps) &&
+              result.steps.length
+            ) {
+              actionEntries.push({
+                serial: result.serial,
+                steps: result.steps,
+              });
+            }
+          }
+
+          if (actionEntries.length > 0) {
+            showActionCard(
+              "Device Owner Blocked - Action Required",
+              actionEntries,
+            );
+            appendLog(
+              "[UI] Action Required popup shown with exact steps.",
+              "warn",
+            );
+          }
+        } catch (error) {
+          appendLog(serverOfflineHint("Install", error), "error");
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function precheckSelected() {
+        const serials = selectedSerials();
+        if (!serials.length) {
+          appendLog(
+            "[UI] Select at least one authorized device first.",
+            "warn",
+          );
+          return;
+        }
+
+        setBusy(true);
+        appendLog(
+          `[UI] Running pre-check for ${serials.length} device(s)...`,
+          "info",
+        );
+
+        try {
+          const res = await fetch("/api/precheck", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ serials }),
+          });
+
+          const data = await res.json();
+          if (!data.ok) {
+            appendLog(`[UI] Pre-check failed: ${data.error}`, "error");
+            return;
+          }
+
+          const actionEntries = [];
+          for (const check of data.checks) {
+            if (check.ready) {
+              appendLog(
+                `[UI] ${check.serial}: Pre-check passed. You can run Install + Make Owner.`,
+                "success",
+              );
+              continue;
+            }
+
+            appendLog(
+              `[UI] ${check.serial}: Pre-check found blockers.`,
+              "warn",
+            );
+            actionEntries.push({
+              serial: check.serial,
+              observed: check.observed,
+              steps: Array.isArray(check.steps) ? check.steps : [],
+            });
+          }
+
+          if (actionEntries.length > 0) {
+            showActionCard("Action Required", actionEntries);
+            appendLog("[UI] Pre-check popup shown with exact steps.", "warn");
+          }
+        } catch (error) {
+          appendLog(serverOfflineHint("Pre-check", error), "error");
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function removeSelected() {
+        const serials = selectedSerials();
+        if (!serials.length) {
+          appendLog(
+            "[UI] Select at least one authorized device first.",
+            "warn",
+          );
+          return;
+        }
+
+        const runRemoveFlow = async () => {
+          setBusy(true);
+          appendLog(
+            `[UI] Starting remove flow for ${serials.length} device(s)...`,
+            "warn",
+          );
+
+          try {
+            const res = await fetch("/api/remove", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ serials }),
+            });
+
+            const data = await res.json();
+            if (!data.ok) {
+              appendLog(`[UI] Remove request failed: ${data.error}`, "error");
+              return;
+            }
+
+            const okCount = data.results.filter((r) => r.ok).length;
+            const total = data.results.length;
+            if (okCount === total) {
+              appendLog(
+                `[UI] Remove flow completed. Success: ${okCount}/${total}.`,
+                "success",
+              );
+            } else {
+              appendLog(
+                `[UI] Remove flow completed with errors. Success: ${okCount}/${total}.`,
+                "warn",
+              );
+            }
+
+            const actionEntries = [];
+            for (const result of data.results) {
+              if (!result.ok) {
+                const steps =
+                  Array.isArray(result.steps) && result.steps.length
+                    ? result.steps
+                    : ["Check Live Logs for details and retry."];
+                actionEntries.push({
+                  serial: result.serial,
+                  steps,
+                });
+              }
+            }
+
+            if (actionEntries.length > 0) {
+              showActionCard("Remove Action Required", actionEntries);
+              appendLog("[UI] Remove popup shown with exact steps.", "warn");
+            }
+          } catch (error) {
+            appendLog(serverOfflineHint("Remove", error), "error");
+          } finally {
+            setBusy(false);
+          }
+        };
+
+        showConfirmCard(
+          "Confirm Removal",
+          `Remove apps from ${serials.length} device(s)? This will try to remove admin status and uninstall all installer apps.`,
+          runRemoveFlow,
+        );
+      }
+
+      detectBtn.addEventListener("click", detectDevices);
+      precheckBtn.addEventListener("click", precheckSelected);
+      installBtn.addEventListener("click", installSelected);
+      removeBtn.addEventListener("click", removeSelected);
+      closeActionCardBtn.addEventListener("click", closeActionCard);
+      actionCancelBtn.addEventListener("click", closeActionCard);
+      actionConfirmBtn.addEventListener("click", async () => {
+        const action = pendingConfirmAction;
+        closeActionCard();
+        if (typeof action === "function") {
+          await action();
+        }
+      });
+      actionOverlay.addEventListener("click", (event) => {
+        if (event.target === actionOverlay) {
+          closeActionCard();
+        }
+      });
+
+      const eventStream = new EventSource("/events");
+      eventStream.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          appendLog(
+            `[${payload.timestamp}] ${payload.message}`,
+            payload.level || "info",
+          );
+        } catch (error) {
+          appendLog(event.data, "info");
+        }
+      };
+
+      eventStream.onerror = () => {
+        appendLog(
+          "[UI] Log stream disconnected. Retrying... If this repeats, rerun start-installer.bat and keep that terminal window open.",
+          "warn",
+        );
+      };
+
+      (async function init() {
+        await loadStatus();
+        await detectDevices();
+      })();
+    </script>
+  </body>
+</html>

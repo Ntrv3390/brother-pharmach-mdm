@@ -11,7 +11,7 @@
 # Environment variables (overridable):
 #   ANDROID_DIR, SERVER_FILES_DIR, DB_USER, DB_NAME, DB_HOST, DB_PORT,
 #   DB_PASSWORD, APK_NAME, PKG_NAME, APK_BASE_URL, SKIP_DB_UPDATE,
-#   DOCKER_CONTAINER
+#   DOCKER_CONTAINER, APP_INSTALLER_DIR
 # =============================================================================
 set -e
 
@@ -40,6 +40,7 @@ DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
 SERVER_FILES_DIR="${SERVER_FILES_DIR:-/opt/hmdm/files}"
 APP_ARTIFACT_DIR="${APP_ARTIFACT_DIR:-$HMDM_DIR/app}"
+APP_INSTALLER_DIR="${APP_INSTALLER_DIR:-$HMDM_DIR/app-installer}"
 
 increment_app_version() {
     local current="$1"
@@ -142,6 +143,10 @@ cp -f "$APK_PATH" "$APP_ARTIFACT_DIR/app-enterprise-release.apk"
 cp -f "$AAB_PATH" "$APP_ARTIFACT_DIR/app-enterprise-release.aab"
 cp -f "$APK_PATH" "$APP_ARTIFACT_DIR/$APK_NAME"
 echo "Updated app artifacts in: $APP_ARTIFACT_DIR"
+
+mkdir -p "$APP_INSTALLER_DIR"
+cp -f "$APK_PATH" "$APP_INSTALLER_DIR/app-enterprise-release.apk"
+echo "Updated installer APK in: $APP_INSTALLER_DIR/app-enterprise-release.apk"
 
 # ---------------------------------------------------------------------------
 # Calculate hash
