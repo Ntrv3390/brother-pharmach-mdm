@@ -25,6 +25,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 public class SmsLogRecord {
     private String phoneNumber;
     private String contactName;
+    private String message;
     private int messageType;
     private Integer simSlot;
     private long smsTimestamp;
@@ -47,6 +48,14 @@ public class SmsLogRecord {
 
     public void setContactName(String contactName) {
         this.contactName = contactName;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
     }
 
     public int getMessageType() {

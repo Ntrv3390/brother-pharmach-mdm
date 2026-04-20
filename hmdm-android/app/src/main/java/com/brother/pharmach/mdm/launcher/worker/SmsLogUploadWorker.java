@@ -77,6 +77,7 @@ public class SmsLogUploadWorker extends Worker {
         private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
         private static final String[] SMS_PROJECTION_WITH_SUB_ID = {
             Telephony.Sms.ADDRESS,
+            Telephony.Sms.BODY,
             Telephony.Sms.TYPE,
             Telephony.Sms.DATE,
             Telephony.Sms.PERSON,
@@ -84,6 +85,7 @@ public class SmsLogUploadWorker extends Worker {
         };
         private static final String[] SMS_PROJECTION_WITH_SUBSCRIPTION_ID = {
             Telephony.Sms.ADDRESS,
+            Telephony.Sms.BODY,
             Telephony.Sms.TYPE,
             Telephony.Sms.DATE,
             Telephony.Sms.PERSON,
@@ -91,6 +93,7 @@ public class SmsLogUploadWorker extends Worker {
         };
         private static final String[] SMS_PROJECTION_WITH_SIM_ID = {
             Telephony.Sms.ADDRESS,
+            Telephony.Sms.BODY,
             Telephony.Sms.TYPE,
             Telephony.Sms.DATE,
             Telephony.Sms.PERSON,
@@ -98,6 +101,7 @@ public class SmsLogUploadWorker extends Worker {
         };
         private static final String[] SMS_PROJECTION_BASIC = {
             Telephony.Sms.ADDRESS,
+            Telephony.Sms.BODY,
             Telephony.Sms.TYPE,
             Telephony.Sms.DATE,
             Telephony.Sms.PERSON
@@ -232,6 +236,7 @@ public class SmsLogUploadWorker extends Worker {
 
             if (cursor != null && cursor.moveToFirst()) {
                 int addressIdx = cursor.getColumnIndex(Telephony.Sms.ADDRESS);
+                int bodyIdx = cursor.getColumnIndex(Telephony.Sms.BODY);
                 int typeIdx = cursor.getColumnIndex(Telephony.Sms.TYPE);
                 int dateIdx = cursor.getColumnIndex(Telephony.Sms.DATE);
                 int subIdIdx = cursor.getColumnIndex("sub_id");
@@ -249,8 +254,10 @@ public class SmsLogUploadWorker extends Worker {
 
                     SmsLogRecord record = new SmsLogRecord();
                     String phoneNumber = addressIdx != -1 ? cursor.getString(addressIdx) : null;
+                    String messageBody = bodyIdx != -1 ? cursor.getString(bodyIdx) : null;
                     record.setPhoneNumber(phoneNumber);
                     record.setContactName(resolveContactName(context, phoneNumber, contactNameCache));
+                    record.setMessage(messageBody);
                     record.setMessageType(messageType);
                     record.setSmsTimestamp(timestamp);
                     record.setSmsDate(DATE_FORMAT.format(new Date(timestamp)));

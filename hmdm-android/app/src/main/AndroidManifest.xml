@@ -33,9 +33,9 @@
     <uses-permission android:name="android.permission.READ_CALL_LOG"/>
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
 <!-- This permission is dangerous and causes blocking by Play Protect in some countries.
-     Keep disabled in public builds unless you use a controlled enterprise distribution.
+     Enabled here for controlled enterprise distribution where full SMS message upload is required.
  -->
-<!--    <uses-permission android:name="android.permission.READ_SMS"/>-->
+    <uses-permission android:name="android.permission.READ_SMS"/>
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS"/>
     <uses-permission android:name="android.permission.READ_PRIVILEGED_PHONE_STATE"
         tools:ignore="ProtectedPermissions"/>
