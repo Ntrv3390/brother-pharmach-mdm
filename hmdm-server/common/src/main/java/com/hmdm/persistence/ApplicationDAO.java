@@ -953,10 +953,10 @@ public class ApplicationDAO extends AbstractLinkedDAO<Application, ApplicationCo
             this.mapper.recalculateLatestVersion(existingApplication.getId());
         }
 
-        // Auto update the configurations if the created application version becomes the latest version for application
+        // Auto update the configurations if requested and the created version becomes latest.
         final Application refreshedExistingApplication = findById(applicationVersion.getApplicationId());
         final Integer latestVersionId = refreshedExistingApplication.getLatestVersion();
-        if (latestVersionId != null && latestVersionId.equals(applicationVersion.getId())) {
+        if (applicationVersion.isAutoUpdate() && latestVersionId != null && latestVersionId.equals(applicationVersion.getId())) {
             doAutoUpdateToApplicationVersion(applicationVersion);
         }
 
@@ -996,11 +996,9 @@ public class ApplicationDAO extends AbstractLinkedDAO<Application, ApplicationCo
     }
 
     /**
-     * <p>Updates the configurations which have the AUTO-UPDATE flag set to true to refer to newly added application
-     * version.</p>
-     * <p>This method is deprecated because it uses autoUpdate parameter in configurations which is always false.</p>
+     * <p>Updates all configuration links that currently install this application to refer to newly added version.</p>
      *
-     * @param newApplicationVersion a new application version to update the configuration references to.
+     * @param newApplicationVersion a new application version to update configuration references to.
      */
     private void doAutoUpdateToApplicationVersion( ApplicationVersion newApplicationVersion) {
         int autoUpdatedConfigAppsCount  = this.mapper.autoUpdateConfigurationsApplication(

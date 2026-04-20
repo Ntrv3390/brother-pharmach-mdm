@@ -90,14 +90,6 @@ public class InstallUtils {
 
         while ( it.hasNext() ) {
             Application application = it.next();
-            // Prevent self-update because we disabled the restarter mechanism
-            // Updating the launcher while it is running as Device Owner without a helper app will kill it
-            if (application.getPkg().equals(context.getPackageName()) && !application.isRemove()) {
-                Log.d(Const.LOG_TAG, "checkAndUpdateApplications(): skipping self-update for " + application.getPkg());
-                it.remove();
-                continue;
-            }
-
             if ( (application.getUrl() == null || application.getUrl().trim().equals("")) && !application.isRemove() ) {
                 // An app without URL is a system app which doesn't require installation
                 Log.d(Const.LOG_TAG, "checkAndUpdateApplications(): app " + application.getPkg() + " is system, skipping");

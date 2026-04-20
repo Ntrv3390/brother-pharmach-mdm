@@ -365,18 +365,14 @@ public interface ApplicationMapper {
     @Update("UPDATE configurationApplications " +
             "SET applicationVersionId = #{newId} " +
             "WHERE applicationId = #{appId} " +
-            "AND action <> 2 " +
-            "AND EXISTS (SELECT 1 " +
-            "            FROM configurations " +
-            "            WHERE configurations.id = configurationApplications.configurationId " +
-            "            AND configurations.autoUpdate IS TRUE)")
+            "AND action = 1 " +
+            "AND COALESCE(remove, FALSE) = FALSE")
     int autoUpdateConfigurationsApplication(@Param("appId") Integer applicationId,
                                             @Param("newId") Integer newAppVersionId);
 
     @Update("UPDATE configurations " +
             "SET mainAppId = #{newId} " +
-            "WHERE configurations.autoUpdate IS TRUE " +
-            "AND EXISTS (SELECT 1 FROM applicationVersions " +
+            "WHERE EXISTS (SELECT 1 FROM applicationVersions " +
             "            WHERE applicationVersions.id = configurations.mainAppId" +
             "            AND applicationVersions.applicationId = #{appId})")
     int autoUpdateConfigurationsMainApplication(@Param("appId") Integer applicationId,
@@ -454,8 +450,7 @@ public interface ApplicationMapper {
 
     @Update("UPDATE configurations " +
             "SET contentAppId = #{newId} " +
-            "WHERE configurations.autoUpdate IS TRUE " +
-            "AND EXISTS (SELECT 1 FROM applicationVersions " +
+            "WHERE EXISTS (SELECT 1 FROM applicationVersions " +
             "            WHERE applicationVersions.id = configurations.contentAppId" +
             "            AND applicationVersions.applicationId = #{appId})")
     int autoUpdateConfigurationsContentApplication(@Param("appId") Integer applicationId,

@@ -74,6 +74,9 @@ public class ApplicationVersion implements Serializable {
     @ApiModelProperty(hidden = true)
     private String arch;
 
+    @ApiModelProperty(hidden = true)
+    private boolean autoUpdate;
+
     /**
      * <p>A path to uploaded file to link this application to when adding an application.</p>
      */
@@ -225,6 +228,14 @@ public class ApplicationVersion implements Serializable {
         this.arch = arch;
     }
 
+    public boolean isAutoUpdate() {
+        return autoUpdate;
+    }
+
+    public void setAutoUpdate(boolean autoUpdate) {
+        this.autoUpdate = autoUpdate;
+    }
+
     @Override
     public String toString() {
         return "ApplicationVersion{" +
@@ -240,6 +251,7 @@ public class ApplicationVersion implements Serializable {
                 ", filePath='" + filePath + '\'' +
                 ", type='" + type + '\'' +
                 ", arch='" + arch + '\'' +
+                ", autoUpdate='" + autoUpdate + '\'' +
                 '}';
     }
 }
