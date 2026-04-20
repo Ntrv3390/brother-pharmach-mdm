@@ -146,9 +146,47 @@ angular
         { id: 32, label: "Sat" },
         { id: 64, label: "Sun" },
       ];
+      $scope.policyTime = null;
+      $scope.exceptionTime = null;
 
       var modalInstance = null;
       var refreshPromise = null;
+
+      function padTimePart(value) {
+        return ("0" + (parseInt(value, 10) || 0)).slice(-2);
+      }
+
+      $scope.timeHourOptions = Array.apply(null, Array(24)).map(function (_, hour) {
+        var value = padTimePart(hour);
+        return { value: value, label: value };
+      });
+
+      $scope.timeMinuteOptions = Array.apply(null, Array(60)).map(function (_, minute) {
+        var value = padTimePart(minute);
+        return { value: value, label: value };
+      });
+
+      function parsePolicyTimeParts(timeValue, fallbackHour, fallbackMinute) {
+        var parts = String(timeValue || "").split(":");
+        var hour = parseInt(parts[0], 10);
+        var minute = parseInt(parts[1], 10);
+
+        if (isNaN(hour) || hour < 0 || hour > 23) {
+          hour = fallbackHour;
+        }
+        if (isNaN(minute) || minute < 0 || minute > 59) {
+          minute = fallbackMinute;
+        }
+
+        return {
+          hour: padTimePart(hour),
+          minute: padTimePart(minute),
+        };
+      }
+
+      function composePolicyTime(hour, minute) {
+        return padTimePart(hour) + ":" + padTimePart(minute);
+      }
 
       function showSuccess(message) {
         $scope.success = message;
@@ -580,6 +618,14 @@ angular
         $scope.error = null;
         $scope.editingDevice = device;
         $scope.editingPolicy = angular.copy(device.policy);
+        var startParts = parsePolicyTimeParts($scope.editingPolicy.startTime, 9, 0);
+        var endParts = parsePolicyTimeParts($scope.editingPolicy.endTime, 17, 0);
+        $scope.policyTime = {
+          startHour: startParts.hour,
+          startMinute: startParts.minute,
+          endHour: endParts.hour,
+          endMinute: endParts.minute,
+        };
         $scope.selectedAppsDuringWork = parseAppsString($scope.editingPolicy.allowedAppsDuringWork);
         $scope.selectedAppsOutsideWork = parseAppsString($scope.editingPolicy.allowedAppsOutsideWork);
         $scope.policyDuringSearchText = "";
@@ -597,6 +643,7 @@ angular
           modalInstance = null;
           $scope.editingDevice = null;
           $scope.editingPolicy = null;
+          $scope.policyTime = null;
         });
       };
 
@@ -609,6 +656,8 @@ angular
         $scope.error = null;
 
         var payload = angular.copy($scope.editingPolicy);
+        payload.startTime = composePolicyTime($scope.policyTime && $scope.policyTime.startHour, $scope.policyTime && $scope.policyTime.startMinute);
+        payload.endTime = composePolicyTime($scope.policyTime && $scope.policyTime.endHour, $scope.policyTime && $scope.policyTime.endMinute);
         payload.allowedAppsDuringWork = buildAppsString($scope.selectedAppsDuringWork);
         payload.allowedAppsOutsideWork = buildAppsString($scope.selectedAppsOutsideWork);
 
@@ -657,8 +706,14 @@ angular
           timeFrom: ("0" + defaultStart.getHours()).slice(-2) + ":" + ("0" + defaultStart.getMinutes()).slice(-2),
           timeTo: ("0" + defaultEnd.getHours()).slice(-2) + ":" + ("0" + defaultEnd.getMinutes()).slice(-2),
         };
-        $scope.editingException.timeFromInput = parseTimeToDate($scope.editingException.timeFrom) || parseTimeToDate("09:00");
-        $scope.editingException.timeToInput = parseTimeToDate($scope.editingException.timeTo) || parseTimeToDate("10:00");
+        var fromParts = parsePolicyTimeParts($scope.editingException.timeFrom, 9, 0);
+        var toParts = parsePolicyTimeParts($scope.editingException.timeTo, 10, 0);
+        $scope.exceptionTime = {
+          fromHour: fromParts.hour,
+          fromMinute: fromParts.minute,
+          toHour: toParts.hour,
+          toMinute: toParts.minute,
+        };
 
         modalInstance = $uibModal.open({
           templateUrl: EXCEPTION_MODAL_TEMPLATE,
@@ -672,6 +727,7 @@ angular
           modalInstance = null;
           $scope.editingDevice = null;
           $scope.editingException = null;
+          $scope.exceptionTime = null;
         });
       };
 
@@ -683,8 +739,10 @@ angular
         $scope.exceptionSaving = true;
         $scope.error = null;
 
-        var startDateTime = toApiDateTimeString($scope.editingException.dateFrom, $scope.editingException.timeFromInput || $scope.editingException.timeFrom);
-        var endDateTime = toApiDateTimeString($scope.editingException.dateTo, $scope.editingException.timeToInput || $scope.editingException.timeTo);
+        var fromTime = composePolicyTime($scope.exceptionTime && $scope.exceptionTime.fromHour, $scope.exceptionTime && $scope.exceptionTime.fromMinute);
+        var toTime = composePolicyTime($scope.exceptionTime && $scope.exceptionTime.toHour, $scope.exceptionTime && $scope.exceptionTime.toMinute);
+        var startDateTime = toApiDateTimeString($scope.editingException.dateFrom, fromTime);
+        var endDateTime = toApiDateTimeString($scope.editingException.dateTo, toTime);
 
         if (!startDateTime || !endDateTime) {
           $scope.exceptionSaving = false;

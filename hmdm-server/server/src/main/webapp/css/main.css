@@ -1037,6 +1037,12 @@ td.app-desc span {
     margin-left: -150px !important;
 }
 
+.dropdown-menu-devices > li > a:hover,
+.dropdown-menu-devices > li > a:focus {
+    background-color: #7a9ab9 !important;
+    color: #ffffff !important;
+}
+
 .time-period-select {
     width: 50px !important;
     font-size: 12px !important;
@@ -1239,6 +1245,15 @@ td.app-desc span {
 
 .administration .tabset li {
     cursor: pointer;
+}
+
+.tabset .nav-tabs > li.dropdown > .dropdown-menu > li > a:hover,
+.tabset .nav-tabs > li.dropdown > .dropdown-menu > li > a:focus,
+.tabset .nav-tabs > li.dropdown > .dropdown-menu > .active > a,
+.tabset .nav-tabs > li.dropdown > .dropdown-menu > .active > a:hover,
+.tabset .nav-tabs > li.dropdown > .dropdown-menu > .active > a:focus {
+    background-color: #7a9ab9;
+    color: #ffffff;
 }
 
 .confirm, .progress-dialog {

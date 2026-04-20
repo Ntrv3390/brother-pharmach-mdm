@@ -678,12 +678,20 @@
         <h5 class="worktime-form-title">Working Window</h5>
         <div class="worktime-inline-grid">
           <div class="worktime-field">
-            <label>Start Time</label>
-            <input type="text" class="form-control" ng-model="editingPolicy.startTime" placeholder="HH:mm" />
+            <label>Start Time (HH:MM)</label>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <select class="form-control" ng-model="policyTime.startHour" ng-options="option.value as option.label for option in timeHourOptions"></select>
+              <span>:</span>
+              <select class="form-control" ng-model="policyTime.startMinute" ng-options="option.value as option.label for option in timeMinuteOptions"></select>
+            </div>
           </div>
           <div class="worktime-field">
-            <label>End Time</label>
-            <input type="text" class="form-control" ng-model="editingPolicy.endTime" placeholder="HH:mm" />
+            <label>End Time (HH:MM)</label>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <select class="form-control" ng-model="policyTime.endHour" ng-options="option.value as option.label for option in timeHourOptions"></select>
+              <span>:</span>
+              <select class="form-control" ng-model="policyTime.endMinute" ng-options="option.value as option.label for option in timeMinuteOptions"></select>
+            </div>
           </div>
         </div>
       </div>
@@ -808,12 +816,20 @@
 
         <div class="worktime-inline-grid" style="margin-top:14px;">
           <div class="worktime-field">
-            <label>Time From</label>
-            <input type="time" class="form-control" ng-model="editingException.timeFromInput" />
+            <label>Time From (HH:MM)</label>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <select class="form-control" ng-model="exceptionTime.fromHour" ng-options="option.value as option.label for option in timeHourOptions"></select>
+              <span>:</span>
+              <select class="form-control" ng-model="exceptionTime.fromMinute" ng-options="option.value as option.label for option in timeMinuteOptions"></select>
+            </div>
           </div>
           <div class="worktime-field">
-            <label>Time To</label>
-            <input type="time" class="form-control" ng-model="editingException.timeToInput" />
+            <label>Time To (HH:MM)</label>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <select class="form-control" ng-model="exceptionTime.toHour" ng-options="option.value as option.label for option in timeHourOptions"></select>
+              <span>:</span>
+              <select class="form-control" ng-model="exceptionTime.toMinute" ng-options="option.value as option.label for option in timeMinuteOptions"></select>
+            </div>
           </div>
         </div>
       </div>

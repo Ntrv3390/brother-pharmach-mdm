@@ -211,7 +211,7 @@
             class="form-control"
             style="flex: 1; min-width: 220px;"
             ng-model="filters.search"
-            placeholder="Search by name or phone number"
+            placeholder="Search by name, phone number, or message"
           />
         </div>
 
@@ -225,6 +225,7 @@
                 <th localized>plugin.smslog.table.sim</th>
                 <th localized>plugin.smslog.table.number</th>
                 <th localized>plugin.smslog.table.contact</th>
+                <th localized>plugin.smslog.table.message</th>
               </tr>
             </thead>
             <tbody>
@@ -244,6 +245,7 @@
                 <td>{{getSimLabel(log.simSlot)}}</td>
                 <td>{{log.phoneNumber || 'N/A'}}</td>
                 <td>{{log.contactName || '-'}}</td>
+                <td style="max-width: 340px; white-space: normal; word-break: break-word;">{{log.message || '-'}}</td>
               </tr>
             </tbody>
           </table>

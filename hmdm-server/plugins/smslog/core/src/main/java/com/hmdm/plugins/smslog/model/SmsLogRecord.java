@@ -27,6 +27,9 @@ public class SmsLogRecord implements Serializable {
     @ApiModelProperty("Contact name (if available)")
     private String contactName;
 
+    @ApiModelProperty("Actual SMS message text")
+    private String message;
+
     @ApiModelProperty("Message type: 1=incoming, 2=outgoing")
     private int messageType;
 
@@ -80,6 +83,14 @@ public class SmsLogRecord implements Serializable {
 
     public void setContactName(String contactName) {
         this.contactName = contactName;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
     }
 
     public int getMessageType() {
@@ -137,6 +148,7 @@ public class SmsLogRecord implements Serializable {
                 ", deviceId=" + deviceId +
                 ", phoneNumber='" + phoneNumber + '\'' +
                 ", contactName='" + contactName + '\'' +
+                ", message='" + message + '\'' +
             ", messageType=" + messageType +
             ", simSlot=" + simSlot +
             ", smsTimestamp=" + smsTimestamp +
