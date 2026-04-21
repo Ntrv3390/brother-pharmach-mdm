@@ -60,7 +60,11 @@ angular.module('headwind-kiosk')
                 $scope.role[prop] = role[prop];
             }
         }
-        $scope.permissionList = permissions.map(function (permission) {
+        $scope.permissionList = permissions
+            .filter(function(permission) {
+                return permission.name !== 'plugin_xtra_access';
+            })
+            .map(function (permission) {
             return {
                 id: permission.id,
                 label: localization.localize('permission.' + permission.name)
