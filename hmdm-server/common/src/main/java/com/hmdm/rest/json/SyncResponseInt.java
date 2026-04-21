@@ -159,6 +159,8 @@ public interface SyncResponseInt {
 
     String getCustom3();
 
+    String getPasswordReset();
+
     String getAppName();
 
     String getVendor();

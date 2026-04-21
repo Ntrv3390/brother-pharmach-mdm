@@ -66,6 +66,8 @@ public class Device implements CustomerData, Serializable {
     private String custom2;
     @ApiModelProperty("Custom property #3")
     private String custom3;
+    @ApiModelProperty("Pending password reset")
+    private String passwordReset;
 
     // Many-to-many relations
     @ApiModelProperty("A list of groups assigned to device")
@@ -273,6 +275,14 @@ public class Device implements CustomerData, Serializable {
         this.custom3 = custom3;
     }
 
+    public String getPasswordReset() {
+        return passwordReset;
+    }
+
+    public void setPasswordReset(String passwordReset) {
+        this.passwordReset = passwordReset;
+    }
+
     public List<LookupItem> getGroups() {
         return groups;
     }
@@ -391,6 +401,7 @@ public class Device implements CustomerData, Serializable {
                 ", custom1=" + custom1 +
                 ", custom2=" + custom2 +
                 ", custom3=" + custom3 +
+                ", passwordReset='" + passwordReset + '\'' +
                 ", groups=" + groups +
                 ", ids=" + ids +
                 ", configuration=" + configuration +

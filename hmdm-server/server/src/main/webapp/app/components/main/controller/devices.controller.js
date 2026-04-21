@@ -981,6 +981,22 @@ angular.module('headwind-kiosk')
             $rootScope.$emit('plugin-' + plugin.identifier + '-device-selected', device);
         };
 
+        $scope.resetPassword = function (device) {
+            var modalInstance = $modal.open({
+                templateUrl: 'app/components/main/view/modal/device.resetPassword.html',
+                controller: 'DeviceResetPasswordModalController',
+                resolve: {
+                    device: function () {
+                        return device;
+                    }
+                }
+            });
+
+            modalInstance.result.then(function () {
+                $scope.search();
+            });
+        };
+
         $scope.editConfiguration = function (configuration) {
             $state.transitionTo('configEditor', {"id": configuration.id});
         };
@@ -1427,6 +1443,36 @@ angular.module('headwind-kiosk')
                 $scope.groups = response.data;
             });
         })
+    .controller('DeviceResetPasswordModalController', function ($scope, $modalInstance, deviceService, device, localization) {
+        $scope.device = device;
+        $scope.password = "";
+        $scope.passwordConfirm = "";
+
+        $scope.save = function () {
+            if (!$scope.password || $scope.password.length === 0) {
+                $scope.errorMessage = localization.localize("error.empty.password");
+                return;
+            }
+            if ($scope.password !== $scope.passwordConfirm) {
+                $scope.errorMessage = localization.localize("error.password.mismatch");
+                return;
+            }
+
+            deviceService.resetPassword({id: device.id, password: $scope.password}, function (response) {
+                if (response.status === 'OK') {
+                    $modalInstance.close();
+                } else {
+                    $scope.errorMessage = localization.localizeServerResponse(response);
+                }
+            }, function () {
+                $scope.errorMessage = localization.localizeServerResponse('error.request.failure');
+            });
+        };
+
+        $scope.closeModal = function () {
+            $modalInstance.dismiss();
+        }
+    })
     .controller('DeviceApplicationSettingsModalController', function ($scope, $modal, $modalInstance,
                                                                       localization, deviceService,
                                                                       applicationService, alertService,

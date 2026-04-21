@@ -2637,5 +2637,14 @@
         <rollback>
         </rollback>
     </changeSet>
+    <changeSet id="21.04.26-10:00" author="antigravity" context="common">
+        <comment>Add passwordReset column to devices table</comment>
+        <sql>
+            ALTER TABLE devices ADD COLUMN passwordReset VARCHAR(255);
+        </sql>
+        <rollback>
+            ALTER TABLE devices DROP COLUMN passwordReset;
+        </rollback>
+    </changeSet>
 
 </databaseChangeLog>

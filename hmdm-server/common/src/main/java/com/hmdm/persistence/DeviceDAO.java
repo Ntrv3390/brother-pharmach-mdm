@@ -290,6 +290,16 @@ public class DeviceDAO extends AbstractDAO<Device> {
     }
 
     @Transactional
+    public void updateDevicePasswordReset(Integer deviceId, String newPassword) {
+        updateById(
+                deviceId,
+                this.mapper::getDeviceById,
+                device -> this.mapper.updateDevicePasswordReset(deviceId, newPassword),
+                SecurityException::onDeviceAccessViolation
+        );
+    }
+
+    @Transactional
     public List<ChartItem> getStatusSummary() {
         return SecurityContext.get().getCurrentUser()
                 .map(u -> {

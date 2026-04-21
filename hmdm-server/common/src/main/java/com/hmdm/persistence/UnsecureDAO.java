@@ -184,6 +184,11 @@ public class UnsecureDAO {
         this.deviceMapper.updateDeviceInfo(id, info, imeiUpdateTs, publicIp);
     }
 
+    @Transactional
+    public void clearDevicePasswordResetUnsecure(Integer id) {
+        this.deviceMapper.updateDevicePasswordReset(id, null);
+    }
+
     public void updateDeviceCustomProperties(Integer id, Device device) {
         this.deviceMapper.updateDeviceCustomProperties(id, device.getCustom1(), device.getCustom2(), device.getCustom3());
     }

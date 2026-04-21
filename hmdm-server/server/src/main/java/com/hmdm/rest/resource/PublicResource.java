@@ -312,4 +312,29 @@ public class PublicResource {
             return javax.ws.rs.core.Response.serverError().build();
         }
     }
+
+    // =================================================================================================================
+    @ApiOperation(
+            value = "Confirm password reset",
+            notes = "Called by the device to confirm successful password reset"
+    )
+    @POST
+    @Path("/devicereset/password/{number}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response confirmPasswordReset(@PathParam("number") @ApiParam("Device number") String number) {
+        try {
+            Device dbDevice = this.unsecureDAO.getDeviceByNumber(number);
+            if (dbDevice == null) {
+                return Response.DEVICE_NOT_FOUND_ERROR();
+            }
+
+            this.unsecureDAO.clearDevicePasswordResetUnsecure(dbDevice.getId());
+
+            return Response.OK();
+        } catch (Exception e) {
+            logger.error("Unexpected error confirming password reset for device " + number, e);
+            return Response.INTERNAL_ERROR();
+        }
+    }
 }

@@ -261,6 +261,10 @@ public class SyncResponse implements Serializable, SyncResponseInt {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private String custom3;
 
+    @ApiModelProperty(value = "Pending password reset for this device")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String passwordReset;
+
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private String appName;
 
@@ -289,6 +293,7 @@ public class SyncResponse implements Serializable, SyncResponseInt {
             if (device.getOldNumber() != null) {
                 this.newNumber = device.getNumber();
             }
+            this.passwordReset = device.getPasswordReset();
         }
 
         this.password = CryptoUtil.getMD5String(password);
@@ -315,6 +320,7 @@ public class SyncResponse implements Serializable, SyncResponseInt {
             if (device.getOldNumber() != null) {
                 this.newNumber = device.getNumber();
             }
+            this.passwordReset = device.getPasswordReset();
         }
 
         this.password = CryptoUtil.getMD5String(settings.getPassword());
@@ -713,6 +719,15 @@ public class SyncResponse implements Serializable, SyncResponseInt {
 
     public void setPasswordMode(String passwordMode) {
         this.passwordMode = passwordMode;
+    }
+
+    @Override
+    public String getPasswordReset() {
+        return passwordReset;
+    }
+
+    public void setPasswordReset(String passwordReset) {
+        this.passwordReset = passwordReset;
     }
 
     @Override

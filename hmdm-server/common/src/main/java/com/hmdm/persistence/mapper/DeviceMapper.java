@@ -144,6 +144,10 @@ public interface DeviceMapper {
     void updateDeviceDescription(@Param("deviceId") Integer deviceId,
                                  @Param("description") String newDeviceDesc);
 
+    @Update({"UPDATE devices SET passwordReset = #{passwordReset} WHERE id = #{deviceId}"})
+    void updateDevicePasswordReset(@Param("deviceId") Integer deviceId,
+                                   @Param("passwordReset") String passwordReset);
+
     @Update({"UPDATE devices SET fastSearch = RIGHT(number, #{fastSearchChars}) WHERE fastSearch IS NULL " +
             " OR LENGTH(fastSearch) != #{fastSearchChars}"})
     void updateFastSearch(@Param("fastSearchChars") Integer fastSearchChars);

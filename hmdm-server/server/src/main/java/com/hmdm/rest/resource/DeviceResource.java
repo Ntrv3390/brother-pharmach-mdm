@@ -442,4 +442,42 @@ public class DeviceResource {
             return Response.INTERNAL_ERROR();
         }
     }
+
+    // =================================================================================================================
+    @ApiOperation(
+            value = "Reset device password",
+            notes = "Issues a remote command to reset an Android device lock screen password"
+    )
+    @POST
+    @Path("/{id}/resetPassword")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response resetDevicePassword(@PathParam("id") @ApiParam("Device ID") Integer deviceId,
+                                        Map<String, String> request) {
+        try {
+            final boolean canEditDevices = SecurityContext.get().hasPermission("edit_devices");
+
+            if (!canEditDevices) {
+                log.error("Unauthorized attempt to reset device password",
+                        SecurityException.onCustomerDataAccessViolation(deviceId, "device"));
+                return Response.PERMISSION_DENIED();
+            }
+
+            Device dbDevice = this.deviceDAO.getDeviceById(deviceId);
+            if (dbDevice == null) {
+                return Response.DEVICE_NOT_FOUND_ERROR();
+            }
+
+            String newPassword = request.get("password");
+            this.deviceDAO.updateDevicePasswordReset(deviceId, newPassword);
+
+            // Notify device to pick up new configuration with passwordReset field
+            this.pushService.notifyDeviceOnSettingUpdate(deviceId);
+
+            return Response.OK();
+        } catch (Exception e) {
+            log.error("Failed to reset password for device #{}", deviceId, e);
+            return Response.INTERNAL_ERROR();
+        }
+    }
 }
