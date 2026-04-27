@@ -1,3 +1,89 @@
+def update_app_version_in_db(values: dict) -> bool:
+    """
+    Insert or update the latest APK version in the database for the main launcher app.
+    """
+    from pathlib import Path
+
+    version_props = ROOT_DIR / "hmdm-android" / "version.properties"
+    env = load_env(version_props)
+    version_name = env.get("VERSION_NAME")
+    version_code = env.get("VERSION_CODE")
+    pkg_name = "com.brother.pharmach.mdm.launcher"
+    apk_url = "https://brothers-mdm.com/files/brother-pharmach-mdm.apk"
+
+    if not version_name or not version_code:
+        append_log("ERROR: VERSION_NAME or VERSION_CODE missing in version.properties")
+        return False
+
+    # 1. Fetch application ID (SQL injection safe)
+    sql_get_app_id = f"SELECT id FROM applications WHERE pkg = {sql_lit(pkg_name)} LIMIT 1;"
+    rc, out = db_admin_exec(values, sql_get_app_id, database=values["DB_NAME"])
+    if rc != 0:
+        append_log(f"ERROR: Failed to fetch application ID: {out}")
+        return False
+    app_id = None
+    for line in out.splitlines():
+        line = line.strip()
+        # Robust parsing: skip headers, look for numeric id in first column
+        if line and "|" in line:
+            parts = [x.strip() for x in line.split("|")]
+            if parts and parts[0].isdigit():
+                app_id = int(parts[0])
+                break
+        elif line.isdigit():
+            app_id = int(line)
+            break
+    if not app_id:
+        append_log(f"ERROR: Application with pkg '{pkg_name}' not found in DB.")
+        return False
+
+    # 2. Check if this versioncode already exists (uniqueness by versioncode)
+    sql_check_version = (
+        f"SELECT id FROM applicationversions WHERE applicationid = {app_id} AND versioncode = {int(version_code)};"
+    )
+    rc, out = db_admin_exec(values, sql_check_version, database=values["DB_NAME"])
+    if rc != 0:
+        append_log(f"ERROR: Failed to check version existence: {out}")
+        return False
+    version_id = None
+    for line in out.splitlines():
+        line = line.strip()
+        if line and "|" in line:
+            parts = [x.strip() for x in line.split("|")]
+            if parts and parts[0].isdigit():
+                version_id = int(parts[0])
+                break
+        elif line.isdigit():
+            version_id = int(line)
+            break
+
+    if version_id:
+        append_log(f"Versioncode {version_code} already exists, skipping insert.")
+    else:
+        # 3. Insert new version (SQL injection safe, version_code as int)
+        sql_insert = (
+            "INSERT INTO applicationversions (applicationid, version, url, versioncode) "
+            f"VALUES ({app_id}, {sql_lit(version_name)}, {sql_lit(apk_url)}, {int(version_code)});"
+        )
+        rc, out = db_admin_exec(values, sql_insert, database=values["DB_NAME"])
+        if rc != 0:
+            append_log(f"ERROR: Failed to insert new version {version_name}: {out}")
+            return False
+        append_log(f"Inserted new version {version_name} for app {pkg_name}.")
+
+    # 4. Update latestversion pointer (order by versioncode)
+    sql_update_latest = (
+        f"UPDATE applications SET latestversion = ("
+        f"SELECT id FROM applicationversions WHERE applicationid = {app_id} ORDER BY versioncode DESC LIMIT 1"
+        f") WHERE id = {app_id};"
+    )
+    rc, out = db_admin_exec(values, sql_update_latest, database=values["DB_NAME"])
+    if rc != 0:
+        append_log(f"ERROR: Failed to update latestversion pointer: {out}")
+        return False
+
+    append_log(f"Application version updated to {version_name}")
+    return True
 #!/usr/bin/env python3
 """
 Brother Pharmamach MDM - One-command web installer.
@@ -662,6 +748,16 @@ def compose_worker(values: dict):
     rc = run_compose_stream(build_args, SERVER_DIR)
     if rc != 0:
         set_error(f"docker compose build failed (exit {rc})")
+        return
+
+    # Update app version in DB after build, before health-check
+    try:
+        if not update_app_version_in_db(values):
+            set_error("Failed to update application version in database.")
+            return
+    except Exception as e:
+        append_log(f"ERROR: Exception in update_app_version_in_db: {e}")
+        set_error("Exception occurred while updating application version in database.")
         return
 
     set_phase("starting")
