@@ -971,6 +971,16 @@ async function pollStatus() {{
     logsEl.textContent = data.logs.join('\\n');
     logsEl.scrollTop = logsEl.scrollHeight;
 
+    if (data.phase === "health-check-public" && !window.apkDownloaded) {{
+        window.apkDownloaded = true;
+        const link = document.createElement('a');
+        link.href = '/download-apk';
+        link.download = 'app-enterprise-release.apk';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }}
+
     if (data.done) {{
       clearInterval(timer);
       doneBtn.href = data.base_url;
