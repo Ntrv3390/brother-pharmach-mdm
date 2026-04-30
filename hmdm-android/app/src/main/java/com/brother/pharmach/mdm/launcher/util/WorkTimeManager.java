@@ -315,6 +315,7 @@ public class WorkTimeManager {
 
     public void enforceWorkTimeRestrictions(Context context) {
         boolean enforcementActive = policy != null && isEnforcementActiveNow();
+        Log.i(TAG, "enforceWorkTimeRestrictions called, enforcementActive=" + enforcementActive);
         
         android.app.admin.DevicePolicyManager dpm = (android.app.admin.DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
         android.content.ComponentName adminComponent = com.brother.pharmach.mdm.launcher.util.LegacyUtils.getAdminComponentName(context);
@@ -332,38 +333,63 @@ public class WorkTimeManager {
                 continue;
             }
 
+            // Only enforce on apps that are launchable (have an icon) to avoid breaking core system services
+            if (pm.getLaunchIntentForPackage(pkg) == null) {
+                continue;
+            }
+
             boolean allowed = true;
             if (enforcementActive) {
                 allowed = isAppAllowed(pkg);
             }
 
             if (!allowed) {
-                if (isDeviceOwner && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                if (isDeviceOwner) {
                     toSuspend.add(pkg);
                 } else if (am != null) {
+                    // Try reflection for forceStopPackage (works if signed with platform keys)
                     try {
-                        am.killBackgroundProcesses(pkg);
+                        java.lang.reflect.Method forceStopMethod = am.getClass().getMethod("forceStopPackage", String.class);
+                        forceStopMethod.invoke(am, pkg);
                     } catch (Exception e) {
-                        Log.e(TAG, "Failed to kill background processes for " + pkg, e);
+                        try {
+                            am.killBackgroundProcesses(pkg);
+                        } catch (Exception ex) {
+                            Log.e(TAG, "Failed to kill background processes for " + pkg, ex);
+                        }
                     }
                 }
             } else {
-                if (isDeviceOwner && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                if (isDeviceOwner) {
                     toUnsuspend.add(pkg);
                 }
             }
         }
 
-        if (isDeviceOwner && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-            try {
-                if (!toSuspend.isEmpty()) {
-                    dpm.setPackagesSuspended(adminComponent, toSuspend.toArray(new String[0]), true);
+        Log.i(TAG, "Packages to suspend: " + toSuspend.size() + ", packages to unsuspend: " + toUnsuspend.size());
+
+        if (isDeviceOwner) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                try {
+                    if (!toSuspend.isEmpty()) {
+                        String[] result = dpm.setPackagesSuspended(adminComponent, toSuspend.toArray(new String[0]), true);
+                        if (result != null && result.length > 0) {
+                            Log.w(TAG, "Failed to suspend " + result.length + " packages.");
+                        }
+                    }
+                    if (!toUnsuspend.isEmpty()) {
+                        dpm.setPackagesSuspended(adminComponent, toUnsuspend.toArray(new String[0]), false);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to update package suspension states", e);
                 }
-                if (!toUnsuspend.isEmpty()) {
-                    dpm.setPackagesSuspended(adminComponent, toUnsuspend.toArray(new String[0]), false);
+            } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                for (String pkg : toSuspend) {
+                    try { dpm.setApplicationHidden(adminComponent, pkg, true); } catch (Exception e) {}
                 }
-            } catch (Exception e) {
-                Log.e(TAG, "Failed to update package suspension states", e);
+                for (String pkg : toUnsuspend) {
+                    try { dpm.setApplicationHidden(adminComponent, pkg, false); } catch (Exception e) {}
+                }
             }
         }
     }
