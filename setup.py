@@ -1020,6 +1020,27 @@ class SetupHandler(BaseHTTPRequestHandler):
             self._send_json(payload)
             return
 
+        if self.path == "/download-apk":
+            apk_path = ROOT_DIR / "hmdm-android" / "app" / "build" / "outputs" / "apk" / "enterprise" / "release" / "app-enterprise-release.apk"
+            if not apk_path.exists():
+                self.send_response(404)
+                self.send_header("Content-Type", "text/plain")
+                self.end_headers()
+                self.wfile.write(b"APK not found.")
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.android.package-archive")
+            self.send_header("Content-Disposition", "attachment; filename=app-enterprise-release.apk")
+            self.send_header("Content-Length", str(apk_path.stat().st_size))
+            self.end_headers()
+            with open(apk_path, "rb") as f:
+                while True:
+                    chunk = f.read(8192)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+            return
+
         self._send_json({"ok": False, "error": "Not found"}, code=404)
 
     def do_POST(self):
