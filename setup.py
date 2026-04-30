@@ -769,6 +769,8 @@ def compose_worker(values: dict):
 
     apk_path = apk_files[0]
     append_log(f"APK found: {apk_path}")
+    apk_download_url = f"http://{HOST}:{PORT}/download-apk"
+    append_log(f"APK ready. Downloading from: {apk_download_url}")
 
     set_phase("starting")
     append_log("Starting required containers (postgres, hmdm-server, cloudflared)...")
