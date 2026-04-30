@@ -521,9 +521,12 @@
           appendLog(serverOfflineHint("Stop Logs", error), "error");
         }
       }
-
-      logcatStartBtn.addEventListener("click", startLogcatUI);
-      logcatStopBtn.addEventListener("click", stopLogcatUI);
+      if (logcatStartBtn) {
+        logcatStartBtn.addEventListener("click", startLogcatUI);
+      }
+      if (logcatStopBtn) {
+        logcatStopBtn.addEventListener("click", stopLogcatUI);
+      }
 
       function serverOfflineHint(actionName, error) {
         const message =
