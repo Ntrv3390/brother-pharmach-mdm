@@ -750,14 +750,11 @@ def compose_worker(values: dict):
         set_error(f"docker compose build failed (exit {rc})")
         return
 
-    # Update app version in DB after build, before health-check
-    try:
-        if not update_app_version_in_db(values):
-            set_error("Failed to update application version in database.")
-            return
-    except Exception as e:
-        append_log(f"ERROR: Exception in update_app_version_in_db: {e}")
-        set_error("Exception occurred while updating application version in database.")
+    # APK validation after build
+    apk_path = ROOT_DIR / "hmdm-android" / "app" / "build" / "outputs" / "apk" / "enterprise" / "release" / "app-enterprise-release.apk"
+    if not apk_path.exists():
+        set_error("APK not found after build.")
+        append_log("ERROR: APK not found after build.")
         return
 
     set_phase("starting")
