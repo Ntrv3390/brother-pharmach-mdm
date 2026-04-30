@@ -749,13 +749,26 @@ def compose_worker(values: dict):
     if rc != 0:
         set_error(f"docker compose build failed (exit {rc})")
         return
+    
+    apk_dir = ROOT_DIR / "hmdm-android" / "app" / "build" / "outputs" / "apk"
+    apk_files = list(apk_dir.rglob("*.apk"))
 
-    # APK validation after build
-    apk_path = ROOT_DIR / "hmdm-android" / "app" / "build" / "outputs" / "apk" / "enterprise" / "release" / "app-enterprise-release.apk"
-    if not apk_path.exists():
-        set_error("APK not found after build.")
-        append_log("ERROR: APK not found after build.")
-        return
+    if not apk_files:
+        append_log("APK not found on host, trying to copy from Docker...")
+        subprocess.run([
+            "docker", "cp",
+            "hmdm:/app/build/outputs/apk/enterprise/release/app-enterprise-release.apk",
+            str(apk_dir / "app-enterprise-release.apk")
+        ])
+
+        apk_files = list(apk_dir.rglob("*.apk"))
+
+        if not apk_files:
+            set_error("APK not found after build (even after docker copy).")
+            return
+
+apk_path = apk_files[0]
+append_log(f"APK found: {apk_path}")
 
     set_phase("starting")
     append_log("Starting required containers (postgres, hmdm-server, cloudflared)...")
