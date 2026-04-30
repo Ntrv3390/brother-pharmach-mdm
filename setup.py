@@ -767,8 +767,8 @@ def compose_worker(values: dict):
             set_error("APK not found after build (even after docker copy).")
             return
 
-apk_path = apk_files[0]
-append_log(f"APK found: {apk_path}")
+    apk_path = apk_files[0]
+    append_log(f"APK found: {apk_path}")
 
     set_phase("starting")
     append_log("Starting required containers (postgres, hmdm-server, cloudflared)...")
