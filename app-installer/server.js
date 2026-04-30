@@ -8,7 +8,8 @@ const APP_DIR = __dirname;
 const UI_FILE = path.join(APP_DIR, "ui", "index.html");
 const APK_FILE = path.join(APP_DIR, "app-enterprise-release.apk");
 const ADMIN_FILE = path.join(APP_DIR, "AdminReceiverClass.txt");
-const DEFAULT_ADMIN_COMPONENT = "com.brother.pharmach.mdm.launcher/.AdminReceiver";
+const DEFAULT_ADMIN_COMPONENT =
+  "com.brother.pharmach.mdm.launcher/.AdminReceiver";
 
 function resolveAdbPath() {
   const envPath = (process.env.APP_INSTALLER_ADB_PATH || "").trim();
@@ -157,7 +158,9 @@ async function listDevices() {
   const lines = result.stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("List of devices attached"));
+    .filter(
+      (line) => line.length > 0 && !line.startsWith("List of devices attached"),
+    );
 
   const devices = lines.map((line) => {
     const parts = line.split(/\s+/);
@@ -211,13 +214,18 @@ function replyJson(res, statusCode, payload) {
 function extractPackageFromComponent(adminComponent) {
   const slash = adminComponent.indexOf("/");
   if (slash <= 0) {
-    throw new Error(`Invalid admin component in AdminReceiverClass.txt: ${adminComponent}`);
+    throw new Error(
+      `Invalid admin component in AdminReceiverClass.txt: ${adminComponent}`,
+    );
   }
   return adminComponent.substring(0, slash);
 }
 
 async function isPackageInstalled(serial, packageName) {
-  const result = await runAdb(["-s", serial, "shell", "pm", "path", packageName], 30000);
+  const result = await runAdb(
+    ["-s", serial, "shell", "pm", "path", packageName],
+    30000,
+  );
   const out = `${result.stdout}\n${result.stderr}`.trim();
   return {
     installed: result.code === 0 && /package:/i.test(out),
@@ -229,13 +237,16 @@ async function ensurePackageInstalled(serial, packageName) {
   const packageCheck = await isPackageInstalled(serial, packageName);
   if (!packageCheck.installed) {
     throw new Error(
-      `Installed package check failed for ${packageName}. Ensure APK installed correctly before setting device owner. Details: ${packageCheck.details}`
+      `Installed package check failed for ${packageName}. Ensure APK installed correctly before setting device owner. Details: ${packageCheck.details}`,
     );
   }
 }
 
 async function getUserCount(serial) {
-  const result = await runAdb(["-s", serial, "shell", "pm", "list", "users"], 30000);
+  const result = await runAdb(
+    ["-s", serial, "shell", "pm", "list", "users"],
+    30000,
+  );
   const out = `${result.stdout}\n${result.stderr}`;
   const matches = [...out.matchAll(/UserInfo\{\d+:/g)];
   return {
@@ -246,7 +257,10 @@ async function getUserCount(serial) {
 }
 
 async function getAccountCount(serial) {
-  const result = await runAdb(["-s", serial, "shell", "dumpsys", "account"], 40000);
+  const result = await runAdb(
+    ["-s", serial, "shell", "dumpsys", "account"],
+    40000,
+  );
   const out = `${result.stdout}\n${result.stderr}`;
   if (result.code !== 0) {
     return {
@@ -282,7 +296,10 @@ async function getAccountCount(serial) {
 }
 
 async function listInstalledPackageNames(serial) {
-  const result = await runAdb(["-s", serial, "shell", "pm", "list", "packages"], 30000);
+  const result = await runAdb(
+    ["-s", serial, "shell", "pm", "list", "packages"],
+    30000,
+  );
   const out = `${result.stdout}\n${result.stderr}`.trim();
   if (result.code !== 0) {
     throw new Error(`Unable to list installed packages: ${out}`);
@@ -299,14 +316,20 @@ async function listInstalledPackageNames(serial) {
 function apkPackageHint(apkPath) {
   const base = path.basename(apkPath, ".apk").toLowerCase();
   const withoutCopyIndex = base.replace(/\s*\(\d+\)\s*$/, "");
-  const withoutVersion = withoutCopyIndex.replace(/[-_ ]v?\d+(\.\d+)+(.*)?$/, "");
+  const withoutVersion = withoutCopyIndex.replace(
+    /[-_ ]v?\d+(\.\d+)+(.*)?$/,
+    "",
+  );
   const hint = withoutVersion.replace(/[^a-z0-9]/g, "");
   return hint;
 }
 
 async function resolveAdditionalPackagesOnDevice(serial, extraApks) {
   const installed = await listInstalledPackageNames(serial);
-  const installedLower = installed.map((p) => ({ original: p, lower: p.toLowerCase() }));
+  const installedLower = installed.map((p) => ({
+    original: p,
+    lower: p.toLowerCase(),
+  }));
 
   const resolved = [];
   const unresolved = [];
@@ -326,7 +349,11 @@ async function resolveAdditionalPackagesOnDevice(serial, extraApks) {
     }
 
     if (matches.length > 1) {
-      unresolved.push({ apkName, reason: "ambiguous", candidates: matches.map((m) => m.original) });
+      unresolved.push({
+        apkName,
+        reason: "ambiguous",
+        candidates: matches.map((m) => m.original),
+      });
       continue;
     }
 
@@ -344,14 +371,18 @@ function remediationStepsForBlockers(blockers) {
 
   if (hasAccounts || hasUsers) {
     steps.push("Factory reset the phone.");
-    steps.push("On first boot, skip Google/Samsung/Xiaomi/Huawei account sign-in.");
+    steps.push(
+      "On first boot, skip Google/Samsung/Xiaomi/Huawei account sign-in.",
+    );
     steps.push("Enable Developer options and USB debugging.");
     steps.push("Connect USB, tap Allow USB debugging on phone.");
     steps.push("Run Install + Make Owner before adding any account.");
   }
 
   if (!steps.length) {
-    steps.push("No blocker detected. You can proceed with Install + Make Owner.");
+    steps.push(
+      "No blocker detected. You can proceed with Install + Make Owner.",
+    );
   }
 
   return steps;
@@ -405,8 +436,26 @@ async function precheckDeviceOwner(serial, adminComponent) {
 async function setDeviceOwnerWithFallbacks(serial, adminComponent) {
   const attempts = [
     ["-s", serial, "shell", "dpm", "set-device-owner", adminComponent],
-    ["-s", serial, "shell", "dpm", "set-device-owner", "--user", "current", adminComponent],
-    ["-s", serial, "shell", "dpm", "set-device-owner", "--user", "0", adminComponent],
+    [
+      "-s",
+      serial,
+      "shell",
+      "dpm",
+      "set-device-owner",
+      "--user",
+      "current",
+      adminComponent,
+    ],
+    [
+      "-s",
+      serial,
+      "shell",
+      "dpm",
+      "set-device-owner",
+      "--user",
+      "0",
+      adminComponent,
+    ],
   ];
 
   let lastCombined = "";
@@ -423,7 +472,9 @@ async function setDeviceOwnerWithFallbacks(serial, adminComponent) {
       return { ok: true, output: combined };
     }
 
-    if (/already has a device owner|already set.*device owner/i.test(combined)) {
+    if (
+      /already has a device owner|already set.*device owner/i.test(combined)
+    ) {
       return { ok: true, alreadyOwner: true, output: combined };
     }
   }
@@ -435,22 +486,25 @@ async function installOnDevice(serial, adminComponent) {
   sendLog(`[${serial}] Preparing device for installation...`);
   sendLog(
     `[${serial}] If your phone asks for USB debugging authorization, tap Allow now.`,
-    "warn"
+    "warn",
   );
 
   const state = await runAdb(["-s", serial, "get-state"], 20000);
   const stateText = state.stdout.trim();
   if (state.code !== 0 || stateText !== "device") {
     throw new Error(
-      `Device is not ready (${stateText || state.stderr.trim() || "unknown state"}).`
+      `Device is not ready (${stateText || state.stderr.trim() || "unknown state"}).`,
     );
   }
 
   sendLog(`[${serial}] Installing APK...`);
-  const installResult = await runAdb(["-s", serial, "install", "-r", APK_FILE], 180000);
+  const installResult = await runAdb(
+    ["-s", serial, "install", "-r", APK_FILE],
+    180000,
+  );
   if (installResult.code !== 0) {
     throw new Error(
-      `APK install failed: ${(installResult.stderr || installResult.stdout).trim()}`
+      `APK install failed: ${(installResult.stderr || installResult.stdout).trim()}`,
     );
   }
 
@@ -461,10 +515,13 @@ async function installOnDevice(serial, adminComponent) {
       const apkName = path.basename(extraApk);
       sendLog(`[${serial}] Installing extra app: ${apkName}`);
 
-      const extraResult = await runAdb(["-s", serial, "install", "-r", extraApk], 180000);
+      const extraResult = await runAdb(
+        ["-s", serial, "install", "-r", extraApk],
+        180000,
+      );
       if (extraResult.code !== 0) {
         throw new Error(
-          `Additional app install failed (${apkName}): ${(extraResult.stderr || extraResult.stdout).trim()}`
+          `Additional app install failed (${apkName}): ${(extraResult.stderr || extraResult.stdout).trim()}`,
         );
       }
     }
@@ -477,21 +534,28 @@ async function installOnDevice(serial, adminComponent) {
   await ensurePackageInstalled(serial, packageName);
 
   // Ignore failure here; this simply clears old active admin state if present.
-  await runAdb(["-s", serial, "shell", "dpm", "remove-active-admin", adminComponent], 30000);
+  await runAdb(
+    ["-s", serial, "shell", "dpm", "remove-active-admin", adminComponent],
+    30000,
+  );
 
   const ownerResult = await setDeviceOwnerWithFallbacks(serial, adminComponent);
   const combined = ownerResult.output || "";
 
   if (!ownerResult.ok) {
-    if (/already some accounts on the device|not allowed to set the device owner/i.test(combined)) {
+    if (
+      /already some accounts on the device|not allowed to set the device owner/i.test(
+        combined,
+      )
+    ) {
       throw new Error(
-        `Device owner blocked by Android policy (accounts/users already present). ${combined}`
+        `Device owner blocked by Android policy (accounts/users already present). ${combined}`,
       );
     }
 
     if (/unknown admin/i.test(combined)) {
       throw new Error(
-        `Device owner failed: admin component not recognized on device. Check AdminReceiverClass.txt and APK package/class. ${combined}`
+        `Device owner failed: admin component not recognized on device. Check AdminReceiverClass.txt and APK package/class. ${combined}`,
       );
     }
 
@@ -506,7 +570,7 @@ async function installOnDevice(serial, adminComponent) {
   if (!/Active admin component set|Success/i.test(combined)) {
     sendLog(
       `[${serial}] dpm command completed, but response was unusual: ${combined}`,
-      "warn"
+      "warn",
     );
   } else {
     sendLog(`[${serial}] Device owner set successfully.`, "success");
@@ -515,14 +579,18 @@ async function installOnDevice(serial, adminComponent) {
 
 async function handleInstallRequest(res, requestedSerials) {
   if (installInProgress) {
-    replyJson(res, 409, { ok: false, error: "An install is already in progress." });
+    replyJson(res, 409, {
+      ok: false,
+      error: "An install is already in progress.",
+    });
     return;
   }
 
   if (!fs.existsSync(APK_FILE)) {
     replyJson(res, 400, {
       ok: false,
-      error: "APK not found. Expected app-enterprise-release.apk in app-installer folder.",
+      error:
+        "APK not found. Expected app-enterprise-release.apk in app-installer folder.",
     });
     return;
   }
@@ -547,17 +615,22 @@ async function handleInstallRequest(res, requestedSerials) {
   if (eligible.length === 0) {
     replyJson(res, 400, {
       ok: false,
-      error: "No authorized devices detected. Connect phone, enable USB debugging, and tap Allow.",
+      error:
+        "No authorized devices detected. Connect phone, enable USB debugging, and tap Allow.",
     });
     return;
   }
 
-  const selected = Array.isArray(requestedSerials) && requestedSerials.length > 0
-    ? eligible.filter((d) => requestedSerials.includes(d.serial))
-    : eligible;
+  const selected =
+    Array.isArray(requestedSerials) && requestedSerials.length > 0
+      ? eligible.filter((d) => requestedSerials.includes(d.serial))
+      : eligible;
 
   if (selected.length === 0) {
-    replyJson(res, 400, { ok: false, error: "No valid authorized devices selected." });
+    replyJson(res, 400, {
+      ok: false,
+      error: "No valid authorized devices selected.",
+    });
     return;
   }
 
@@ -575,13 +648,21 @@ async function handleInstallRequest(res, requestedSerials) {
 
       const lowered = reason.toLowerCase();
       const steps = [];
-      if (lowered.includes("accounts/users already present") || lowered.includes("already some accounts")) {
+      if (
+        lowered.includes("accounts/users already present") ||
+        lowered.includes("already some accounts")
+      ) {
         steps.push("Factory reset the device.");
         steps.push("Skip all account sign-in during setup.");
         steps.push("Enable USB debugging and tap Allow.");
         steps.push("Run Install + Make Owner before adding any account.");
-      } else if (lowered.includes("admin component not recognized") || lowered.includes("unknown admin")) {
-        steps.push("Confirm AdminReceiverClass.txt matches manifest receiver class.");
+      } else if (
+        lowered.includes("admin component not recognized") ||
+        lowered.includes("unknown admin")
+      ) {
+        steps.push(
+          "Confirm AdminReceiverClass.txt matches manifest receiver class.",
+        );
         steps.push("Reinstall the APK and retry.");
       }
 
@@ -599,7 +680,10 @@ async function handleInstallRequest(res, requestedSerials) {
   installInProgress = false;
 
   const successCount = results.filter((r) => r.ok).length;
-  sendLog(`Install flow finished. Success: ${successCount}/${results.length}.`, "info");
+  sendLog(
+    `Install flow finished. Success: ${successCount}/${results.length}.`,
+    "info",
+  );
 
   replyJson(res, 200, {
     ok: true,
@@ -615,7 +699,7 @@ async function removeAppsOnDevice(serial, adminComponent) {
   const stateText = state.stdout.trim();
   if (state.code !== 0 || stateText !== "device") {
     throw new Error(
-      `Device is not ready (${stateText || state.stderr.trim() || "unknown state"}).`
+      `Device is not ready (${stateText || state.stderr.trim() || "unknown state"}).`,
     );
   }
 
@@ -625,7 +709,16 @@ async function removeAppsOnDevice(serial, adminComponent) {
   // Try removing active admin in both default and explicit user modes.
   const removeAdminAttempts = [
     ["-s", serial, "shell", "dpm", "remove-active-admin", adminComponent],
-    ["-s", serial, "shell", "dpm", "remove-active-admin", "--user", "0", adminComponent],
+    [
+      "-s",
+      serial,
+      "shell",
+      "dpm",
+      "remove-active-admin",
+      "--user",
+      "0",
+      adminComponent,
+    ],
   ];
 
   let adminRemovalMessage = "";
@@ -644,11 +737,15 @@ async function removeAppsOnDevice(serial, adminComponent) {
   }
 
   if (adminRemovalMessage) {
-    if (/not test.?only admin|securityexception|unknown admin/i.test(adminRemovalMessage)) {
+    if (
+      /not test.?only admin|securityexception|unknown admin/i.test(
+        adminRemovalMessage,
+      )
+    ) {
       adminRemovalRestricted = true;
       sendLog(
         `[${serial}] Admin removal may be restricted by Android policy: ${adminRemovalMessage}`,
-        "warn"
+        "warn",
       );
     }
   }
@@ -657,20 +754,28 @@ async function removeAppsOnDevice(serial, adminComponent) {
   const extraApks = getAdditionalApkFiles();
 
   try {
-    const extraPackages = await resolveAdditionalPackagesOnDevice(serial, extraApks);
+    const extraPackages = await resolveAdditionalPackagesOnDevice(
+      serial,
+      extraApks,
+    );
     for (const item of extraPackages.resolved) {
       uninstallTargets.add(item.packageName);
     }
 
     for (const unresolved of extraPackages.unresolved) {
-      const detail = unresolved.candidates ? ` Candidates: ${unresolved.candidates.join(", ")}` : "";
+      const detail = unresolved.candidates
+        ? ` Candidates: ${unresolved.candidates.join(", ")}`
+        : "";
       sendLog(
         `[${serial}] Could not auto-resolve package for ${unresolved.apkName} (${unresolved.reason}).${detail}`,
-        "warn"
+        "warn",
       );
     }
   } catch (error) {
-    sendLog(`[${serial}] Could not resolve additional packages automatically: ${error.message}`, "warn");
+    sendLog(
+      `[${serial}] Could not resolve additional packages automatically: ${error.message}`,
+      "warn",
+    );
   }
 
   const removed = [];
@@ -678,7 +783,10 @@ async function removeAppsOnDevice(serial, adminComponent) {
 
   for (const packageName of uninstallTargets) {
     sendLog(`[${serial}] Uninstalling package: ${packageName}`);
-    const uninstall = await runAdb(["-s", serial, "uninstall", packageName], 60000);
+    const uninstall = await runAdb(
+      ["-s", serial, "uninstall", packageName],
+      60000,
+    );
     const combined = `${uninstall.stdout}\n${uninstall.stderr}`.trim();
     if (uninstall.code === 0 && /success/i.test(combined)) {
       removed.push(packageName);
@@ -696,32 +804,43 @@ async function removeAppsOnDevice(serial, adminComponent) {
       adminRemovalRestricted &&
       /delete_failed_internal_error/i.test(failureReason)
     ) {
-      failureReason =
-        `Admin app cannot be removed via adb because it is an active non-test device admin/device owner on this device. ${failureReason}`;
+      failureReason = `Admin app cannot be removed via adb because it is an active non-test device admin/device owner on this device. ${failureReason}`;
     }
 
     failed.push({ packageName, error: failureReason });
-    sendLog(`[${serial}] Uninstall failed for ${packageName}: ${failureReason}`, "error");
+    sendLog(
+      `[${serial}] Uninstall failed for ${packageName}: ${failureReason}`,
+      "error",
+    );
   }
 
   if (failed.length > 0) {
     const firstError = failed[0].error || "Uninstall failed";
     throw new Error(
-      `Some apps could not be removed. Removed ${removed.length}, failed ${failed.length}. First error: ${firstError}`
+      `Some apps could not be removed. Removed ${removed.length}, failed ${failed.length}. First error: ${firstError}`,
     );
   }
 
-  sendLog(`[${serial}] App removal flow complete. Removed ${removed.length} package(s).`, "success");
+  sendLog(
+    `[${serial}] App removal flow complete. Removed ${removed.length} package(s).`,
+    "success",
+  );
 }
 
 async function handleRemoveRequest(res, requestedSerials) {
   if (installInProgress) {
-    replyJson(res, 409, { ok: false, error: "Cannot remove while install is in progress." });
+    replyJson(res, 409, {
+      ok: false,
+      error: "Cannot remove while install is in progress.",
+    });
     return;
   }
 
   if (removeInProgress) {
-    replyJson(res, 409, { ok: false, error: "A remove operation is already in progress." });
+    replyJson(res, 409, {
+      ok: false,
+      error: "A remove operation is already in progress.",
+    });
     return;
   }
 
@@ -745,17 +864,22 @@ async function handleRemoveRequest(res, requestedSerials) {
   if (eligible.length === 0) {
     replyJson(res, 400, {
       ok: false,
-      error: "No authorized devices detected. Connect phone, enable USB debugging, and tap Allow.",
+      error:
+        "No authorized devices detected. Connect phone, enable USB debugging, and tap Allow.",
     });
     return;
   }
 
-  const selected = Array.isArray(requestedSerials) && requestedSerials.length > 0
-    ? eligible.filter((d) => requestedSerials.includes(d.serial))
-    : eligible;
+  const selected =
+    Array.isArray(requestedSerials) && requestedSerials.length > 0
+      ? eligible.filter((d) => requestedSerials.includes(d.serial))
+      : eligible;
 
   if (selected.length === 0) {
-    replyJson(res, 400, { ok: false, error: "No valid authorized devices selected." });
+    replyJson(res, 400, {
+      ok: false,
+      error: "No valid authorized devices selected.",
+    });
     return;
   }
 
@@ -775,18 +899,28 @@ async function handleRemoveRequest(res, requestedSerials) {
       const lowered = reason.toLowerCase();
       if (
         /not test.?only admin|securityexception|device owner|delete_failed_internal_error|cannot be removed via adb/.test(
-          lowered
+          lowered,
         )
       ) {
-        steps.push("Open the admin app and use any built-in deactivation/remove-owner option if available.");
-        steps.push("If removal is still blocked, factory reset the device (Android policy restriction).");
-        steps.push("After reset, do not add accounts before install/remove operations.");
+        steps.push(
+          "Open the admin app and use any built-in deactivation/remove-owner option if available.",
+        );
+        steps.push(
+          "If removal is still blocked, factory reset the device (Android policy restriction).",
+        );
+        steps.push(
+          "After reset, do not add accounts before install/remove operations.",
+        );
       }
 
       if (steps.length === 0) {
         steps.push("Review the exact error in Live Logs for this device.");
-        steps.push("Ensure the device is unlocked and USB debugging is still authorized.");
-        steps.push("Retry Remove Apps. If it fails again, factory reset may be required.");
+        steps.push(
+          "Ensure the device is unlocked and USB debugging is still authorized.",
+        );
+        steps.push(
+          "Retry Remove Apps. If it fails again, factory reset may be required.",
+        );
       }
 
       results.push({ serial: device.serial, ok: false, error: reason, steps });
@@ -795,7 +929,10 @@ async function handleRemoveRequest(res, requestedSerials) {
 
   removeInProgress = false;
   const successCount = results.filter((r) => r.ok).length;
-  sendLog(`Remove flow finished. Success: ${successCount}/${results.length}.`, "info");
+  sendLog(
+    `Remove flow finished. Success: ${successCount}/${results.length}.`,
+    "info",
+  );
 
   replyJson(res, 200, {
     ok: true,
@@ -886,7 +1023,10 @@ const server = http.createServer(async (req, res) => {
       const serials = Array.isArray(body.serials) ? body.serials : [];
 
       if (!serials.length) {
-        replyJson(res, 400, { ok: false, error: "No device serials provided." });
+        replyJson(res, 400, {
+          ok: false,
+          error: "No device serials provided.",
+        });
         return;
       }
 
@@ -935,7 +1075,9 @@ const server = http.createServer(async (req, res) => {
 ensureAdminFile();
 sendLog("App Installer server starting...");
 sendLog(`ADB path: ${ADB_EXE}`);
-sendLog(`Using admin receiver from ${path.basename(ADMIN_FILE)}: ${readAdminComponent()}`);
+sendLog(
+  `Using admin receiver from ${path.basename(ADMIN_FILE)}: ${readAdminComponent()}`,
+);
 
 process.on("uncaughtException", (error) => {
   console.error("[FATAL] Uncaught exception:", error);
@@ -960,5 +1102,7 @@ process.on("unhandledRejection", (reason) => {
 
 server.listen(PORT, () => {
   sendLog(`Web UI ready at http://localhost:${PORT}`);
-  sendLog("Connect Android phone via USB, enable USB debugging, then click Detect Devices.");
+  sendLog(
+    "Connect Android phone via USB, enable USB debugging, then click Detect Devices.",
+  );
 });
