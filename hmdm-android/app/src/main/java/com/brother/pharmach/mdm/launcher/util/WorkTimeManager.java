@@ -312,4 +312,59 @@ public class WorkTimeManager {
             return 0;
         }
     }
+
+    public void enforceWorkTimeRestrictions(Context context) {
+        boolean enforcementActive = policy != null && isEnforcementActiveNow();
+        
+        android.app.admin.DevicePolicyManager dpm = (android.app.admin.DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+        android.content.ComponentName adminComponent = com.brother.pharmach.mdm.launcher.util.LegacyUtils.getAdminComponentName(context);
+        boolean isDeviceOwner = dpm != null && dpm.isDeviceOwnerApp(context.getPackageName());
+        android.app.ActivityManager am = (android.app.ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+        android.content.pm.PackageManager pm = context.getPackageManager();
+        
+        java.util.List<android.content.pm.ApplicationInfo> installedApps = pm.getInstalledApplications(0);
+        java.util.ArrayList<String> toSuspend = new java.util.ArrayList<>();
+        java.util.ArrayList<String> toUnsuspend = new java.util.ArrayList<>();
+
+        for (android.content.pm.ApplicationInfo appInfo : installedApps) {
+            String pkg = appInfo.packageName;
+            if (pkg.equals(context.getPackageName())) {
+                continue;
+            }
+
+            boolean allowed = true;
+            if (enforcementActive) {
+                allowed = isAppAllowed(pkg);
+            }
+
+            if (!allowed) {
+                if (isDeviceOwner && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    toSuspend.add(pkg);
+                } else if (am != null) {
+                    try {
+                        am.killBackgroundProcesses(pkg);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Failed to kill background processes for " + pkg, e);
+                    }
+                }
+            } else {
+                if (isDeviceOwner && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    toUnsuspend.add(pkg);
+                }
+            }
+        }
+
+        if (isDeviceOwner && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+            try {
+                if (!toSuspend.isEmpty()) {
+                    dpm.setPackagesSuspended(adminComponent, toSuspend.toArray(new String[0]), true);
+                }
+                if (!toUnsuspend.isEmpty()) {
+                    dpm.setPackagesSuspended(adminComponent, toUnsuspend.toArray(new String[0]), false);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to update package suspension states", e);
+            }
+        }
+    }
 }

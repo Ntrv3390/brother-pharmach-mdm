@@ -307,6 +307,7 @@ public class MainActivity
                     ServerConfig cfg = settingsHelper != null ? settingsHelper.getConfig() : null;
                     if (cfg != null) {
                         showContent(cfg);
+                        com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance().enforceWorkTimeRestrictions(context);
                     }
                     break;
             }
@@ -339,6 +340,7 @@ public class MainActivity
                  if (com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance().shouldRefreshUI()) {
                      needRedrawContentAfterReconfigure = true;
                      showContent(settingsHelper.getConfig());
+                     com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance().enforceWorkTimeRestrictions(context);
                  }
                  return;
             }
