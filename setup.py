@@ -749,28 +749,16 @@ def compose_worker(values: dict):
     if rc != 0:
         set_error(f"docker compose build failed (exit {rc})")
         return
-    
-    apk_dir = ROOT_DIR / "hmdm-android" / "app" / "build" / "outputs" / "apk"
-    apk_files = list(apk_dir.rglob("*.apk"))
 
-    if not apk_files:
-        append_log("APK not found on host, trying to copy from Docker...")
-        subprocess.run([
-            "docker", "cp",
-            "hmdm:/app/build/outputs/apk/enterprise/release/app-enterprise-release.apk",
-            str(apk_dir / "app-enterprise-release.apk")
-        ])
-
-        apk_files = list(apk_dir.rglob("*.apk"))
-
-        if not apk_files:
-            set_error("APK not found after build (even after docker copy).")
+    # Update app version in DB after build, before health-check
+    try:
+        if not update_app_version_in_db(values):
+            set_error("Failed to update application version in database.")
             return
-
-    apk_path = apk_files[0]
-    append_log(f"APK found: {apk_path}")
-    apk_download_url = f"http://{HOST}:{PORT}/download-apk"
-    append_log(f"APK ready. Downloading from: {apk_download_url}")
+    except Exception as e:
+        append_log(f"ERROR: Exception in update_app_version_in_db: {e}")
+        set_error("Exception occurred while updating application version in database.")
+        return
 
     set_phase("starting")
     append_log("Starting required containers (postgres, hmdm-server, cloudflared)...")
@@ -971,16 +959,6 @@ async function pollStatus() {{
     logsEl.textContent = data.logs.join('\\n');
     logsEl.scrollTop = logsEl.scrollHeight;
 
-    if (data.phase === "health-check-public" && !window.apkDownloaded) {{
-        window.apkDownloaded = true;
-        const link = document.createElement('a');
-        link.href = '/download-apk';
-        link.download = 'app-enterprise-release.apk';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }}
-
     if (data.done) {{
       clearInterval(timer);
       doneBtn.href = data.base_url;
@@ -1043,27 +1021,6 @@ class SetupHandler(BaseHTTPRequestHandler):
                     "base_url": STATE["base_url"],
                 }
             self._send_json(payload)
-            return
-
-        if self.path == "/download-apk":
-            apk_path = ROOT_DIR / "hmdm-android" / "app" / "build" / "outputs" / "apk" / "enterprise" / "release" / "app-enterprise-release.apk"
-            if not apk_path.exists():
-                self.send_response(404)
-                self.send_header("Content-Type", "text/plain")
-                self.end_headers()
-                self.wfile.write(b"APK not found.")
-                return
-            self.send_response(200)
-            self.send_header("Content-Type", "application/vnd.android.package-archive")
-            self.send_header("Content-Disposition", "attachment; filename=app-enterprise-release.apk")
-            self.send_header("Content-Length", str(apk_path.stat().st_size))
-            self.end_headers()
-            with open(apk_path, "rb") as f:
-                while True:
-                    chunk = f.read(8192)
-                    if not chunk:
-                        break
-                    self.wfile.write(chunk)
             return
 
         self._send_json({"ok": False, "error": "Not found"}, code=404)
