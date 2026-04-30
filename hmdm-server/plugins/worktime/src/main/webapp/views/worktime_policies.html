@@ -731,8 +731,7 @@
               <input
                 type="checkbox"
                 ng-model="selectedAppsDuringWork[app.pkg]"
-                ng-change="toggleIndividualAppDuringWork()"
-                ng-disabled="selectedAppsDuringWork['*']" />
+                ng-change="toggleIndividualAppDuringWork()" />
               <div>
                 <strong>{{app.name || app.applicationName || app.pkg}}</strong>
                 <div class="text-muted" style="font-size:12px;">{{app.pkg}}</div>
@@ -767,8 +766,7 @@
               <input
                 type="checkbox"
                 ng-model="selectedAppsOutsideWork[app.pkg]"
-                ng-change="toggleIndividualAppOutsideWork()"
-                ng-disabled="selectedAppsOutsideWork['*']" />
+                ng-change="toggleIndividualAppOutsideWork()" />
               <div>
                 <strong>{{app.name || app.applicationName || app.pkg}}</strong>
                 <div class="text-muted" style="font-size:12px;">{{app.pkg}}</div>

@@ -18,13 +18,15 @@ angular
 
     $stateProvider.state("plugin-worktime-devices", {
       url: "/plugin-worktime/devices",
-      templateUrl: "app/components/plugins/worktime/views/worktime_policies.html",
+      templateUrl:
+        "app/components/plugins/worktime/views/worktime_policies.html",
       controller: "WorkTimeAdminController",
     });
 
     $stateProvider.state("plugin-worktime-policies", {
       url: "/plugin-worktime/policies",
-      templateUrl: "app/components/plugins/worktime/views/worktime_policies.html",
+      templateUrl:
+        "app/components/plugins/worktime/views/worktime_policies.html",
       controller: "WorkTimeAdminController",
     });
   })
@@ -49,7 +51,7 @@ angular
           transformResponse: unwrapList,
         },
         save: { method: "POST", url: "/rest/plugins/worktime/private/policy" },
-      }
+      },
     );
   })
   .factory("WorkTimeDevice", function ($resource) {
@@ -73,7 +75,7 @@ angular
         },
         save: { method: "POST", url: "/rest/plugins/worktime/private/device" },
         remove: { method: "DELETE" },
-      }
+      },
     );
   })
   .factory("WorkTimeApplications", function ($resource) {
@@ -98,7 +100,7 @@ angular
           method: "GET",
           url: "/rest/private/configurations/applications",
         },
-      }
+      },
     );
   })
   .controller(
@@ -112,7 +114,7 @@ angular
       WorkTimeDevice,
       WorkTimeApplications,
       localization,
-      authService
+      authService,
     ) {
       var POLICY_MODAL_TEMPLATE = "worktimePolicyModalTemplate.html";
       var EXCEPTION_MODAL_TEMPLATE = "worktimeExceptionModalTemplate.html";
@@ -136,7 +138,8 @@ angular
       $scope.applications = [];
       $scope.searchText = "";
       $scope.lastRefreshAt = null;
-      $scope.canEdit = authService.isSuperAdmin() || authService.hasPermission("settings");
+      $scope.canEdit =
+        authService.isSuperAdmin() || authService.hasPermission("settings");
       $scope.days = [
         { id: 1, label: "Mon" },
         { id: 2, label: "Tue" },
@@ -156,15 +159,19 @@ angular
         return ("0" + (parseInt(value, 10) || 0)).slice(-2);
       }
 
-      $scope.timeHourOptions = Array.apply(null, Array(24)).map(function (_, hour) {
-        var value = padTimePart(hour);
-        return { value: value, label: value };
-      });
+      $scope.timeHourOptions = Array.apply(null, Array(24)).map(
+        function (_, hour) {
+          var value = padTimePart(hour);
+          return { value: value, label: value };
+        },
+      );
 
-      $scope.timeMinuteOptions = Array.apply(null, Array(60)).map(function (_, minute) {
-        var value = padTimePart(minute);
-        return { value: value, label: value };
-      });
+      $scope.timeMinuteOptions = Array.apply(null, Array(60)).map(
+        function (_, minute) {
+          var value = padTimePart(minute);
+          return { value: value, label: value };
+        },
+      );
 
       function parsePolicyTimeParts(timeValue, fallbackHour, fallbackMinute) {
         var parts = String(timeValue || "").split(":");
@@ -197,7 +204,9 @@ angular
 
       function getAppSearchText(app) {
         return [app && app.name, app && app.applicationName, app && app.pkg]
-          .filter(function (value) { return !!value; })
+          .filter(function (value) {
+            return !!value;
+          })
           .join(" ")
           .toLowerCase();
       }
@@ -223,14 +232,15 @@ angular
       }
 
       function buildAppsString(selectedApps) {
-        if (selectedApps["*"]) {
+        var selected = Object.keys(selectedApps).filter(function (pkg) {
+          return pkg !== "*" && selectedApps[pkg];
+        });
+
+        if (selectedApps["*"] && selected.length === 0) {
           return "*";
         }
-        return Object.keys(selectedApps)
-          .filter(function (pkg) {
-            return pkg !== "*" && selectedApps[pkg];
-          })
-          .join(",");
+
+        return selected.join(",");
       }
 
       function countSelected(selectedApps) {
@@ -246,7 +256,10 @@ angular
       function normalizePolicy(device, policy) {
         var merged = angular.extend({}, DEFAULT_POLICY, policy || {});
         merged.deviceId = device.deviceId;
-        merged.deviceName = device.deviceName || (policy && policy.deviceName) || ("Device " + device.deviceId);
+        merged.deviceName =
+          device.deviceName ||
+          (policy && policy.deviceName) ||
+          "Device " + device.deviceId;
         return merged;
       }
 
@@ -257,7 +270,15 @@ angular
         var stringValue = String(value);
         if (/^\d{4}-\d{2}-\d{2}$/.test(stringValue)) {
           var parts = stringValue.split("-");
-          return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 0, 0, 0, 0);
+          return new Date(
+            parseInt(parts[0], 10),
+            parseInt(parts[1], 10) - 1,
+            parseInt(parts[2], 10),
+            0,
+            0,
+            0,
+            0,
+          );
         }
         var parsed = new Date(stringValue);
         return isNaN(parsed.getTime()) ? null : parsed;
@@ -274,7 +295,12 @@ angular
           var parts = timeValue.split(":");
           if (parts.length >= 2) {
             var parsed = new Date();
-            parsed.setHours(parseInt(parts[0], 10) || 0, parseInt(parts[1], 10) || 0, 0, 0);
+            parsed.setHours(
+              parseInt(parts[0], 10) || 0,
+              parseInt(parts[1], 10) || 0,
+              0,
+              0,
+            );
             return parsed;
           }
         }
@@ -286,7 +312,11 @@ angular
         if (!date || isNaN(date.getTime())) {
           return null;
         }
-        return [date.getFullYear(), ("0" + (date.getMonth() + 1)).slice(-2), ("0" + date.getDate()).slice(-2)].join("-");
+        return [
+          date.getFullYear(),
+          ("0" + (date.getMonth() + 1)).slice(-2),
+          ("0" + date.getDate()).slice(-2),
+        ].join("-");
       }
 
       function toTimePart(timeValue) {
@@ -294,12 +324,20 @@ angular
           return null;
         }
         if (angular.isDate(timeValue) && !isNaN(timeValue.getTime())) {
-          return ("0" + timeValue.getHours()).slice(-2) + ":" + ("0" + timeValue.getMinutes()).slice(-2);
+          return (
+            ("0" + timeValue.getHours()).slice(-2) +
+            ":" +
+            ("0" + timeValue.getMinutes()).slice(-2)
+          );
         }
         if (typeof timeValue === "string") {
           var parts = timeValue.split(":");
           if (parts.length >= 2) {
-            return ("0" + (parseInt(parts[0], 10) || 0)).slice(-2) + ":" + ("0" + (parseInt(parts[1], 10) || 0)).slice(-2);
+            return (
+              ("0" + (parseInt(parts[0], 10) || 0)).slice(-2) +
+              ":" +
+              ("0" + (parseInt(parts[1], 10) || 0)).slice(-2)
+            );
           }
         }
         return null;
@@ -325,28 +363,50 @@ angular
         }
         if (exception.timeFrom) {
           var fromParts = String(exception.timeFrom).split(":");
-          from.setHours(parseInt(fromParts[0], 10) || 0, parseInt(fromParts[1], 10) || 0, 0, 0);
+          from.setHours(
+            parseInt(fromParts[0], 10) || 0,
+            parseInt(fromParts[1], 10) || 0,
+            0,
+            0,
+          );
         }
         if (exception.timeTo) {
           var toParts = String(exception.timeTo).split(":");
-          to.setHours(parseInt(toParts[0], 10) || 0, parseInt(toParts[1], 10) || 0, 59, 999);
+          to.setHours(
+            parseInt(toParts[0], 10) || 0,
+            parseInt(toParts[1], 10) || 0,
+            59,
+            999,
+          );
         }
         return { from: from, to: to };
       }
 
       function normalizeExceptions(device) {
-        var exceptions = angular.isArray(device.exceptions) ? angular.copy(device.exceptions) : [];
+        var exceptions = angular.isArray(device.exceptions)
+          ? angular.copy(device.exceptions)
+          : [];
         var now = new Date();
 
-        if (exceptions.length === 0 && device.startDateTime && device.endDateTime) {
+        if (
+          exceptions.length === 0 &&
+          device.startDateTime &&
+          device.endDateTime
+        ) {
           var start = new Date(device.startDateTime);
           var end = new Date(device.endDateTime);
           if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && now <= end) {
             exceptions.push({
               dateFrom: start,
               dateTo: end,
-              timeFrom: ("0" + start.getHours()).slice(-2) + ":" + ("0" + start.getMinutes()).slice(-2),
-              timeTo: ("0" + end.getHours()).slice(-2) + ":" + ("0" + end.getMinutes()).slice(-2),
+              timeFrom:
+                ("0" + start.getHours()).slice(-2) +
+                ":" +
+                ("0" + start.getMinutes()).slice(-2),
+              timeTo:
+                ("0" + end.getHours()).slice(-2) +
+                ":" +
+                ("0" + end.getMinutes()).slice(-2),
             });
           }
         }
@@ -374,36 +434,43 @@ angular
           policyMap[policy.deviceId] = policy;
         });
 
-        return (overrides || []).map(function (device) {
-          var row = angular.copy(device);
-          row.deviceName = row.deviceName || ("Device " + row.deviceId);
-          row.policy = normalizePolicy(row, policyMap[row.deviceId]);
-          row.exceptions = normalizeExceptions(row);
-          row.hasActiveException = row.exceptions.some(function (exception) {
-            return !!exception.active;
+        return (overrides || [])
+          .map(function (device) {
+            var row = angular.copy(device);
+            row.deviceName = row.deviceName || "Device " + row.deviceId;
+            row.policy = normalizePolicy(row, policyMap[row.deviceId]);
+            row.exceptions = normalizeExceptions(row);
+            row.hasActiveException = row.exceptions.some(function (exception) {
+              return !!exception.active;
+            });
+            return row;
+          })
+          .sort(function (left, right) {
+            var leftName = (left.deviceName || "").toLowerCase();
+            var rightName = (right.deviceName || "").toLowerCase();
+            return leftName.localeCompare(rightName);
           });
-          return row;
-        }).sort(function (left, right) {
-          var leftName = (left.deviceName || "").toLowerCase();
-          var rightName = (right.deviceName || "").toLowerCase();
-          return leftName.localeCompare(rightName);
-        });
       }
 
       function handleLoadError(error, fallbackMessage) {
         console.error(fallbackMessage, error);
-        $scope.error = (error && error.data && error.data.message) || fallbackMessage;
+        $scope.error =
+          (error && error.data && error.data.message) || fallbackMessage;
         $scope.loading = false;
         $scope.refreshing = false;
       }
 
       $scope.formatDays = function (daysOfWeek) {
-        var value = angular.isNumber(daysOfWeek) ? daysOfWeek : DEFAULT_POLICY.daysOfWeek;
-        var labels = $scope.days.filter(function (day) {
-          return (value & day.id) === day.id;
-        }).map(function (day) {
-          return day.label;
-        });
+        var value = angular.isNumber(daysOfWeek)
+          ? daysOfWeek
+          : DEFAULT_POLICY.daysOfWeek;
+        var labels = $scope.days
+          .filter(function (day) {
+            return (value & day.id) === day.id;
+          })
+          .map(function (day) {
+            return day.label;
+          });
         return labels.length === 7 ? "Every day" : labels.join(", ");
       };
 
@@ -418,8 +485,10 @@ angular
         }
         var search = $scope.searchText.toLowerCase();
         return $scope.devices.filter(function (device) {
-          return (device.deviceName || "").toLowerCase().indexOf(search) !== -1 ||
-                 String(device.deviceId || "").indexOf(search) !== -1;
+          return (
+            (device.deviceName || "").toLowerCase().indexOf(search) !== -1 ||
+            String(device.deviceId || "").indexOf(search) !== -1
+          );
         });
       };
 
@@ -450,26 +519,38 @@ angular
 
       $scope.toggleAllAppsDuringWork = function () {
         if ($scope.selectedAppsDuringWork["*"]) {
-          $scope.selectedAppsDuringWork = { "*": true };
+          ($scope.applications || []).forEach(function (app) {
+            $scope.selectedAppsDuringWork[app.pkg] = true;
+          });
+        } else {
+          $scope.selectedAppsDuringWork = {};
         }
       };
 
       $scope.toggleAllAppsOutsideWork = function () {
         if ($scope.selectedAppsOutsideWork["*"]) {
-          $scope.selectedAppsOutsideWork = { "*": true };
+          ($scope.applications || []).forEach(function (app) {
+            $scope.selectedAppsOutsideWork[app.pkg] = true;
+          });
+        } else {
+          $scope.selectedAppsOutsideWork = {};
         }
       };
 
       $scope.toggleIndividualAppDuringWork = function () {
-        if ($scope.selectedAppsDuringWork["*"]) {
-          delete $scope.selectedAppsDuringWork["*"];
-        }
+        var allSelected = ($scope.applications || []).every(function (app) {
+          return $scope.selectedAppsDuringWork[app.pkg];
+        });
+
+        $scope.selectedAppsDuringWork["*"] = allSelected;
       };
 
       $scope.toggleIndividualAppOutsideWork = function () {
-        if ($scope.selectedAppsOutsideWork["*"]) {
-          delete $scope.selectedAppsOutsideWork["*"];
-        }
+        var allSelected = ($scope.applications || []).every(function (app) {
+          return $scope.selectedAppsOutsideWork[app.pkg];
+        });
+
+        $scope.selectedAppsOutsideWork["*"] = allSelected;
       };
 
       $scope.countSelectedApps = function (selectedApps) {
@@ -488,19 +569,22 @@ angular
           function (deviceResponse) {
             WorkTimePolicy.list(
               function (policyResponse) {
-                $scope.devices = buildDeviceRows(deviceResponse, policyResponse);
+                $scope.devices = buildDeviceRows(
+                  deviceResponse,
+                  policyResponse,
+                );
                 $scope.lastRefreshAt = new Date();
                 $scope.loading = false;
                 $scope.refreshing = false;
               },
               function (error) {
                 handleLoadError(error, "Failed to load device policies");
-              }
+              },
             );
           },
           function (error) {
             handleLoadError(error, "Failed to load devices");
-          }
+          },
         );
       };
 
@@ -517,8 +601,16 @@ angular
             return !!(app && app.pkg);
           })
           .sort(function (left, right) {
-            var leftName = (left.name || left.applicationName || left.pkg).toLowerCase();
-            var rightName = (right.name || right.applicationName || right.pkg).toLowerCase();
+            var leftName = (
+              left.name ||
+              left.applicationName ||
+              left.pkg
+            ).toLowerCase();
+            var rightName = (
+              right.name ||
+              right.applicationName ||
+              right.pkg
+            ).toLowerCase();
             return leftName.localeCompare(rightName);
           });
       }
@@ -538,9 +630,12 @@ angular
               assignApps(normalizeApplicationsResponse(configurationResponse));
             },
             function (configurationError) {
-              console.error("Failed to load applications via configuration endpoint", configurationError);
+              console.error(
+                "Failed to load applications via configuration endpoint",
+                configurationError,
+              );
               assignApps([]);
-            }
+            },
           );
         };
 
@@ -558,7 +653,7 @@ angular
             function (error) {
               console.error("Failed to load applications", error);
               loadFromConfigurationEndpoint();
-            }
+            },
           );
         };
 
@@ -574,9 +669,12 @@ angular
               loadFromStandardSearch();
             },
             function (adminError) {
-              console.error("Failed to load applications via admin search", adminError);
+              console.error(
+                "Failed to load applications via admin search",
+                adminError,
+              );
               loadFromStandardSearch();
-            }
+            },
           );
         };
 
@@ -604,7 +702,7 @@ angular
             console.error("Failed to load device applications", error);
             $scope.applications = [];
             $scope.appsLoading = false;
-          }
+          },
         );
       };
 
@@ -618,16 +716,28 @@ angular
         $scope.error = null;
         $scope.editingDevice = device;
         $scope.editingPolicy = angular.copy(device.policy);
-        var startParts = parsePolicyTimeParts($scope.editingPolicy.startTime, 9, 0);
-        var endParts = parsePolicyTimeParts($scope.editingPolicy.endTime, 17, 0);
+        var startParts = parsePolicyTimeParts(
+          $scope.editingPolicy.startTime,
+          9,
+          0,
+        );
+        var endParts = parsePolicyTimeParts(
+          $scope.editingPolicy.endTime,
+          17,
+          0,
+        );
         $scope.policyTime = {
           startHour: startParts.hour,
           startMinute: startParts.minute,
           endHour: endParts.hour,
           endMinute: endParts.minute,
         };
-        $scope.selectedAppsDuringWork = parseAppsString($scope.editingPolicy.allowedAppsDuringWork);
-        $scope.selectedAppsOutsideWork = parseAppsString($scope.editingPolicy.allowedAppsOutsideWork);
+        $scope.selectedAppsDuringWork = parseAppsString(
+          $scope.editingPolicy.allowedAppsDuringWork,
+        );
+        $scope.selectedAppsOutsideWork = parseAppsString(
+          $scope.editingPolicy.allowedAppsOutsideWork,
+        );
         $scope.policyDuringSearchText = "";
         $scope.policyOutsideSearchText = "";
 
@@ -656,10 +766,20 @@ angular
         $scope.error = null;
 
         var payload = angular.copy($scope.editingPolicy);
-        payload.startTime = composePolicyTime($scope.policyTime && $scope.policyTime.startHour, $scope.policyTime && $scope.policyTime.startMinute);
-        payload.endTime = composePolicyTime($scope.policyTime && $scope.policyTime.endHour, $scope.policyTime && $scope.policyTime.endMinute);
-        payload.allowedAppsDuringWork = buildAppsString($scope.selectedAppsDuringWork);
-        payload.allowedAppsOutsideWork = buildAppsString($scope.selectedAppsOutsideWork);
+        payload.startTime = composePolicyTime(
+          $scope.policyTime && $scope.policyTime.startHour,
+          $scope.policyTime && $scope.policyTime.startMinute,
+        );
+        payload.endTime = composePolicyTime(
+          $scope.policyTime && $scope.policyTime.endHour,
+          $scope.policyTime && $scope.policyTime.endMinute,
+        );
+        payload.allowedAppsDuringWork = buildAppsString(
+          $scope.selectedAppsDuringWork,
+        );
+        payload.allowedAppsOutsideWork = buildAppsString(
+          $scope.selectedAppsOutsideWork,
+        );
 
         WorkTimePolicy.save(
           payload,
@@ -669,16 +789,23 @@ angular
               if (modalInstance) {
                 modalInstance.close();
               }
-              showSuccess("Policy updated for " + ($scope.editingDevice.deviceName || ("Device " + $scope.editingDevice.deviceId)));
+              showSuccess(
+                "Policy updated for " +
+                  ($scope.editingDevice.deviceName ||
+                    "Device " + $scope.editingDevice.deviceId),
+              );
               $scope.refresh(true);
             } else {
-              $scope.error = (response && response.message) || "Failed to save policy";
+              $scope.error =
+                (response && response.message) || "Failed to save policy";
             }
           },
           function (error) {
             $scope.policySaving = false;
-            $scope.error = (error && error.data && error.data.message) || localization.localize("error.request.failure");
-          }
+            $scope.error =
+              (error && error.data && error.data.message) ||
+              localization.localize("error.request.failure");
+          },
         );
       };
 
@@ -693,7 +820,10 @@ angular
           return;
         }
 
-        var existing = device.exceptions && device.exceptions.length > 0 ? angular.copy(device.exceptions[0]) : null;
+        var existing =
+          device.exceptions && device.exceptions.length > 0
+            ? angular.copy(device.exceptions[0])
+            : null;
         var defaultStart = new Date();
         defaultStart.setMinutes(defaultStart.getMinutes() + 1, 0, 0);
         var defaultEnd = new Date(defaultStart.getTime() + 60 * 60 * 1000);
@@ -703,11 +833,25 @@ angular
         $scope.editingException = existing || {
           dateFrom: defaultStart,
           dateTo: defaultEnd,
-          timeFrom: ("0" + defaultStart.getHours()).slice(-2) + ":" + ("0" + defaultStart.getMinutes()).slice(-2),
-          timeTo: ("0" + defaultEnd.getHours()).slice(-2) + ":" + ("0" + defaultEnd.getMinutes()).slice(-2),
+          timeFrom:
+            ("0" + defaultStart.getHours()).slice(-2) +
+            ":" +
+            ("0" + defaultStart.getMinutes()).slice(-2),
+          timeTo:
+            ("0" + defaultEnd.getHours()).slice(-2) +
+            ":" +
+            ("0" + defaultEnd.getMinutes()).slice(-2),
         };
-        var fromParts = parsePolicyTimeParts($scope.editingException.timeFrom, 9, 0);
-        var toParts = parsePolicyTimeParts($scope.editingException.timeTo, 10, 0);
+        var fromParts = parsePolicyTimeParts(
+          $scope.editingException.timeFrom,
+          9,
+          0,
+        );
+        var toParts = parsePolicyTimeParts(
+          $scope.editingException.timeTo,
+          10,
+          0,
+        );
         $scope.exceptionTime = {
           fromHour: fromParts.hour,
           fromMinute: fromParts.minute,
@@ -732,17 +876,33 @@ angular
       };
 
       $scope.saveException = function () {
-        if (!$scope.editingDevice || !$scope.editingException || $scope.exceptionSaving) {
+        if (
+          !$scope.editingDevice ||
+          !$scope.editingException ||
+          $scope.exceptionSaving
+        ) {
           return;
         }
 
         $scope.exceptionSaving = true;
         $scope.error = null;
 
-        var fromTime = composePolicyTime($scope.exceptionTime && $scope.exceptionTime.fromHour, $scope.exceptionTime && $scope.exceptionTime.fromMinute);
-        var toTime = composePolicyTime($scope.exceptionTime && $scope.exceptionTime.toHour, $scope.exceptionTime && $scope.exceptionTime.toMinute);
-        var startDateTime = toApiDateTimeString($scope.editingException.dateFrom, fromTime);
-        var endDateTime = toApiDateTimeString($scope.editingException.dateTo, toTime);
+        var fromTime = composePolicyTime(
+          $scope.exceptionTime && $scope.exceptionTime.fromHour,
+          $scope.exceptionTime && $scope.exceptionTime.fromMinute,
+        );
+        var toTime = composePolicyTime(
+          $scope.exceptionTime && $scope.exceptionTime.toHour,
+          $scope.exceptionTime && $scope.exceptionTime.toMinute,
+        );
+        var startDateTime = toApiDateTimeString(
+          $scope.editingException.dateFrom,
+          fromTime,
+        );
+        var endDateTime = toApiDateTimeString(
+          $scope.editingException.dateTo,
+          toTime,
+        );
 
         if (!startDateTime || !endDateTime) {
           $scope.exceptionSaving = false;
@@ -772,16 +932,23 @@ angular
               if (modalInstance) {
                 modalInstance.close();
               }
-              showSuccess("Exception saved for " + ($scope.editingDevice.deviceName || ("Device " + $scope.editingDevice.deviceId)));
+              showSuccess(
+                "Exception saved for " +
+                  ($scope.editingDevice.deviceName ||
+                    "Device " + $scope.editingDevice.deviceId),
+              );
               $scope.refresh(true);
             } else {
-              $scope.error = (response && response.message) || "Failed to save exception";
+              $scope.error =
+                (response && response.message) || "Failed to save exception";
             }
           },
           function (error) {
             $scope.exceptionSaving = false;
-            $scope.error = (error && error.data && error.data.message) || localization.localize("error.request.failure");
-          }
+            $scope.error =
+              (error && error.data && error.data.message) ||
+              localization.localize("error.request.failure");
+          },
         );
       };
 
@@ -796,12 +963,17 @@ angular
             if (modalInstance) {
               modalInstance.close();
             }
-            showSuccess("Exception removed for " + (device.deviceName || ("Device " + device.deviceId)));
+            showSuccess(
+              "Exception removed for " +
+                (device.deviceName || "Device " + device.deviceId),
+            );
             $scope.refresh(true);
           },
           function (error) {
-            $scope.error = (error && error.data && error.data.message) || localization.localize("error.request.failure");
-          }
+            $scope.error =
+              (error && error.data && error.data.message) ||
+              localization.localize("error.request.failure");
+          },
         );
       };
 
@@ -822,7 +994,7 @@ angular
       });
 
       $scope.refresh();
-    }
+    },
   )
   .controller("WorkTimePoliciesController", function ($controller, $scope) {
     $controller("WorkTimeAdminController", { $scope: $scope });
