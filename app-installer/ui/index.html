@@ -404,10 +404,15 @@
             <button class="btn-primary" id="precheckBtn">
               Pre-check Owner
             </button>
-            <button class="btn-warning" id="installBtn">
-              Install Apps
-            </button>
+            <button class="btn-warning" id="installBtn">Install Apps</button>
             <!-- <button class="btn-danger" id="removeBtn">Remove Apps</button> -->
+          </div>
+
+          <div class="row">
+            <button class="btn-primary" id="logcatStartBtn">
+              View Device Logs
+            </button>
+            <button class="btn-danger" id="logcatStopBtn">Stop Logs</button>
           </div>
 
           <div id="deviceList"></div>
@@ -469,6 +474,8 @@
       const actionConfirmBar = document.getElementById("actionConfirmBar");
       const actionCancelBtn = document.getElementById("actionCancelBtn");
       const actionConfirmBtn = document.getElementById("actionConfirmBtn");
+      const logcatStartBtn = document.getElementById("logcatStartBtn");
+      const logcatStopBtn = document.getElementById("logcatStopBtn");
 
       let currentDevices = [];
       let pendingConfirmAction = null;
@@ -484,6 +491,39 @@
         terminal.appendChild(div);
         terminal.scrollTop = terminal.scrollHeight;
       }
+
+      async function startLogcatUI() {
+        const serials = selectedSerials();
+
+        try {
+          await fetch("/api/logcat/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              serial: serials.length ? serials[0] : null,
+            }),
+          });
+
+          appendLog("[UI] Started device logs...", "info");
+        } catch (error) {
+          appendLog(serverOfflineHint("Start Logs", error), "error");
+        }
+      }
+
+      async function stopLogcatUI() {
+        try {
+          await fetch("/api/logcat/stop", {
+            method: "POST",
+          });
+
+          appendLog("[UI] Stopped device logs.", "warn");
+        } catch (error) {
+          appendLog(serverOfflineHint("Stop Logs", error), "error");
+        }
+      }
+
+      logcatStartBtn.addEventListener("click", startLogcatUI);
+      logcatStopBtn.addEventListener("click", stopLogcatUI);
 
       function serverOfflineHint(actionName, error) {
         const message =

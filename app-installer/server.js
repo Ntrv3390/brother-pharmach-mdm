@@ -10,7 +10,7 @@ const APK_FILE = path.join(APP_DIR, "app-enterprise-release.apk");
 const ADMIN_FILE = path.join(APP_DIR, "AdminReceiverClass.txt");
 const DEFAULT_ADMIN_COMPONENT =
   "com.brother.pharmach.mdm.launcher/.AdminReceiver";
-
+let logcatProcess = null;
 function resolveAdbPath() {
   const envPath = (process.env.APP_INSTALLER_ADB_PATH || "").trim();
   if (envPath && fs.existsSync(envPath)) {
@@ -42,6 +42,48 @@ function writeSse(res, chunk) {
 
 function now() {
   return new Date().toISOString().replace("T", " ").replace("Z", "");
+}
+
+function startLogcat(serial) {
+  if (logcatProcess) {
+    sendLog("Logcat already running", "warn");
+    return;
+  }
+
+  const args = serial ? ["-s", serial, "logcat"] : ["logcat"];
+
+  logcatProcess = spawn(ADB_EXE, args, {
+    windowsHide: true,
+  });
+
+  sendLog(
+    `Started ADB logcat${serial ? ` for device ${serial}` : ""}...`,
+    "info",
+  );
+
+  logcatProcess.stdout.on("data", (data) => {
+    const lines = data.toString().split("\n");
+    lines.forEach((line) => {
+      if (line.trim()) sendLog(line, "info");
+    });
+  });
+
+  logcatProcess.stderr.on("data", (data) => {
+    sendLog(data.toString(), "error");
+  });
+
+  logcatProcess.on("close", () => {
+    sendLog("Logcat stopped", "warn");
+    logcatProcess = null;
+  });
+}
+
+function stopLogcat() {
+  if (logcatProcess) {
+    logcatProcess.kill();
+    logcatProcess = null;
+    sendLog("Stopped ADB logcat", "warn");
+  }
 }
 
 function sendLog(message, level = "info") {
@@ -1041,6 +1083,27 @@ const server = http.createServer(async (req, res) => {
         adminComponent,
         checks,
       });
+    } catch (error) {
+      replyJson(res, 500, { ok: false, error: error.message });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && requestUrl.pathname === "/api/logcat/start") {
+    try {
+      const body = await parseRequestBody(req);
+      startLogcat(body.serial || null);
+      replyJson(res, 200, { ok: true });
+    } catch (error) {
+      replyJson(res, 500, { ok: false, error: error.message });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && requestUrl.pathname === "/api/logcat/stop") {
+    try {
+      stopLogcat();
+      replyJson(res, 200, { ok: true });
     } catch (error) {
       replyJson(res, 500, { ok: false, error: error.message });
     }
