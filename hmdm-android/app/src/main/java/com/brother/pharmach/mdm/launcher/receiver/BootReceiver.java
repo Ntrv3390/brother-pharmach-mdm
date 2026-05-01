@@ -14,6 +14,17 @@ import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
+        // After OTA self-update the launcher is killed; relaunch it immediately so the
+        // user is not stranded on the system launcher.
+        if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction())) {
+            Log.i(Const.LOG_TAG, "Package replaced (OTA update) — relaunching launcher");
+            RemoteLogger.log(context, Const.LOG_DEBUG, "Package replaced (OTA update) — relaunching launcher");
+            Intent launch = new Intent(context, com.brother.pharmach.mdm.launcher.ui.MainActivity.class);
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            context.startActivity(launch);
+            return;
+        }
+
         Log.i(Const.LOG_TAG, "Got the BOOT_RECEIVER broadcast");
         RemoteLogger.log(context, Const.LOG_DEBUG, "Got the BOOT_RECEIVER broadcast");
 

@@ -229,6 +229,10 @@
                 <!--For HTC devices-->
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
+            <!-- Relaunch launcher automatically after OTA self-update -->
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+            </intent-filter>
         </receiver>
 
         <receiver android:name="com.brother.pharmach.mdm.launcher.receiver.CallStateReceiver"

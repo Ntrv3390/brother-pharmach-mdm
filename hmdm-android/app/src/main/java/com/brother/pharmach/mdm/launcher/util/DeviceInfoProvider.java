@@ -334,6 +334,8 @@ public class DeviceInfoProvider {
         return imsi;
     }
 
+    private static final String PHONE_CACHE_PREFS = "phone_number_cache";
+
     @SuppressLint( { "MissingPermission" } )
     public static String getPhoneNumber(Context context, int slot) {
         try {
@@ -347,10 +349,50 @@ public class DeviceInfoProvider {
             SubscriptionManager subscriptionManager = SubscriptionManager.from(context);
             List<SubscriptionInfo> subscriptionList = subscriptionManager.getActiveSubscriptionInfoList();
             if (subscriptionList == null || slot >= subscriptionList.size()) {
-                // No mobile info at all
                 return null;
             }
-            return subscriptionList.get(slot).getNumber();
+            SubscriptionInfo subInfo = subscriptionList.get(slot);
+
+            // Priority 1: SubscriptionInfo.getNumber()
+            String phone = subInfo.getNumber();
+
+            // Priority 2: TelephonyManager.createForSubscriptionId() — more reliable on API 24+
+            if (phone == null || phone.isEmpty()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    try {
+                        TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+                        if (tm != null) {
+                            phone = tm.createForSubscriptionId(subInfo.getSubscriptionId()).getLine1Number();
+                        }
+                    } catch (Exception e) {
+                        Log.w(Const.LOG_TAG, "createForSubscriptionId getLine1Number failed: " + e.getMessage());
+                    }
+                }
+            }
+
+            // Priority 3: plain TelephonyManager.getLine1Number() (slot 0 only)
+            if ((phone == null || phone.isEmpty()) && slot == 0) {
+                phone = getPhoneNumber(context);
+            }
+
+            // Priority 4: SharedPreferences cache keyed by ICCID — persist any fresh value,
+            // restore last-known value if all live queries returned empty
+            String iccid = subInfo.getIccId();
+            android.content.SharedPreferences prefs =
+                    context.getSharedPreferences(PHONE_CACHE_PREFS, Context.MODE_PRIVATE);
+            if (phone != null && !phone.isEmpty()) {
+                if (iccid != null && !iccid.isEmpty()) {
+                    prefs.edit().putString("phone_" + iccid, phone).apply();
+                }
+            } else if (iccid != null && !iccid.isEmpty()) {
+                String cached = prefs.getString("phone_" + iccid, null);
+                if (cached != null && !cached.isEmpty()) {
+                    Log.d(Const.LOG_TAG, "Phone number from ICCID cache (slot " + slot + "): " + cached);
+                    phone = cached;
+                }
+            }
+
+            return (phone != null && !phone.isEmpty()) ? phone : null;
         } catch (Exception e) {
             e.printStackTrace();
         }
