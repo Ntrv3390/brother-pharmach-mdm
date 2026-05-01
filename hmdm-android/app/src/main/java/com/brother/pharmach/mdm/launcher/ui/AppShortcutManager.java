@@ -116,7 +116,9 @@ public class AppShortcutManager {
     private void getConfiguredApps(Context context, boolean bottom, Map<String, Application> requiredPackages,
             Map<String, Application> requiredLinks) {
         SettingsHelper config = SettingsHelper.getInstance(context);
-        com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance().updatePolicy(context);
+        // Issue 7: pass forceRefresh=false so the rate-limiter prevents any blocking network work
+        // from this main-thread call path
+        com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance().updatePolicy(context, false);
         if (config.getConfig() != null) {
             List<Application> applications = SettingsHelper.getInstance(context).getConfig().getApplications();
             for (Application application : applications) {
@@ -145,7 +147,14 @@ public class AppShortcutManager {
         public int compare(AppInfo o1, AppInfo o2) {
             if (o1.screenOrder == null) {
                 if (o2.screenOrder == null) {
-                    return 0;
+                    // Issue 6: stable secondary sort — letters A-Z first, then digits/special chars
+                    String n1 = o1.name != null ? o1.name.toString() : "";
+                    String n2 = o2.name != null ? o2.name.toString() : "";
+                    boolean n1Letter = !n1.isEmpty() && Character.isLetter(n1.charAt(0));
+                    boolean n2Letter = !n2.isEmpty() && Character.isLetter(n2.charAt(0));
+                    if (n1Letter && !n2Letter) return -1;
+                    if (!n1Letter && n2Letter) return 1;
+                    return n1.compareToIgnoreCase(n2);
                 }
                 return 1;
             }

@@ -216,6 +216,14 @@ public class MainActivity
 
     private ANRWatchDog anrWatchDog;
 
+    // Issue 7: debounce guard — minimum ms between showContent() calls from periodic/broadcast sources
+    private static final long SHOW_CONTENT_DEBOUNCE_MS = 500;
+    private long lastShowContentMs = 0;
+
+    // Issue 7: single-thread executor for background policy/enforcement work
+    private static final java.util.concurrent.ExecutorService POLICY_EXECUTOR =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
+
     private int lastNetworkType;
 
     private ConfigUpdater configUpdater = new ConfigUpdater();
@@ -307,15 +315,10 @@ public class MainActivity
                     ServerConfig cfg = settingsHelper != null ? settingsHelper.getConfig() : null;
                     if (cfg != null) {
                         showContent(cfg);
+                        // Issue 7: enforcement off main thread; bring to front if work time active
                         com.brother.pharmach.mdm.launcher.util.WorkTimeManager wm2 =
                                 com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance();
-                        wm2.enforceWorkTimeRestrictions(context);
-                        // Issue 2: bring launcher to front if work time just started
-                        if (wm2.isWorkTimeActive()) {
-                            Intent launchSelf = new Intent(MainActivity.this, MainActivity.class);
-                            launchSelf.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_NEW_TASK);
-                            startActivity(launchSelf);
-                        }
+                        enforceWorkTimeAsync(context, wm2.isWorkTimeActive());
                     }
                     break;
             }
@@ -350,15 +353,9 @@ public class MainActivity
                     com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance();
             wm.updatePolicy(context);
             if (settingsHelper != null && settingsHelper.getConfig() != null) {
-                wm.enforceWorkTimeRestrictions(context);
-                showContent(settingsHelper.getConfig());
-                // Issue 2: if we're in work time, bring the launcher to foreground
-                // so restricted apps in recents cannot be resumed by the user
-                if (wm.isWorkTimeActive()) {
-                    Intent launchSelf = new Intent(MainActivity.this, MainActivity.class);
-                    launchSelf.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(launchSelf);
-                }
+                showContentDebounced(settingsHelper.getConfig());
+                // Issue 7: enforcement off main thread; bring to front if work time active
+                enforceWorkTimeAsync(context, wm.isWorkTimeActive());
             }
         }
     };
@@ -371,15 +368,9 @@ public class MainActivity
                          com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance();
                  if (wm.shouldRefreshUI()) {
                      needRedrawContentAfterReconfigure = true;
-                     showContent(settingsHelper.getConfig());
-                     wm.enforceWorkTimeRestrictions(context);
-                     // Issue 2: bring the launcher to foreground so a restricted app in recents
-                     // cannot remain on screen when work time begins
-                     if (wm.isWorkTimeActive()) {
-                         Intent launchSelf = new Intent(MainActivity.this, MainActivity.class);
-                         launchSelf.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_NEW_TASK);
-                         startActivity(launchSelf);
-                     }
+                     showContentDebounced(settingsHelper.getConfig()); // Issue 7: debounced
+                     // Issue 7: run enforcement off main thread; bring to front if work time is now active
+                     enforceWorkTimeAsync(context, wm.isWorkTimeActive());
                  }
                  return;
             }
@@ -401,10 +392,15 @@ public class MainActivity
                 }
             }
 
-            try {
-                applyEarlyPolicies(settingsHelper.getConfig());
-            } catch (Exception e) {
-            }
+            // Issue 7 Plan A: post applyEarlyPolicies off the hot broadcast path
+            // so connectivity changes don't block the main thread
+            final ServerConfig connectivityConfig = settingsHelper.getConfig();
+            handler.post(() -> {
+                try {
+                    applyEarlyPolicies(connectivityConfig);
+                } catch (Exception e) {
+                }
+            });
         }
     };
 
@@ -462,8 +458,17 @@ public class MainActivity
 
 
         if (BuildConfig.ANR_WATCHDOG) {
-            // anrWatchDog = new ANRWatchDog();
-            // anrWatchDog.start();
+            // Issue 7 Plan E: re-enable ANRWatchDog with a non-crashing reporter so ANRs are
+            // logged to the remote server for diagnosis instead of killing the app
+            anrWatchDog = new ANRWatchDog();
+            anrWatchDog.setANRListener(error -> {
+                StringBuilder sb = new StringBuilder("ANR detected:\n");
+                for (StackTraceElement frame : error.getStackTrace()) {
+                    sb.append("  at ").append(frame.toString()).append("\n");
+                }
+                RemoteLogger.log(MainActivity.this, Const.LOG_ERROR, sb.toString());
+            });
+            anrWatchDog.start();
         }
 
         // Prevent showing the lock screen during the app download/installation
@@ -1703,7 +1708,10 @@ public class MainActivity
     }
 
     private boolean applyEarlyPolicies(ServerConfig config) {
-        Initializer.applyEarlyNonInteractivePolicies(this, config);
+        // Issue 7 Plan C: run non-interactive policies on a background thread to avoid
+        // blocking the main thread with Bluetooth/volume/brightness/Settings.Secure I/O
+        final Context appContext = getApplicationContext();
+        POLICY_EXECUTOR.execute(() -> Initializer.applyEarlyNonInteractivePolicies(appContext, config));
         return true;
     }
 
@@ -1770,6 +1778,39 @@ public class MainActivity
             return binding.getShowContent() != null && binding.getShowContent();
         }
         return false;
+    }
+
+    /**
+     * Issue 7: runs enforceWorkTimeRestrictions() on the background policy executor
+     * (avoids blocking the main thread with PackageManager iteration + DPM IPC calls),
+     * then optionally brings the launcher to the foreground on the main thread.
+     */
+    private void enforceWorkTimeAsync(Context context, boolean bringToFront) {
+        POLICY_EXECUTOR.execute(() -> {
+            com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance()
+                    .enforceWorkTimeRestrictions(context);
+            if (bringToFront) {
+                handler.post(() -> {
+                    Intent launchSelf = new Intent(MainActivity.this, MainActivity.class);
+                    launchSelf.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(launchSelf);
+                });
+            }
+        });
+    }
+
+    /**
+     * Issue 7: debounced wrapper for showContent() — use this from periodic/broadcast paths
+     * (TIME_TICK, userPresent, connectivity) to prevent excessive main-thread work.
+     * Direct calls from user-driven or config-driven paths should still use showContent() directly.
+     */
+    private void showContentDebounced(ServerConfig config) {
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastShowContentMs < SHOW_CONTENT_DEBOUNCE_MS) {
+            return;
+        }
+        lastShowContentMs = now;
+        showContent(config);
     }
 
     private void showContent(ServerConfig config ) {
