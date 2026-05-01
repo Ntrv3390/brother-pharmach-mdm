@@ -19,18 +19,60 @@
 
 package com.brother.pharmach.mdm.launcher.pro.service;
 
-import android.app.Service;
+import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Intent;
-import android.os.IBinder;
+import android.util.Log;
+import android.view.accessibility.AccessibilityEvent;
+
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+
+import com.brother.pharmach.mdm.launcher.Const;
+import com.brother.pharmach.mdm.launcher.util.WorkTimeManager;
 
 /**
- * In open-source version, the service checking foreground apps is just a stub;
- * this option is available in Pro-version only
+ * Accessibility service that intercepts every foreground window change and blocks
+ * restricted apps during enforced WorkTime windows. Covers all launch vectors:
+ * push notifications, recents, Play Store intents, deep links, etc.
  */
-public class CheckForegroundAppAccessibilityService extends Service {
+public class CheckForegroundAppAccessibilityService extends AccessibilityService {
+
+    private static final String TAG = "WorkTimeAccessibility";
+
     @Override
-    public IBinder onBind(Intent intent) {
-        // Stub
-        return null;
+    protected void onServiceConnected() {
+        super.onServiceConnected();
+        AccessibilityServiceInfo info = new AccessibilityServiceInfo();
+        info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED;
+        info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
+        info.notificationTimeout = 100;
+        setServiceInfo(info);
+        Log.d(TAG, "WorkTime accessibility service connected");
+    }
+
+    @Override
+    public void onAccessibilityEvent(AccessibilityEvent event) {
+        if (event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            return;
+        }
+        CharSequence packageName = event.getPackageName();
+        if (packageName == null) {
+            return;
+        }
+        String pkg = packageName.toString();
+        if (pkg.isEmpty() || pkg.equals(getPackageName())) {
+            return;
+        }
+        if (!WorkTimeManager.getInstance().isAppAllowed(pkg)) {
+            Log.d(TAG, "Blocking restricted app: " + pkg);
+            Intent blockIntent = new Intent(Const.ACTION_HIDE_SCREEN);
+            blockIntent.putExtra(Const.PACKAGE_NAME, pkg);
+            LocalBroadcastManager.getInstance(this).sendBroadcast(blockIntent);
+        }
+    }
+
+    @Override
+    public void onInterrupt() {
+        // Required by AccessibilityService — no-op
     }
 }

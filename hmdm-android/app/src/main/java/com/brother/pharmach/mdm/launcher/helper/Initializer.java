@@ -9,6 +9,7 @@ import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.util.Log;
 
 import com.brother.pharmach.mdm.launcher.BuildConfig;
@@ -292,6 +293,26 @@ public class Initializer {
         }
 
         Utils.disableScreenshots(config.isDisableScreenshots(), context);
+
+        // Auto-enable the WorkTime accessibility service for device owners so no manual
+        // user interaction is required to activate foreground-app blocking.
+        if (BuildConfig.USE_ACCESSIBILITY && Utils.isDeviceOwner(context)
+                && !ProUtils.checkAccessibilityService(context)) {
+            try {
+                String componentName = context.getPackageName()
+                        + "/com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundAppAccessibilityService";
+                Settings.Secure.putString(
+                        context.getContentResolver(),
+                        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                        componentName);
+                Settings.Secure.putInt(
+                        context.getContentResolver(),
+                        Settings.Secure.ACCESSIBILITY_ENABLED, 1);
+                Log.d("Initializer", "WorkTime accessibility service auto-enabled");
+            } catch (Exception e) {
+                Log.w("Initializer", "Failed to auto-enable accessibility service", e);
+            }
+        }
     }
 
 }

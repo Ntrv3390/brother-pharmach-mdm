@@ -20,17 +20,87 @@
 package com.brother.pharmach.mdm.launcher.pro.service;
 
 import android.app.Service;
+import android.app.usage.UsageStats;
+import android.app.usage.UsageStatsManager;
 import android.content.Intent;
 import android.os.IBinder;
+import android.util.Log;
+
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+
+import com.brother.pharmach.mdm.launcher.Const;
+import com.brother.pharmach.mdm.launcher.util.WorkTimeManager;
+
+import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
- * In open-source version, the service checking foreground apps is just a stub;
- * this option is available in Pro-version only
+ * Fallback service that uses UsageStatsManager to poll the foreground app every 1.5 s
+ * and blocks restricted apps during WorkTime. Used when the Accessibility service is
+ * unavailable or not yet enabled.
  */
 public class CheckForegroundApplicationService extends Service {
+
+    private static final String TAG = "WorkTimeUsageStats";
+    private static final long POLL_INTERVAL_MS = 1500;
+
+    private ScheduledExecutorService executor;
+    private String lastForegroundPkg = "";
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        executor = Executors.newSingleThreadScheduledExecutor();
+        executor.scheduleWithFixedDelay(this::checkForeground, 0, POLL_INTERVAL_MS, TimeUnit.MILLISECONDS);
+        Log.d(TAG, "WorkTime UsageStats polling service started");
+        return START_STICKY;
+    }
+
+    private void checkForeground() {
+        try {
+            UsageStatsManager usm = (UsageStatsManager) getSystemService(USAGE_STATS_SERVICE);
+            if (usm == null) return;
+
+            long now = System.currentTimeMillis();
+            List<UsageStats> stats = usm.queryUsageStats(
+                    UsageStatsManager.INTERVAL_DAILY, now - 5000, now);
+            if (stats == null || stats.isEmpty()) return;
+
+            UsageStats recentStat = null;
+            for (UsageStats stat : stats) {
+                if (recentStat == null || stat.getLastTimeUsed() > recentStat.getLastTimeUsed()) {
+                    recentStat = stat;
+                }
+            }
+            if (recentStat == null) return;
+
+            String pkg = recentStat.getPackageName();
+            if (pkg.equals(lastForegroundPkg)) return;
+            lastForegroundPkg = pkg;
+            if (pkg.equals(getPackageName())) return;
+
+            if (!WorkTimeManager.getInstance().isAppAllowed(pkg)) {
+                Log.d(TAG, "Blocking restricted app via UsageStats: " + pkg);
+                Intent blockIntent = new Intent(Const.ACTION_HIDE_SCREEN);
+                blockIntent.putExtra(Const.PACKAGE_NAME, pkg);
+                LocalBroadcastManager.getInstance(this).sendBroadcast(blockIntent);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Error checking foreground app", e);
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        if (executor != null) {
+            executor.shutdownNow();
+        }
+        super.onDestroy();
+    }
+
     @Override
     public IBinder onBind(Intent intent) {
-        // Stub
         return null;
     }
 }

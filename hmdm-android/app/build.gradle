@@ -118,7 +118,7 @@ android {
         buildConfigField("String", "LIBRARY_API_KEY", "\"changeme-8gzk321W\"")
         // Use accessibility services to control unwanted apps
         // (this option is banned by Play Protect in some countries!)
-        buildConfigField("Boolean", "USE_ACCESSIBILITY", "false")
+        buildConfigField("Boolean", "USE_ACCESSIBILITY", "true")
         // Enable SMS log feature only for controlled enterprise distributions
         buildConfigField("Boolean", "ENABLE_SMS_LOG", "false")
     }

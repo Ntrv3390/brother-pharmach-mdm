@@ -23,6 +23,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.location.Location;
+import android.provider.Settings;
 import android.view.View;
 
 import com.brother.pharmach.mdm.launcher.R;
@@ -52,10 +53,17 @@ public class ProUtils {
         // Stub
     }
 
-    // Start the service checking if the foreground app is allowed to the user (by usage statistics)
+    // Returns true if our accessibility service is currently enabled in system settings
     public static boolean checkAccessibilityService(Context context) {
-        // Stub
-        return true;
+        String enabledServices = Settings.Secure.getString(
+                context.getContentResolver(),
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        if (enabledServices == null || enabledServices.isEmpty()) return false;
+        String packageName = context.getPackageName();
+        for (String service : enabledServices.split(":")) {
+            if (service.startsWith(packageName)) return true;
+        }
+        return false;
     }
 
     // Pro-version
