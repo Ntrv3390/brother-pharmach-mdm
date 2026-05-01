@@ -365,16 +365,15 @@ public class WorkTimeManager {
     public void enforceWorkTimeRestrictions(Context context) {
         boolean enforcementActive = policy != null && isEnforcementActiveNow();
         Log.i(TAG, "enforceWorkTimeRestrictions called, enforcementActive=" + enforcementActive);
-        
+
         android.app.admin.DevicePolicyManager dpm = (android.app.admin.DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
         android.content.ComponentName adminComponent = com.brother.pharmach.mdm.launcher.util.LegacyUtils.getAdminComponentName(context);
         boolean isDeviceOwner = dpm != null && dpm.isDeviceOwnerApp(context.getPackageName());
         android.app.ActivityManager am = (android.app.ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
         android.content.pm.PackageManager pm = context.getPackageManager();
-        
+
         java.util.List<android.content.pm.ApplicationInfo> installedApps = pm.getInstalledApplications(0);
-        java.util.ArrayList<String> toSuspend = new java.util.ArrayList<>();
-        java.util.ArrayList<String> toUnsuspend = new java.util.ArrayList<>();
+        java.util.ArrayList<String> launchablePkgs = new java.util.ArrayList<>();
 
         for (android.content.pm.ApplicationInfo appInfo : installedApps) {
             String pkg = appInfo.packageName;
@@ -387,60 +386,47 @@ public class WorkTimeManager {
                 continue;
             }
 
-            boolean allowed = true;
-            if (enforcementActive) {
-                allowed = isAppAllowed(pkg);
-            }
+            launchablePkgs.add(pkg);
 
-            if (!allowed) {
-                if (isDeviceOwner) {
-                    toSuspend.add(pkg);
-                } else if (am != null) {
-                    // Try reflection for forceStopPackage (works if signed with platform keys)
+            if (enforcementActive && !isAppAllowed(pkg) && am != null) {
+                // WorkTime rule: do NOT disable Recents globally; just auto-close restricted apps.
+                // Accessibility/UsageStats monitors and MainActivity then bring launcher to front.
+                try {
+                    java.lang.reflect.Method forceStopMethod = am.getClass().getMethod("forceStopPackage", String.class);
+                    forceStopMethod.invoke(am, pkg);
+                } catch (Exception e) {
                     try {
-                        java.lang.reflect.Method forceStopMethod = am.getClass().getMethod("forceStopPackage", String.class);
-                        forceStopMethod.invoke(am, pkg);
-                    } catch (Exception e) {
-                        try {
-                            am.killBackgroundProcesses(pkg);
-                        } catch (Exception ex) {
-                            Log.e(TAG, "Failed to kill background processes for " + pkg, ex);
-                        }
+                        am.killBackgroundProcesses(pkg);
+                    } catch (Exception ex) {
+                        Log.e(TAG, "Failed to kill background processes for " + pkg, ex);
                     }
-                }
-            } else {
-                if (isDeviceOwner) {
-                    toUnsuspend.add(pkg);
                 }
             }
         }
 
-        Log.i(TAG, "Packages to suspend: " + toSuspend.size() + ", packages to unsuspend: " + toUnsuspend.size());
-
-        if (isDeviceOwner) {
+        // If WorkTime enforcement is inactive (policy off or device exception window),
+        // clear any legacy suspended/hidden state left from older builds.
+        if (!enforcementActive && isDeviceOwner && dpm != null && adminComponent != null) {
+            Log.i(TAG, "Enforcement inactive: clearing legacy app suspension/hidden states for " + launchablePkgs.size() + " packages");
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
                 try {
-                    if (!toSuspend.isEmpty()) {
-                        String[] result = dpm.setPackagesSuspended(adminComponent, toSuspend.toArray(new String[0]), true);
-                        if (result != null && result.length > 0) {
-                            Log.w(TAG, "Failed to suspend " + result.length + " packages.");
-                        }
-                    }
-                    if (!toUnsuspend.isEmpty()) {
-                        dpm.setPackagesSuspended(adminComponent, toUnsuspend.toArray(new String[0]), false);
+                    if (!launchablePkgs.isEmpty()) {
+                        dpm.setPackagesSuspended(adminComponent, launchablePkgs.toArray(new String[0]), false);
                     }
                 } catch (Exception e) {
-                    Log.e(TAG, "Failed to update package suspension states", e);
+                    Log.e(TAG, "Failed to clear package suspension states", e);
                 }
             } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-                for (String pkg : toSuspend) {
-                    try { dpm.setApplicationHidden(adminComponent, pkg, true); } catch (Exception e) {}
-                }
-                for (String pkg : toUnsuspend) {
-                    try { dpm.setApplicationHidden(adminComponent, pkg, false); } catch (Exception e) {}
+                for (String pkg : launchablePkgs) {
+                    try {
+                        dpm.setApplicationHidden(adminComponent, pkg, false);
+                    } catch (Exception e) {
+                    }
                 }
             }
         }
+
+        Log.i(TAG, "WorkTime enforcement completed, launchable packages scanned=" + launchablePkgs.size());
 
         // Issue 2: Always clear restricted apps from the recents task stack after enforcement
         removeRestrictedFromRecents(context);
