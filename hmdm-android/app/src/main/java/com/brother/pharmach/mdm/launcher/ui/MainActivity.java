@@ -583,6 +583,10 @@ public class MainActivity
 
         isBackground = false;
 
+        // Issue 5: refresh WorkTime policy on every resume so the Favorites page
+        // never shows restricted apps after screen unlock or app switch
+        com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance().updatePolicy(this);
+
         // On some Android firmwares, onResume is called before onCreate, so the fields are not initialized
         // Here we initialize all required fields to avoid crash at startup
         reinitApp();
