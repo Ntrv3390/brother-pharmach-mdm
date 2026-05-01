@@ -37,6 +37,7 @@ public class WorkTimeManager {
 
     private static WorkTimeManager instance;
     private volatile EffectiveWorkTimePolicy policy;
+    private volatile String lastAppliedConfigPolicyRaw;
     private Boolean lastWorkTimeState = null;
     private volatile long lastFetchAttemptMs = 0;
 
@@ -85,9 +86,15 @@ public class WorkTimeManager {
                 if (custom1.trim().startsWith("{")) {
                     WorkTimePolicyWrapper wrapper = MAPPER.readValue(custom1, WorkTimePolicyWrapper.class);
                     if ("worktime".equals(wrapper.getPluginId()) && wrapper.getPolicy() != null) {
-                        this.policy = wrapper.getPolicy();
-                        parsedFromConfig = true;
-                        notifyPolicyUpdated(context);
+                        // Keep server-fetched policy authoritative unless the config payload itself changed.
+                        // This avoids stale custom1 values repeatedly overriding live per-device exceptions.
+                        boolean configPolicyChanged = !custom1.equals(lastAppliedConfigPolicyRaw);
+                        if (this.policy == null || configPolicyChanged) {
+                            this.policy = wrapper.getPolicy();
+                            this.lastAppliedConfigPolicyRaw = custom1;
+                            parsedFromConfig = true;
+                            notifyPolicyUpdated(context);
+                        }
                     }
                 }
             } catch (Exception e) {

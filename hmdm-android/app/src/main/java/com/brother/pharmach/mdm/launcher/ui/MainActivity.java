@@ -246,7 +246,16 @@ public class MainActivity
                     }
                     break;
                 case Const.ACTION_HIDE_SCREEN:
-                    RemoteLogger.log(MainActivity.this, Const.LOG_DEBUG, "Received ACTION_HIDE_SCREEN for package: " + intent.getStringExtra(Const.PACKAGE_NAME));
+                    String blockedPackage = intent.getStringExtra(Const.PACKAGE_NAME);
+                    RemoteLogger.log(MainActivity.this, Const.LOG_DEBUG, "Received ACTION_HIDE_SCREEN for package: " + blockedPackage);
+                    // Drop stale block events if policy changed (e.g., device exception became active)
+                    // between the foreground check and this receiver callback.
+                    if (blockedPackage != null && com.brother.pharmach.mdm.launcher.util.WorkTimeManager
+                            .getInstance().isAppAllowed(blockedPackage)) {
+                        RemoteLogger.log(MainActivity.this, Const.LOG_DEBUG,
+                                "Ignoring stale ACTION_HIDE_SCREEN for now-allowed package: " + blockedPackage);
+                        break;
+                    }
                     ServerConfig serverConfig = SettingsHelper.getInstance(MainActivity.this).getConfig();
                     if (serverConfig.getLock() != null && serverConfig.getLock()) {
                         // Device is locked by the server administrator!
@@ -254,9 +263,9 @@ public class MainActivity
                         showLockScreen();
                     } else if ( applicationNotAllowed != null &&
                             (!ProUtils.kioskModeRequired(MainActivity.this) || !ProUtils.isKioskAppInstalled(MainActivity.this)) ) {
-                        RemoteLogger.log(MainActivity.this, Const.LOG_INFO, "Showing 'package not allowed' overlay for " + intent.getStringExtra(Const.PACKAGE_NAME));
+                        RemoteLogger.log(MainActivity.this, Const.LOG_INFO, "Showing 'package not allowed' overlay for " + blockedPackage);
                         TextView textView = ( TextView ) applicationNotAllowed.findViewById( R.id.package_id );
-                        textView.setText(intent.getStringExtra(Const.PACKAGE_NAME));
+                        textView.setText(blockedPackage);
 
                         applicationNotAllowed.setVisibility( View.VISIBLE );
                         // This ensures requestFocus() happens after layout, when it's safe and guaranteed to work.
