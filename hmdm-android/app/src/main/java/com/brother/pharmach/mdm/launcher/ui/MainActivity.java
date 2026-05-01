@@ -307,7 +307,15 @@ public class MainActivity
                     ServerConfig cfg = settingsHelper != null ? settingsHelper.getConfig() : null;
                     if (cfg != null) {
                         showContent(cfg);
-                        com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance().enforceWorkTimeRestrictions(context);
+                        com.brother.pharmach.mdm.launcher.util.WorkTimeManager wm2 =
+                                com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance();
+                        wm2.enforceWorkTimeRestrictions(context);
+                        // Issue 2: bring launcher to front if work time just started
+                        if (wm2.isWorkTimeActive()) {
+                            Intent launchSelf = new Intent(MainActivity.this, MainActivity.class);
+                            launchSelf.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_NEW_TASK);
+                            startActivity(launchSelf);
+                        }
                     }
                     break;
             }
@@ -333,14 +341,45 @@ public class MainActivity
 
     private final BroadcastReceiver screenOffReceiver = new ScreenOffReceiver();
 
+    // Issue 2: enforce restrictions immediately when user unlocks the screen
+    private final BroadcastReceiver userPresentReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!Intent.ACTION_USER_PRESENT.equals(intent.getAction())) return;
+            com.brother.pharmach.mdm.launcher.util.WorkTimeManager wm =
+                    com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance();
+            wm.updatePolicy(context);
+            if (settingsHelper != null && settingsHelper.getConfig() != null) {
+                wm.enforceWorkTimeRestrictions(context);
+                showContent(settingsHelper.getConfig());
+                // Issue 2: if we're in work time, bring the launcher to foreground
+                // so restricted apps in recents cannot be resumed by the user
+                if (wm.isWorkTimeActive()) {
+                    Intent launchSelf = new Intent(MainActivity.this, MainActivity.class);
+                    launchSelf.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(launchSelf);
+                }
+            }
+        }
+    };
+
     private final BroadcastReceiver stateChangeReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             if (Intent.ACTION_TIME_TICK.equals(intent.getAction())) {
-                 if (com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance().shouldRefreshUI()) {
+                 com.brother.pharmach.mdm.launcher.util.WorkTimeManager wm =
+                         com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance();
+                 if (wm.shouldRefreshUI()) {
                      needRedrawContentAfterReconfigure = true;
                      showContent(settingsHelper.getConfig());
-                     com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance().enforceWorkTimeRestrictions(context);
+                     wm.enforceWorkTimeRestrictions(context);
+                     // Issue 2: bring the launcher to foreground so a restricted app in recents
+                     // cannot remain on screen when work time begins
+                     if (wm.isWorkTimeActive()) {
+                         Intent launchSelf = new Intent(MainActivity.this, MainActivity.class);
+                         launchSelf.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_NEW_TASK);
+                         startActivity(launchSelf);
+                     }
                  }
                  return;
             }
@@ -474,6 +513,14 @@ public class MainActivity
                 registerReceiver(pushReceiver, intentFilter, Context.RECEIVER_EXPORTED);
             } else {
                 registerReceiver(pushReceiver, intentFilter);
+            }
+
+            // Issue 2: listen for screen unlock to enforce restrictions on recents
+            IntentFilter userPresentFilter = new IntentFilter(Intent.ACTION_USER_PRESENT);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                registerReceiver(userPresentReceiver, userPresentFilter, Context.RECEIVER_EXPORTED);
+            } else {
+                registerReceiver(userPresentReceiver, userPresentFilter);
             }
 
             if (!getIntent().getBooleanExtra(Const.RESTORED_ACTIVITY, false)) {
@@ -2087,6 +2134,7 @@ public class MainActivity
             LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
             unregisterReceiver(stateChangeReceiver);
             unregisterReceiver(screenOffReceiver);
+            unregisterReceiver(userPresentReceiver);
         } catch (Exception e) {
             e.printStackTrace();
         }

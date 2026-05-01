@@ -1,12 +1,13 @@
 package com.brother.pharmach.mdm.launcher.util;
 
-import android.util.Log;
+import android.app.ActivityManager;
+import android.content.Context;
 import android.content.Intent;
+import android.util.Log;
 
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import android.content.Context;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.json.EffectiveWorkTimePolicy;
@@ -206,6 +207,14 @@ public class WorkTimeManager {
     }
 
     /**
+     * Returns true if enforcement is active and the current time is within the WorkTime window.
+     * Use this to decide whether to bring the launcher to the foreground.
+     */
+    public boolean isWorkTimeActive() {
+        return policy != null && isEnforcementActiveNow() && isCurrentTimeWorkTime();
+    }
+
+    /**
      * Returns true only while WorkTime enforcement is active now (no exception)
      * and current time is inside configured WorkTime window.
      */
@@ -313,6 +322,39 @@ public class WorkTimeManager {
         }
     }
 
+    /**
+     * Issue 2: Removes restricted apps from the Recents (Overview) task stack so users
+     * cannot tap them in the recent-apps screen during an active WorkTime window.
+     * Safe to call on non-Device-Owner devices — uses only the public ActivityManager API.
+     */
+    public void removeRestrictedFromRecents(Context context) {
+        if (policy == null || !isEnforcementActiveNow() || !isCurrentTimeWorkTime()) {
+            return;
+        }
+        try {
+            ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+            if (am == null) return;
+            for (ActivityManager.AppTask task : am.getAppTasks()) {
+                ActivityManager.RecentTaskInfo info = task.getTaskInfo();
+                if (info == null) continue;
+                String pkg = null;
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
+                        && info.topActivity != null) {
+                    pkg = info.topActivity.getPackageName();
+                } else if (info.baseIntent != null && info.baseIntent.getComponent() != null) {
+                    pkg = info.baseIntent.getComponent().getPackageName();
+                }
+                if (pkg == null || pkg.equals(context.getPackageName())) continue;
+                if (!isAppAllowed(pkg)) {
+                    Log.d(TAG, "Removing restricted app from recents: " + pkg);
+                    task.finishAndRemoveTask();
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "removeRestrictedFromRecents failed", e);
+        }
+    }
+
     public void enforceWorkTimeRestrictions(Context context) {
         boolean enforcementActive = policy != null && isEnforcementActiveNow();
         Log.i(TAG, "enforceWorkTimeRestrictions called, enforcementActive=" + enforcementActive);
@@ -392,5 +434,8 @@ public class WorkTimeManager {
                 }
             }
         }
+
+        // Issue 2: Always clear restricted apps from the recents task stack after enforcement
+        removeRestrictedFromRecents(context);
     }
 }
