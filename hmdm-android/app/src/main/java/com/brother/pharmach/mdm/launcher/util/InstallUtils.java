@@ -90,6 +90,7 @@ public class InstallUtils {
 
         while ( it.hasNext() ) {
             Application application = it.next();
+            String targetVersion = application.getVersion() != null ? application.getVersion() : "";
             if ( (application.getUrl() == null || application.getUrl().trim().equals("")) && !application.isRemove() ) {
                 // An app without URL is a system app which doesn't require installation
                 Log.d(Const.LOG_TAG, "checkAndUpdateApplications(): app " + application.getPkg() + " is system, skipping");
@@ -100,32 +101,32 @@ public class InstallUtils {
             try {
                 PackageInfo packageInfo = packageManager.getPackageInfo( application.getPkg(), 0 );
 
-                if (application.isRemove() && !application.getVersion().equals("0") &&
-                        !areVersionsEqual(packageInfo.versionName, packageInfo.versionCode, application.getVersion(), application.getCode())) {
+                if (application.isRemove() && !"0".equals(targetVersion) &&
+                    !areVersionsEqual(packageInfo.versionName, packageInfo.versionCode, targetVersion, application.getCode())) {
                     // If a removal is required, but the app version doesn't match, do not remove
                     Log.d(Const.LOG_TAG, "checkAndUpdateApplications(): app " + application.getPkg() + " version not match: "
-                            + application.getVersion() + " " + packageInfo.versionName + ", skipping");
+                        + targetVersion + " " + packageInfo.versionName + ", skipping");
                     it.remove();
                     continue;
                 }
 
                 if (!application.isRemove() && !upgradingHmdmFreeToFull(context, application, packageInfo) &&
-                        (application.isSkipVersion() || application.getVersion().equals("0") ||
-                                areVersionsEqual(packageInfo.versionName, packageInfo.versionCode, application.getVersion(), application.getCode()))) {
+                    (application.isSkipVersion() || "0".equals(targetVersion) ||
+                        areVersionsEqual(packageInfo.versionName, packageInfo.versionCode, targetVersion, application.getCode()))) {
                     // If installation is required, but the app of the same version already installed, do not install
                     Log.d(Const.LOG_TAG, "checkAndUpdateApplications(): app " + application.getPkg() + " versions match: "
-                            + application.getVersion() + " " + packageInfo.versionName + ", skipping");
+                        + targetVersion + " " + packageInfo.versionName + ", skipping");
                     it.remove();
                     continue;
                 }
 
                 if (!application.isRemove() &&
-                        compareVersions(packageInfo.versionName, packageInfo.versionCode, application.getVersion(), application.getCode()) > 0) {
+                    compareVersions(packageInfo.versionName, packageInfo.versionCode, targetVersion, application.getCode()) > 0) {
                     // Downgrade requested!
                     // It will only succeed if a higher version is marked as "Remove"
                     // Let's check that condition to avoid failed attempts to install and downloads of the lower version each time
                     RemoteLogger.log(context, Const.LOG_DEBUG, "Downgrade requested for " + application.getPkg() +
-                            ": installed version " + packageInfo.versionName + ", required version " + application.getVersion());
+                        ": installed version " + packageInfo.versionName + ", required version " + targetVersion);
                     boolean canDowngrade = false;
                     for (Application a : applications) {
                         if (a.getPkg().equalsIgnoreCase(application.getPkg()) && a.isRemove() &&
@@ -180,6 +181,11 @@ public class InstallUtils {
         if (c2 != null && c2 != 0) {
             // If version code is present, let's compare version codes instead of names
             return c1 == c2;
+        }
+
+        // Missing target version in config: keep current app version and skip reinstall.
+        if (v2 == null || v2.trim().isEmpty()) {
+            return true;
         }
 
         if (v1 == null || v2 == null) {
