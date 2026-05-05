@@ -475,6 +475,28 @@ async function precheckDeviceOwner(serial, adminComponent) {
   };
 }
 
+async function getExistingDeviceOwner(serial) {
+  const result = await runAdb(
+    ["-s", serial, "shell", "cmd", "device_policy", "get-device-owner"],
+    30000,
+  );
+  const output = `${result.stdout}\n${result.stderr}`.trim();
+  
+  // Device owner might be shown as "Device owner: com.package/.admin"
+  // or in other formats depending on Android version
+  if (
+    result.code === 0 && 
+    output &&
+    output !== "No device owner set" &&
+    !output.toLowerCase().includes("error") &&
+    output.length > 5
+  ) {
+    return output;
+  }
+  
+  return null;
+}
+
 async function setDeviceOwnerWithFallbacks(serial, adminComponent) {
   const attempts = [
     ["-s", serial, "shell", "dpm", "set-device-owner", adminComponent],
@@ -514,8 +536,9 @@ async function setDeviceOwnerWithFallbacks(serial, adminComponent) {
       return { ok: true, output: combined };
     }
 
+    // Check for various "already owner" patterns
     if (
-      /already has a device owner|already set.*device owner/i.test(combined)
+      /already has a device owner|already set.*device owner|@ProvisioningPreCondition 99/i.test(combined)
     ) {
       return { ok: true, alreadyOwner: true, output: combined };
     }
@@ -598,6 +621,19 @@ async function installOnDevice(serial, adminComponent) {
     if (/unknown admin/i.test(combined)) {
       throw new Error(
         `Device owner failed: admin component not recognized on device. Check AdminReceiverClass.txt and APK package/class. ${combined}`,
+      );
+    }
+
+    // Error code 99 or other provisioning conflicts — suggest factory reset
+    if (/@ProvisioningPreCondition 99|PRECONDITION_NOT_DEVICE_OWNER|provisioning|blocker/i.test(combined)) {
+      const existing = await getExistingDeviceOwner(serial);
+      if (existing) {
+        throw new Error(
+          `Device already has a device owner (${existing}). Factory reset required to change device owner.`,
+        );
+      }
+      throw new Error(
+        `Device provisioning conflict (error 99). This typically means: another device owner is set, accounts are configured, or a managed profile exists. Factory reset the device and skip all account sign-in during setup. ${combined}`,
       );
     }
 
@@ -692,12 +728,18 @@ async function handleInstallRequest(res, requestedSerials) {
       const steps = [];
       if (
         lowered.includes("accounts/users already present") ||
-        lowered.includes("already some accounts")
+        lowered.includes("already some accounts") ||
+        lowered.includes("provisioning conflict") ||
+        lowered.includes("error 99") ||
+        lowered.includes("@provisioningprecondition 99")
       ) {
-        steps.push("Factory reset the device.");
-        steps.push("Skip all account sign-in during setup.");
-        steps.push("Enable USB debugging and tap Allow.");
-        steps.push("Run Install + Make Owner before adding any account.");
+        steps.push("Factory reset the device (Settings > System > Reset options > Erase all data).");
+        steps.push("On first boot, do NOT sign in to Google/Samsung/Xiaomi/Huawei account.");
+        steps.push("Skip all email and account setup.");
+        steps.push("Enable Developer options: tap Build Number 7 times in About Phone.");
+        steps.push("Enable USB Debugging in Developer options.");
+        steps.push("Connect USB cable and tap Allow when prompted on phone.");
+        steps.push("Run Install + Make Owner immediately before adding any account.");
       } else if (
         lowered.includes("admin component not recognized") ||
         lowered.includes("unknown admin")
