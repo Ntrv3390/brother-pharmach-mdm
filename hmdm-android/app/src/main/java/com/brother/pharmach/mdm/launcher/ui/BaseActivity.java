@@ -25,6 +25,8 @@ import android.app.ProgressDialog;
 import android.app.admin.DevicePolicyManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.util.Log;
@@ -408,7 +410,16 @@ public class BaseActivity extends AppCompatActivity {
         }
 
         dialogDeviceInfoBinding.setDeviceId(SettingsHelper.getInstance(this).getDeviceId());
-        dialogDeviceInfoBinding.setVersion(BuildConfig.VERSION_NAME + "-" + Utils.getLauncherVariant());
+
+        String installedVersion = BuildConfig.VERSION_NAME;
+        try {
+            PackageInfo packageInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+            if (packageInfo.versionName != null && !packageInfo.versionName.trim().isEmpty()) {
+                installedVersion = packageInfo.versionName;
+            }
+        } catch (PackageManager.NameNotFoundException ignored) {
+        }
+        dialogDeviceInfoBinding.setVersion(installedVersion + "-" + Utils.getLauncherVariant());
 
         String serverPath = SettingsHelper.getInstance(this).getServerProject();
         if (serverPath.length() > 0) {
