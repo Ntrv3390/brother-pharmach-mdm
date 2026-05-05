@@ -28,7 +28,6 @@ if [ -f "$HMDM_DIR/hmdm-server/.env" ]; then
 fi
 
 # Defaults
-APK_NAME="${APK_NAME:-brother-pharmach-mdm.apk}"
 PKG_NAME="${PKG_NAME:-com.brother.pharmach.mdm.launcher}"
 APK_BASE_URL="${APK_BASE_URL:-${BASE_URL:-https://brothers-mdm.com}/files}"
 SKIP_DB_UPDATE="${SKIP_DB_UPDATE:-0}"
@@ -42,30 +41,8 @@ SERVER_FILES_DIR="${SERVER_FILES_DIR:-/opt/hmdm/files}"
 APP_ARTIFACT_DIR="${APP_ARTIFACT_DIR:-$HMDM_DIR/app}"
 APP_INSTALLER_DIR="${APP_INSTALLER_DIR:-$HMDM_DIR/app-installer}"
 
-increment_app_version() {
-    local current="$1"
-    local major minor
-
-    if [[ ! "$current" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
-        echo "1.0"
-        return
-    fi
-
-    major="${current%%.*}"
-    if [[ "$current" == "$major" ]]; then
-        minor=0
-    else
-        minor="${current#*.}"
-    fi
-
-    minor=$((10#$minor + 1))
-    if [ "$minor" -ge 100 ]; then
-        major=$((major + 1))
-        minor=0
-    fi
-
-    echo "${major}.${minor}"
-}
+# APK_NAME is set after the build so it can embed the version code.
+# It must NOT be set as a default here — it is derived from version.properties.
 
 # Detect mode
 MODE="docker"
@@ -85,19 +62,23 @@ VERSION_PROPS_FILE="$ANDROID_DIR/version.properties"
 
 bump_android_version() {
     local props_file="$1"
-    # Read current values (strip comments and whitespace)
     local cur_code cur_name
     cur_code=$(grep '^VERSION_CODE=' "$props_file" | head -1 | cut -d= -f2 | tr -d '[:space:]')
     cur_name=$(grep '^VERSION_NAME=' "$props_file" | head -1 | cut -d= -f2 | tr -d '[:space:]')
 
-    # Increment versionCode by 1
     local new_code=$(( ${cur_code:-15310} + 1 ))
 
-    # Increment versionName using the same minor/major logic
-    local new_name
-    new_name="$(increment_app_version "${cur_name:-6.31}")"
+    # Increment the minor part of the version name (e.g. 6.91 -> 6.92)
+    local major minor
+    major="${cur_name%%.*}"
+    minor="${cur_name#*.}"
+    minor=$((10#$minor + 1))
+    if [ "$minor" -ge 100 ]; then
+        major=$((major + 1))
+        minor=0
+    fi
+    local new_name="${major}.${minor}"
 
-    # Write back atomically
     {
         echo "# Auto-managed by deploy_updated_apk.sh — do not edit manually"
         echo "# VERSION_CODE must increase monotonically for each Play Console upload"
@@ -138,6 +119,18 @@ if [ ! -f "$AAB_PATH" ]; then
     exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# Derive versioned APK filename from version.properties
+# Each version gets a unique filename (e.g. app-enterprise-release-15371.apk)
+# so every upload has a distinct URL — no Cloudflare cache collisions.
+# ---------------------------------------------------------------------------
+ANDROID_VERSION_CODE=$(grep '^VERSION_CODE=' "$VERSION_PROPS_FILE" | head -1 | cut -d= -f2 | tr -d '[:space:]')
+ANDROID_VERSION_NAME=$(grep '^VERSION_NAME=' "$VERSION_PROPS_FILE" | head -1 | cut -d= -f2 | tr -d '[:space:]')
+
+# Allow override via env, otherwise use versioned name
+APK_NAME="${APK_NAME:-app-enterprise-release-${ANDROID_VERSION_CODE}.apk}"
+echo "APK filename: $APK_NAME  (version ${ANDROID_VERSION_NAME} / ${ANDROID_VERSION_CODE})"
+
 mkdir -p "$APP_ARTIFACT_DIR"
 cp -f "$APK_PATH" "$APP_ARTIFACT_DIR/app-enterprise-release.apk"
 cp -f "$AAB_PATH" "$APP_ARTIFACT_DIR/app-enterprise-release.aab"
@@ -174,35 +167,45 @@ if [ "$MODE" = "docker" ]; then
     # Update DB through the postgres container
     if [ "$SKIP_DB_UPDATE" != "1" ]; then
         echo "Updating database via Docker..."
-        CURRENT_VERSION="$(docker exec "$DOCKER_DB_CONTAINER" psql \
+        APK_URL="${APK_BASE_URL}/${APK_NAME}"
+
+        # Get the application ID
+        APP_ID="$(docker exec "$DOCKER_DB_CONTAINER" psql \
             -U "$DB_USER" \
             -d "$DB_NAME" \
             -tA \
-            -c "SELECT av.version
-                FROM applicationversions av
-                JOIN applications a ON a.id = av.applicationid
-                WHERE a.pkg = '${PKG_NAME}'
-                ORDER BY av.id DESC
-                LIMIT 1;" | tr -d '[:space:]')"
-        APP_VERSION="$(increment_app_version "${CURRENT_VERSION:-1.0}")"
-        APK_URL="${APK_BASE_URL}/${APK_NAME}"
+            -c "SELECT id FROM applications WHERE pkg = '${PKG_NAME}' LIMIT 1;" | tr -d '[:space:]')"
 
-        docker exec "$DOCKER_DB_CONTAINER" psql \
+        if [ -z "$APP_ID" ]; then
+            echo "Error: application with pkg '${PKG_NAME}' not found in database."
+            exit 1
+        fi
+
+        # Check if this version code already exists — if so, update URL/hash; otherwise insert
+        EXISTING_ID="$(docker exec "$DOCKER_DB_CONTAINER" psql \
             -U "$DB_USER" \
             -d "$DB_NAME" \
-            -c "UPDATE applicationversions
-                SET url = '${APK_URL}',
-                    apkhash = '${APK_HASH}',
-                    version = '${APP_VERSION}'
-                WHERE id = (
-                    SELECT av.id
-                    FROM applicationversions av
-                    JOIN applications a ON a.id = av.applicationid
-                    WHERE a.pkg = '${PKG_NAME}'
-                    ORDER BY av.id DESC
-                    LIMIT 1
-                );"
-        echo "Database updated. New app version: ${APP_VERSION}"
+            -tA \
+            -c "SELECT id FROM applicationversions WHERE applicationid = ${APP_ID} AND versioncode = ${ANDROID_VERSION_CODE} LIMIT 1;" | tr -d '[:space:]')"
+
+        if [ -n "$EXISTING_ID" ]; then
+            docker exec "$DOCKER_DB_CONTAINER" psql \
+                -U "$DB_USER" \
+                -d "$DB_NAME" \
+                -c "UPDATE applicationversions
+                    SET url = '${APK_URL}',
+                        apkhash = '${APK_HASH}',
+                        version = '${ANDROID_VERSION_NAME}'
+                    WHERE id = ${EXISTING_ID};"
+            echo "Database updated (existing record id=${EXISTING_ID})."
+        else
+            docker exec "$DOCKER_DB_CONTAINER" psql \
+                -U "$DB_USER" \
+                -d "$DB_NAME" \
+                -c "INSERT INTO applicationversions (applicationid, version, versioncode, url, apkhash)
+                    VALUES (${APP_ID}, '${ANDROID_VERSION_NAME}', ${ANDROID_VERSION_CODE}, '${APK_URL}', '${APK_HASH}');"
+            echo "Database updated (new record inserted: version=${ANDROID_VERSION_NAME}, code=${ANDROID_VERSION_CODE})."
+        fi
     fi
 
 else
@@ -223,35 +226,41 @@ else
         fi
 
         echo "Updating database..."
-        CURRENT_VERSION="$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -tA -c "SELECT av.version
-            FROM applicationversions av
-            JOIN applications a ON a.id = av.applicationid
-            WHERE a.pkg = '$PKG_NAME'
-            ORDER BY av.id DESC
-            LIMIT 1;" | tr -d '[:space:]')"
-        APP_VERSION="$(increment_app_version "${CURRENT_VERSION:-1.0}")"
-        APK_URL="$APK_BASE_URL/$APK_NAME?v=$(date +%s)"
+        APK_URL="$APK_BASE_URL/$APK_NAME"
 
         export PGPASSWORD="$DB_PASSWORD"
-        psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -c "
-            UPDATE applicationversions
-            SET url = '$APK_URL',
-                apkhash = '$APK_HASH',
-                version = '$APP_VERSION'
-            WHERE id = (
-                SELECT av.id
-                FROM applicationversions av
-                JOIN applications a ON a.id = av.applicationid
-                WHERE a.pkg = '$PKG_NAME'
-                ORDER BY av.id DESC
-                LIMIT 1
-            );"
-        echo "Database updated. New app version: ${APP_VERSION}"
+
+        APP_ID="$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -tA \
+            -c "SELECT id FROM applications WHERE pkg = '${PKG_NAME}' LIMIT 1;" | tr -d '[:space:]')"
+
+        if [ -z "$APP_ID" ]; then
+            echo "Error: application with pkg '${PKG_NAME}' not found in database."
+            exit 1
+        fi
+
+        EXISTING_ID="$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -tA \
+            -c "SELECT id FROM applicationversions WHERE applicationid = ${APP_ID} AND versioncode = ${ANDROID_VERSION_CODE} LIMIT 1;" | tr -d '[:space:]')"
+
+        if [ -n "$EXISTING_ID" ]; then
+            psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -c "
+                UPDATE applicationversions
+                SET url = '$APK_URL',
+                    apkhash = '$APK_HASH',
+                    version = '${ANDROID_VERSION_NAME}'
+                WHERE id = ${EXISTING_ID};"
+            echo "Database updated (existing record id=${EXISTING_ID})."
+        else
+            psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -c "
+                INSERT INTO applicationversions (applicationid, version, versioncode, url, apkhash)
+                VALUES (${APP_ID}, '${ANDROID_VERSION_NAME}', ${ANDROID_VERSION_CODE}, '$APK_URL', '$APK_HASH');"
+            echo "Database updated (new record inserted: version=${ANDROID_VERSION_NAME}, code=${ANDROID_VERSION_CODE})."
+        fi
     fi
 fi
 
 echo "Done! New APK deployed ($MODE mode)."
 echo ""
-echo "APK:  $APK_NAME"
-echo "Hash: $APK_HASH"
-echo "URL:  $APK_BASE_URL/$APK_NAME"
+echo "APK:     $APK_NAME"
+echo "Version: ${ANDROID_VERSION_NAME} (${ANDROID_VERSION_CODE})"
+echo "Hash:    $APK_HASH"
+echo "URL:     $APK_BASE_URL/$APK_NAME"
