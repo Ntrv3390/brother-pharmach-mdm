@@ -239,7 +239,7 @@ public class WorkTimeManager {
     }
 
     private boolean isCurrentTimeWorkTime() {
-        if (policy.getStartTime() == null || policy.getEndTime() == null) {
+        if (policy == null || policy.getStartTime() == null || policy.getEndTime() == null) {
             return false;
         }
 
@@ -250,10 +250,13 @@ public class WorkTimeManager {
         int endMinute = parseTime(policy.getEndTime());
 
         boolean withinWork;
-        if (startMinute <= endMinute) {
-            withinWork = currentMinute >= startMinute && currentMinute < endMinute;
+        if (startMinute == endMinute) {
+            // Keep client logic aligned with server plugin: equal start/end means full day.
+            withinWork = true;
+        } else if (startMinute < endMinute) {
+            withinWork = currentMinute >= startMinute && currentMinute <= endMinute;
         } else {
-            withinWork = currentMinute >= startMinute || currentMinute < endMinute;
+            withinWork = currentMinute >= startMinute || currentMinute <= endMinute;
         }
 
         if (!withinWork) {

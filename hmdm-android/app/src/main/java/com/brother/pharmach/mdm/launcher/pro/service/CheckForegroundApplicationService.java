@@ -44,7 +44,7 @@ import java.util.concurrent.TimeUnit;
 public class CheckForegroundApplicationService extends Service {
 
     private static final String TAG = "WorkTimeUsageStats";
-    private static final long POLL_INTERVAL_MS = 1500;
+    private static final long POLL_INTERVAL_MS = 500;
 
     private ScheduledExecutorService executor;
     private String lastForegroundPkg = "";
@@ -76,16 +76,19 @@ public class CheckForegroundApplicationService extends Service {
             if (recentStat == null) return;
 
             String pkg = recentStat.getPackageName();
-            if (pkg.equals(lastForegroundPkg)) return;
-            lastForegroundPkg = pkg;
             if (pkg.equals(getPackageName())) return;
 
-            if (!WorkTimeManager.getInstance().isAppAllowed(pkg)) {
+            boolean allowed = WorkTimeManager.getInstance().isAppAllowed(pkg);
+            if (!allowed) {
                 Log.d(TAG, "Blocking restricted app via UsageStats: " + pkg);
                 Intent blockIntent = new Intent(Const.ACTION_HIDE_SCREEN);
                 blockIntent.putExtra(Const.PACKAGE_NAME, pkg);
                 LocalBroadcastManager.getInstance(this).sendBroadcast(blockIntent);
+                return;
             }
+
+            if (pkg.equals(lastForegroundPkg)) return;
+            lastForegroundPkg = pkg;
         } catch (Exception e) {
             Log.w(TAG, "Error checking foreground app", e);
         }

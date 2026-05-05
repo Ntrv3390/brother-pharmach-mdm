@@ -256,6 +256,7 @@ public class MainActivity
                                 "Ignoring stale ACTION_HIDE_SCREEN for now-allowed package: " + blockedPackage);
                         break;
                     }
+                        enforceWorkTimeAsync(context, true);
                     ServerConfig serverConfig = SettingsHelper.getInstance(MainActivity.this).getConfig();
                     if (serverConfig.getLock() != null && serverConfig.getLock()) {
                         // Device is locked by the server administrator!
@@ -273,12 +274,6 @@ public class MainActivity
                             View button = applicationNotAllowed.findViewById(R.id.layout_application_not_allowed_continue);
                             button.requestFocus();
                         });
-                        handler.postDelayed( new Runnable() {
-                            @Override
-                            public void run() {
-                                applicationNotAllowed.setVisibility( View.GONE );
-                            }
-                        }, 20000 );
                     }
                     break;
 
@@ -375,12 +370,13 @@ public class MainActivity
             if (Intent.ACTION_TIME_TICK.equals(intent.getAction())) {
                  com.brother.pharmach.mdm.launcher.util.WorkTimeManager wm =
                          com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance();
+                  wm.updatePolicy(context);
                  if (wm.shouldRefreshUI()) {
                      needRedrawContentAfterReconfigure = true;
                      showContentDebounced(settingsHelper.getConfig()); // Issue 7: debounced
-                     // Issue 7: run enforcement off main thread; bring to front if work time is now active
-                     enforceWorkTimeAsync(context, wm.isWorkTimeActive());
                  }
+                  // Strict enforcement: run every tick so lingering apps are closed even without UI transitions.
+                  enforceWorkTimeAsync(context, wm.isWorkTimeActive());
                  return;
             }
 
@@ -600,6 +596,8 @@ public class MainActivity
         // Issue 5: refresh WorkTime policy on every resume so the Favorites page
         // never shows restricted apps after screen unlock or app switch
         com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance().updatePolicy(this);
+        enforceWorkTimeAsync(this,
+            com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance().isWorkTimeActive());
 
         // On some Android firmwares, onResume is called before onCreate, so the fields are not initialized
         // Here we initialize all required fields to avoid crash at startup
@@ -693,6 +691,12 @@ public class MainActivity
                 boolean appStarted = false;
                 for (Application application : config.getApplications()) {
                     if (application.isRunAtBoot()) {
+                        if (!com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance()
+                                .isAppAllowed(application.getPkg())) {
+                            RemoteLogger.log(MainActivity.this, Const.LOG_INFO,
+                                    "Skipping run-at-boot for restricted app during WorkTime: " + application.getPkg());
+                            continue;
+                        }
                         // Delay start of each application to 5 sec
                         try {
                             Thread.sleep(PAUSE_BETWEEN_AUTORUNS_SEC * 1000);
@@ -1299,6 +1303,7 @@ public class MainActivity
         applicationNotAllowed.findViewById( R.id.layout_application_not_allowed_continue ).setOnClickListener( new View.OnClickListener() {
             @Override
             public void onClick( View v ) {
+                enforceWorkTimeAsync(MainActivity.this, true);
                 applicationNotAllowed.setVisibility( View.GONE );
             }
         } );
@@ -2101,6 +2106,12 @@ public class MainActivity
             handler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
+                    if (!com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance()
+                            .isAppAllowed(application.getPkg())) {
+                        RemoteLogger.log(MainActivity.this, Const.LOG_INFO,
+                                "Skipping scheduled autorun for restricted app during WorkTime: " + application.getPkg());
+                        return;
+                    }
                     Intent launchIntent = getPackageManager().getLaunchIntentForPackage(application.getPkg());
                     if (launchIntent != null) {
                         startActivity(launchIntent);

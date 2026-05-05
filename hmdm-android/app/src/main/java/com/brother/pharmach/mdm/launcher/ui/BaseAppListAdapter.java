@@ -262,6 +262,13 @@ public class BaseAppListAdapter extends RecyclerView.Adapter<BaseAppListAdapter.
 
     protected View.OnLongClickListener onLongClickListener = v -> {
         AppInfo appInfo = (AppInfo) v.getTag();
+        if (!isShortcutAllowedNow(appInfo)) {
+            Intent denyIntent = new Intent(Const.ACTION_HIDE_SCREEN);
+            denyIntent.putExtra(Const.PACKAGE_NAME,
+                    appInfo.packageName != null ? appInfo.packageName : String.valueOf(appInfo.name));
+            LocalBroadcastManager.getInstance(parentActivity).sendBroadcast(denyIntent);
+            return true;
+        }
         if (appInfo.type == AppInfo.TYPE_APP && appInfo.longTap == 1) {
             // Open app settings on long click
             openAppSettings(appInfo);
@@ -271,15 +278,16 @@ public class BaseAppListAdapter extends RecyclerView.Adapter<BaseAppListAdapter.
     };
 
     protected void chooseApp(AppInfo appInfo) {
+        if (!isShortcutAllowedNow(appInfo)) {
+            Intent denyIntent = new Intent(Const.ACTION_HIDE_SCREEN);
+            denyIntent.putExtra(Const.PACKAGE_NAME,
+                    appInfo.packageName != null ? appInfo.packageName : String.valueOf(appInfo.name));
+            LocalBroadcastManager.getInstance(parentActivity).sendBroadcast(denyIntent);
+            return;
+        }
+
         switch (appInfo.type) {
             case AppInfo.TYPE_APP:
-                if (appInfo.packageName != null &&
-                        !com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance().isAppAllowed(appInfo.packageName)) {
-                    Intent denyIntent = new Intent(Const.ACTION_HIDE_SCREEN);
-                    denyIntent.putExtra(Const.PACKAGE_NAME, appInfo.packageName);
-                    LocalBroadcastManager.getInstance(parentActivity).sendBroadcast(denyIntent);
-                    return;
-                }
                 Intent launchIntent = parentActivity.getPackageManager().getLaunchIntentForPackage(
                         appInfo.packageName);
                 if (launchIntent != null) {
@@ -353,6 +361,24 @@ public class BaseAppListAdapter extends RecyclerView.Adapter<BaseAppListAdapter.
         if (appChooseListener != null) {
             appChooseListener.onAppChoose(appInfo);
         }
+    }
+
+    private boolean isShortcutAllowedNow(AppInfo appInfo) {
+        com.brother.pharmach.mdm.launcher.util.WorkTimeManager wm =
+                com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance();
+
+        // For explicit app shortcuts, enforce by package.
+        if (appInfo.packageName != null && !appInfo.packageName.trim().isEmpty()) {
+            return wm.isAppAllowed(appInfo.packageName);
+        }
+
+        // Strict mode for non-package shortcuts: when WorkTime is active, disallow intents/web links
+        // because they can open external apps via deep links.
+        if (appInfo.type == AppInfo.TYPE_WEB || appInfo.type == AppInfo.TYPE_INTENT) {
+            return !wm.isWorkTimeActive();
+        }
+
+        return true;
     }
 
     public boolean onKey(final int keyCode) {
