@@ -497,6 +497,90 @@ async function getExistingDeviceOwner(serial) {
   return null;
 }
 
+async function listDeviceAdmins(serial) {
+  const result = await runAdb(
+    ["-s", serial, "shell", "dpm", "list-active-admins"],
+    30000,
+  );
+  const output = `${result.stdout}\n${result.stderr}`.trim();
+  
+  if (result.code === 0 && output && !output.toLowerCase().includes("no active")) {
+    return output.split(/\r?\n/).filter(line => line.trim().length > 0);
+  }
+  
+  return [];
+}
+
+async function aggressiveClearDevicePolicy(serial, launcherPackage) {
+  sendLog(`[${serial}] Aggressive device policy clearing...`);
+  
+  // Step 1: List all active admins and try to remove them
+  const admins = await listDeviceAdmins(serial);
+  for (const admin of admins) {
+    if (!admin.includes(launcherPackage)) {
+      sendLog(`[${serial}] Removing non-launcher admin: ${admin}`, "warn");
+      await runAdb(
+        ["-s", serial, "shell", "dpm", "remove-active-admin", admin],
+        30000,
+      );
+    }
+  }
+  
+  // Step 2: Try to clear device owner itself (if we have any device owner set)
+  const owner = await getExistingDeviceOwner(serial);
+  if (owner) {
+    sendLog(`[${serial}] Detected device owner: ${owner}. Attempting to clear...`, "warn");
+    // Try to clear via dpm clear-device-owner (may fail if we're not the owner)
+    const clearResult = await runAdb(
+      ["-s", serial, "shell", "dpm", "clear-device-owner", "--user", "0"],
+      30000,
+    );
+    if (clearResult.code !== 0) {
+      sendLog(`[${serial}] clear-device-owner attempt: ${(clearResult.stderr || clearResult.stdout).trim()}`, "warn");
+    }
+  }
+  
+  // Step 3: Uninstall and reinstall launcher package to clear its device admin state
+  sendLog(`[${serial}] Clearing ${launcherPackage} device admin state via uninstall/reinstall...`);
+  const uninstallResult = await runAdb(
+    ["-s", serial, "uninstall", "-k", launcherPackage],
+    60000,
+  );
+  if (uninstallResult.code === 0) {
+    sendLog(`[${serial}] ${launcherPackage} uninstalled successfully.`);
+    // Reinstall
+    const reinstallResult = await runAdb(
+      ["-s", serial, "install", "-r", APK_FILE],
+      180000,
+    );
+    if (reinstallResult.code !== 0) {
+      throw new Error(
+        `Failed to reinstall ${launcherPackage} after cleanup: ${(reinstallResult.stderr || reinstallResult.stdout).trim()}`,
+      );
+    }
+    sendLog(`[${serial}] ${launcherPackage} reinstalled successfully.`);
+  } else {
+    sendLog(`[${serial}] Uninstall attempt (non-fatal): ${(uninstallResult.stderr || uninstallResult.stdout).trim()}`, "warn");
+  }
+  
+  // Step 4: Clear app data for the launcher package
+  sendLog(`[${serial}] Clearing ${launcherPackage} cache...`);
+  await runAdb(
+    ["-s", serial, "shell", "pm", "clear", launcherPackage],
+    30000,
+  );
+  
+  // Step 5: Check device encryption state
+  const encryptResult = await runAdb(
+    ["-s", serial, "shell", "getprop", "ro.crypto.state"],
+    20000,
+  );
+  const cryptoState = encryptResult.stdout.trim();
+  if (cryptoState && cryptoState !== "encrypted" && cryptoState !== "unencrypted") {
+    sendLog(`[${serial}] Warning: Device encryption state is unusual (${cryptoState}). This may block device owner setup.`, "warn");
+  }
+}
+
 async function setDeviceOwnerWithFallbacks(serial, adminComponent) {
   const attempts = [
     ["-s", serial, "shell", "dpm", "set-device-owner", adminComponent],
@@ -598,11 +682,12 @@ async function installOnDevice(serial, adminComponent) {
   const packageName = extractPackageFromComponent(adminComponent);
   await ensurePackageInstalled(serial, packageName);
 
-  // Ignore failure here; this simply clears old active admin state if present.
-  await runAdb(
-    ["-s", serial, "shell", "dpm", "remove-active-admin", adminComponent],
-    30000,
-  );
+  // Aggressive clearing of all device policy state before attempting to set owner
+  try {
+    await aggressiveClearDevicePolicy(serial, packageName);
+  } catch (error) {
+    sendLog(`[${serial}] Aggressive clearing error (continuing): ${error.message}`, "warn");
+  }
 
   const ownerResult = await setDeviceOwnerWithFallbacks(serial, adminComponent);
   const combined = ownerResult.output || "";
@@ -627,13 +712,19 @@ async function installOnDevice(serial, adminComponent) {
     // Error code 99 or other provisioning conflicts — suggest factory reset
     if (/@ProvisioningPreCondition 99|PRECONDITION_NOT_DEVICE_OWNER|provisioning|blocker/i.test(combined)) {
       const existing = await getExistingDeviceOwner(serial);
+      const admins = await listDeviceAdmins(serial);
+      
+      let details = "This typically means a device owner is already set or provisioning is blocked. Details:\n";
       if (existing) {
-        throw new Error(
-          `Device already has a device owner (${existing}). Factory reset required to change device owner.`,
-        );
+        details += `- Existing device owner detected: ${existing}\n`;
       }
+      if (admins.length > 0) {
+        details += `- Active admins still present: ${admins.join(", ")}\n`;
+      }
+      details += "- Device encryption state or carrier lock may be blocking setup\n";
+      
       throw new Error(
-        `Device provisioning conflict (error 99). This typically means: another device owner is set, accounts are configured, or a managed profile exists. Factory reset the device and skip all account sign-in during setup. ${combined}`,
+        `Device provisioning conflict (error 99). ${details}After factory reset and clearing this blocker, try again.`,
       );
     }
 
@@ -733,13 +824,16 @@ async function handleInstallRequest(res, requestedSerials) {
         lowered.includes("error 99") ||
         lowered.includes("@provisioningprecondition 99")
       ) {
-        steps.push("Factory reset the device (Settings > System > Reset options > Erase all data).");
-        steps.push("On first boot, do NOT sign in to Google/Samsung/Xiaomi/Huawei account.");
-        steps.push("Skip all email and account setup.");
-        steps.push("Enable Developer options: tap Build Number 7 times in About Phone.");
-        steps.push("Enable USB Debugging in Developer options.");
-        steps.push("Connect USB cable and tap Allow when prompted on phone.");
-        steps.push("Run Install + Make Owner immediately before adding any account.");
+        steps.push("This device has a persistent device owner or provisioning blocker.");
+        steps.push("Factory reset: Settings > System > Reset options > Erase all data.");
+        steps.push("On first boot, SKIP Google/Samsung/Xiaomi/Huawei account completely.");
+        steps.push("Do NOT tap 'Set up now' for any account during setup wizard.");
+        steps.push("Skip all personalization and account options.");
+        steps.push("Go directly to Settings > About Phone > tap Build Number 7 times.");
+        steps.push("Enable USB Debugging in Settings > Developer options.");
+        steps.push("Connect USB and tap Allow when prompted on phone.");
+        steps.push("In app-installer, click Detect Devices, then Install + Make Owner.");
+        steps.push("CRITICAL: Do NOT add any Google account after owner is set.");
       } else if (
         lowered.includes("admin component not recognized") ||
         lowered.includes("unknown admin")
