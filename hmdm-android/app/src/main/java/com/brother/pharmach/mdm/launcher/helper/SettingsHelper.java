@@ -55,6 +55,7 @@ public class SettingsHelper {
     private static final String PREF_KEY_ACTIVITY_RUNNING = ".helpers.ACTIVITY_RUNNING";
     private static final String PREF_KEY_RESTORE_LAUNCHER = ".helpers.NEED_LAUNCHER_RESET";
     private static final String PREF_KEY_INTEGRATED_PROVISIONING_FLOW = ".helpers.INTEGRATED_PROVISIONING_FLOW";
+    private static final String PREF_KEY_STARTUP_SYNC_COMPLETE = ".helpers.STARTUP_SYNC_COMPLETE";
     private static final String PREF_KEY_LAST_APP_UPDATE_STATE = ".helpers.LAST_APP_UPDATE_STATE";
     private static final String PREF_KEY_APP_START_TIME = ".helpers.APP_START_TIME";
     private static final String PREF_KEY_SATELLITE_COUNT = ".helpers.APP_SATELLITE_COUNT";
@@ -123,6 +124,14 @@ public class SettingsHelper {
 
     public boolean setIntegratedProvisioningFlow(boolean value) {
         return sharedPreferences.edit().putBoolean(PACKAGE_NAME + PREF_KEY_INTEGRATED_PROVISIONING_FLOW, value).commit();
+    }
+
+    public boolean isStartupSyncComplete() {
+        return sharedPreferences.getBoolean(PACKAGE_NAME + PREF_KEY_STARTUP_SYNC_COMPLETE, false);
+    }
+
+    public boolean setStartupSyncComplete(boolean value) {
+        return sharedPreferences.edit().putBoolean(PACKAGE_NAME + PREF_KEY_STARTUP_SYNC_COMPLETE, value).commit();
     }
 
     public boolean isBaseUrlSet() {

@@ -1137,6 +1137,7 @@ public class MainActivity
             createAndShowServerDialog(false, settingsHelper.getBaseUrl(), settingsHelper.getServerProject());
         } else if ( settingsHelper.getDeviceId().length() == 0 ) {
             Log.d(Const.LOG_TAG, "Device ID is empty");
+            settingsHelper.setStartupSyncComplete(false);
             Utils.autoGrantPhonePermission(this);
             if (!SystemUtils.autoSetDeviceId(this)) {
                 createAndShowEnterDeviceIdDialog(false, null);
@@ -1147,19 +1148,22 @@ public class MainActivity
             }
         } else if (!configInitialized) {
             Log.i(Const.LOG_TAG, "Updating configuration in startLauncher()");
-            boolean userInteraction = true;
+            ServerConfig currentConfig = settingsHelper.getConfig();
+            boolean hasCachedConfig = currentConfig != null;
+            boolean startupSyncComplete = settingsHelper.isStartupSyncComplete();
             boolean integratedProvisioningFlow = settingsHelper.isIntegratedProvisioningFlow();
+            boolean forceForegroundInit = integratedProvisioningFlow && !startupSyncComplete;
             if (integratedProvisioningFlow) {
                 // InitialSetupActivity just started and this is the first start after
                 // the admin integrated provisioning flow, we need to show the process of loading apps
                 // Notice the config is not null because it's preloaded in InitialSetupActivity
                 settingsHelper.setIntegratedProvisioningFlow(false);
             }
-            if (settingsHelper.getConfig() != null && !integratedProvisioningFlow) {
-                // If it's not the first start, let's update in the background, show the content first!
-                showContent(settingsHelper.getConfig());
-                userInteraction = false;
+            // Always prefer cached content over a blocking startup screen.
+            if (hasCachedConfig) {
+                showContent(currentConfig);
             }
+            boolean userInteraction = !hasCachedConfig || forceForegroundInit;
             updateConfig(userInteraction);
         } else {
             showContent(settingsHelper.getConfig());
@@ -1514,6 +1518,9 @@ public class MainActivity
 
     @Override
     public void onConfigUpdateNetworkError(String errorText) {
+        if (settingsHelper.getConfig() != null && !isContentShown()) {
+            showContent(settingsHelper.getConfig());
+        }
         if (ProUtils.isKioskModeRunning(this) && settingsHelper.getConfig() != null &&
                 !getPackageName().equals(settingsHelper.getConfig().getMainApp())) {
             interruptResumeFlow = true;
@@ -1530,6 +1537,7 @@ public class MainActivity
 
     @Override
     public void onConfigLoaded() {
+        settingsHelper.setStartupSyncComplete(true);
         applyEarlyPolicies(settingsHelper.getConfig());
     }
 
@@ -1671,6 +1679,7 @@ public class MainActivity
 
     @Override
     public void onConfigUpdateComplete() {
+        settingsHelper.setStartupSyncComplete(true);
         SharedPreferences preferences = getApplicationContext().getSharedPreferences(Const.PREFERENCES, MODE_PRIVATE);
         String deviceAdminLog = PreferenceLogger.getLogString(preferences);
         if (deviceAdminLog != null && !deviceAdminLog.equals("")) {
@@ -2466,6 +2475,7 @@ public class MainActivity
         settingsHelper.setBaseUrl("");
         settingsHelper.setSecondaryBaseUrl("");
         settingsHelper.setServerProject("");
+        settingsHelper.setStartupSyncComplete(false);
         createAndShowServerDialog(false, settingsHelper.getBaseUrl(), settingsHelper.getServerProject());
     }
 

@@ -170,6 +170,7 @@ public class InitialSetupActivity extends BaseActivity implements ConfigUpdater.
         }
 
         settingsHelper.setIntegratedProvisioningFlow(true);
+        settingsHelper.setStartupSyncComplete(true);
 
         Log.d(Const.LOG_TAG, "Initial setup activity: setup completed");
         setResult(RESULT_OK);
