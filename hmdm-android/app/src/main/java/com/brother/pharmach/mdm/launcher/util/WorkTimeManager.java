@@ -199,6 +199,10 @@ public class WorkTimeManager {
     }
 
     public boolean isAppAllowed(String packageName) {
+        if (isInfrastructurePackage(packageName)) {
+            return true;
+        }
+
         if (policy == null || !isEnforcementActiveNow()) {
             return true;
         }
@@ -236,6 +240,31 @@ public class WorkTimeManager {
         if (list == null) return false;
         if (list.contains("*")) return true;
         return list.contains(packageName);
+    }
+
+    private boolean isInfrastructurePackage(String packageName) {
+        if (packageName == null || packageName.trim().isEmpty()) {
+            return true;
+        }
+
+        // Never block system shell/navigation surfaces (Recents/Home/System UI).
+        if ("android".equals(packageName)
+                || "com.android.systemui".equals(packageName)
+                || "com.android.permissioncontroller".equals(packageName)
+                || "com.google.android.permissioncontroller".equals(packageName)) {
+            return true;
+        }
+
+        // OEM launchers often host the recents overview.
+        return "com.miui.home".equals(packageName)
+                || "com.huawei.android.launcher".equals(packageName)
+                || "com.sec.android.app.launcher".equals(packageName)
+                || "com.oneplus.launcher".equals(packageName)
+                || "com.oppo.launcher".equals(packageName)
+                || "com.vivo.launcher".equals(packageName)
+                || "com.transsion.itel.launcher".equals(packageName)
+                || "com.transsion.infinix.xlauncher".equals(packageName)
+                || "com.transsion.tecno.launcher".equals(packageName);
     }
 
     private boolean isCurrentTimeWorkTime() {
@@ -333,17 +362,17 @@ public class WorkTimeManager {
     }
 
     /**
-     * Issue 2: Removes restricted apps from the Recents (Overview) task stack so users
-     * cannot tap them in the recent-apps screen during an active WorkTime window.
-     * Safe to call on non-Device-Owner devices — uses only the public ActivityManager API.
+     * Removes apps disallowed for the current policy window from Recents (Overview).
+     * This applies both during and outside work window while enforcement is active.
      */
     public void removeRestrictedFromRecents(Context context) {
-        if (policy == null || !isEnforcementActiveNow() || !isCurrentTimeWorkTime()) {
+        if (policy == null || !isEnforcementActiveNow()) {
             return;
         }
         try {
             ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
             if (am == null) return;
+
             for (ActivityManager.AppTask task : am.getAppTasks()) {
                 ActivityManager.RecentTaskInfo info = task.getTaskInfo();
                 if (info == null) continue;
@@ -360,8 +389,61 @@ public class WorkTimeManager {
                     task.finishAndRemoveTask();
                 }
             }
+
+            // OEM fallback: try global recents list when available.
+            try {
+                java.util.List<ActivityManager.RecentTaskInfo> recentTasks =
+                        am.getRecentTasks(200, ActivityManager.RECENT_IGNORE_UNAVAILABLE);
+                if (recentTasks != null) {
+                    for (ActivityManager.RecentTaskInfo info : recentTasks) {
+                        if (info == null) continue;
+                        String pkg = null;
+                        if (info.baseIntent != null && info.baseIntent.getComponent() != null) {
+                            pkg = info.baseIntent.getComponent().getPackageName();
+                        }
+                        if (pkg == null || pkg.equals(context.getPackageName())) continue;
+                        if (!isAppAllowed(pkg)) {
+                            Log.d(TAG, "Removing restricted app from global recents: " + pkg);
+                            int taskId = info.persistentId >= 0 ? info.persistentId : info.id;
+                            if (!removeTaskByReflection(taskId)) {
+                                if (am != null) {
+                                    try {
+                                        am.killBackgroundProcesses(pkg);
+                                    } catch (Exception ignored) {
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Global recents cleanup unavailable on this device", e);
+            }
         } catch (Exception e) {
             Log.w(TAG, "removeRestrictedFromRecents failed", e);
+        }
+    }
+
+    private boolean removeTaskByReflection(int taskId) {
+        if (taskId < 0) {
+            return false;
+        }
+
+        try {
+            Class<?> atmClass = Class.forName("android.app.ActivityTaskManager");
+            java.lang.reflect.Method getService = atmClass.getMethod("getService");
+            Object service = getService.invoke(null);
+            if (service == null) {
+                return false;
+            }
+            java.lang.reflect.Method removeTask = service.getClass().getMethod("removeTask", int.class);
+            Object result = removeTask.invoke(service, taskId);
+            if (result instanceof Boolean) {
+                return (Boolean) result;
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
         }
     }
 
@@ -381,6 +463,10 @@ public class WorkTimeManager {
         for (android.content.pm.ApplicationInfo appInfo : installedApps) {
             String pkg = appInfo.packageName;
             if (pkg.equals(context.getPackageName())) {
+                continue;
+            }
+
+            if (isInfrastructurePackage(pkg)) {
                 continue;
             }
 
