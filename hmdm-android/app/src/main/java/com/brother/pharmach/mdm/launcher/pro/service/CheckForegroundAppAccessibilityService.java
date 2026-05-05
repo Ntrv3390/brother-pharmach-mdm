@@ -43,8 +43,11 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
     protected void onServiceConnected() {
         super.onServiceConnected();
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
-        info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-            | AccessibilityEvent.TYPE_WINDOWS_CHANGED;
+        // TYPE_WINDOWS_CHANGED is intentionally excluded: it fires for every window in the
+        // recents stack (thumbnails of all recent apps), which caused recents to auto-close
+        // when restricted apps appeared in the recents overview. TYPE_WINDOW_STATE_CHANGED
+        // fires only when a window gains focus, which is sufficient for blocking.
+        info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED;
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
         info.notificationTimeout = 100;
         setServiceInfo(info);
@@ -53,9 +56,7 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        int eventType = event.getEventType();
-        if (eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-            && eventType != AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
+        if (event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             return;
         }
         CharSequence packageName = event.getPackageName();
