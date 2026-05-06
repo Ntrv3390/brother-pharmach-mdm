@@ -167,7 +167,82 @@ public class PushNotificationWorker extends Worker {
 
     // Periodic configuration update requests
     private Result doLongPollingWork() {
+        doPushPoll();
         return forceConfigUpdateWork();
+    }
+
+    private void doPushPoll() {
+        try {
+            if (settingsHelper == null || settingsHelper.getConfig() == null) {
+                return;
+            }
+
+            String project = settingsHelper.getServerProject();
+            String deviceId = settingsHelper.getDeviceId();
+            String baseUrl = settingsHelper.getBaseUrl();
+            String secondaryBaseUrl = settingsHelper.getSecondaryBaseUrl();
+            if (project == null || deviceId == null || deviceId.isEmpty() || baseUrl == null) {
+                return;
+            }
+
+            ServerService serverService = ServerServiceKeeper.createServerService(baseUrl);
+            ServerService secondaryServerService = null;
+            if (secondaryBaseUrl != null) {
+                secondaryServerService = ServerServiceKeeper.createServerService(secondaryBaseUrl);
+            }
+
+            String encodedDeviceId = deviceId;
+            try {
+                encodedDeviceId = URLEncoder.encode(encodedDeviceId, "utf8");
+            } catch (UnsupportedEncodingException ignored) {
+            }
+
+            String path = project + "/rest/notifications/device/" + encodedDeviceId;
+            String signature = null;
+            try {
+                signature = CryptoHelper.getSHA1String(BuildConfig.REQUEST_SIGNATURE + path);
+            } catch (Exception ignored) {
+            }
+
+            Response<PushResponse> response = null;
+            try {
+                response = serverService.queryPushNotifications(project, deviceId, signature).execute();
+            } catch (Exception e) {
+                RemoteLogger.log(context, Const.LOG_WARN, "Primary push poll failed: " + e.getMessage());
+            }
+
+            if ((response == null || !response.isSuccessful()) && secondaryServerService != null) {
+                try {
+                    response = secondaryServerService.queryPushNotifications(project, deviceId, signature).execute();
+                } catch (Exception e) {
+                    RemoteLogger.log(context, Const.LOG_WARN, "Secondary push poll failed: " + e.getMessage());
+                }
+            }
+
+            if (response == null) {
+                return;
+            }
+
+            if (response.isSuccessful() && response.body() != null
+                    && Const.STATUS_OK.equals(response.body().getStatus())
+                    && response.body().getData() != null) {
+                Map<String, PushMessage> filteredMessages = new HashMap<String, PushMessage>();
+                for (PushMessage message : response.body().getData()) {
+                    if (!message.getMessageType().equals(PushMessage.TYPE_CONFIG_UPDATED)
+                            || !filteredMessages.containsKey(PushMessage.TYPE_CONFIG_UPDATED)) {
+                        filteredMessages.put(message.getMessageType(), message);
+                    }
+                }
+                for (Map.Entry<String, PushMessage> entry : filteredMessages.entrySet()) {
+                    PushNotificationProcessor.process(entry.getValue(), context);
+                }
+            } else if (response.code() >= 400 && response.code() < 500) {
+                RemoteLogger.log(context, Const.LOG_WARN,
+                        "Push polling HTTP status " + response.code() + " from short worker poll");
+            }
+        } catch (Exception e) {
+            RemoteLogger.log(context, Const.LOG_WARN, "Short push polling failed: " + e.getMessage());
+        }
     }
 
     // Periodic configuration update requests

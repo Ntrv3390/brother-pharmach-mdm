@@ -1,9 +1,5 @@
 package com.brother.pharmach.mdm.launcher.service;
 
-import android.annotation.SuppressLint;
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
 import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -13,21 +9,17 @@ import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
 
-import androidx.core.app.NotificationCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.brother.pharmach.mdm.launcher.BuildConfig;
 import com.brother.pharmach.mdm.launcher.Const;
-import com.brother.pharmach.mdm.launcher.R;
 import com.brother.pharmach.mdm.launcher.helper.CryptoHelper;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.json.PushMessage;
 import com.brother.pharmach.mdm.launcher.json.PushResponse;
-import com.brother.pharmach.mdm.launcher.pro.ProUtils;
 import com.brother.pharmach.mdm.launcher.server.ServerService;
 import com.brother.pharmach.mdm.launcher.server.ServerServiceKeeper;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
-import com.brother.pharmach.mdm.launcher.util.Utils;
 import com.brother.pharmach.mdm.launcher.worker.PushNotificationProcessor;
 
 import org.eclipse.paho.android.service.MqttService;
@@ -48,11 +40,6 @@ public class PushLongPollingService extends Service {
     private final long DELAY_AFTER_EXCEPTION_MS = 60000;
     // Delay between polling requests to avoid looping if the server would respond instantly
     private final long DELAY_AFTER_REQUEST_MS = 5000;
-    public static String CHANNEL_ID = MqttService.class.getName();
-    // A flag preventing multiple notifications for the foreground service
-    boolean started = false;
-    // Notification ID for the foreground service
-    private static final int NOTIFICATION_ID = 113;
     private ServerService serverService;
     private ServerService secondaryServerService;
 
@@ -71,7 +58,6 @@ public class PushLongPollingService extends Service {
     public void onDestroy() {
         LocalBroadcastManager.getInstance( this ).unregisterReceiver(receiver);
         Log.i(Const.LOG_TAG, "PushLongPollingService: service stopped");
-        started = false;
         super.onDestroy();
     }
 
@@ -79,11 +65,6 @@ public class PushLongPollingService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
         enabled = true;
-
-        if (BuildConfig.MQTT_SERVICE_FOREGROUND && !started) {
-            startAsForeground();
-            started = true;
-        }
 
         Log.i(Const.LOG_TAG, "PushLongPolling: service started. ");
 
@@ -184,29 +165,6 @@ public class PushLongPollingService extends Service {
         }
         threadActive = false;
     };
-
-
-    @SuppressLint("WrongConstant")
-    private void startAsForeground() {
-        NotificationCompat.Builder builder;
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Notification Channel", NotificationManager.IMPORTANCE_DEFAULT);
-            NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            notificationManager.createNotificationChannel(channel);
-            builder = new NotificationCompat.Builder(this, CHANNEL_ID);
-        } else {
-            builder = new NotificationCompat.Builder( this );
-        }
-        Notification notification = builder
-                .setContentTitle(ProUtils.getAppName(this))
-                .setTicker(ProUtils.getAppName(this))
-                .setContentText(getString(R.string.mqtt_service_text))
-                .setSmallIcon(R.drawable.ic_mqtt_service).build();
-
-        Utils.startStableForegroundService(this, NOTIFICATION_ID, notification);
-    }
-
     @Override
     public IBinder onBind(Intent intent) {
         return null;

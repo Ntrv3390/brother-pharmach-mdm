@@ -19,9 +19,7 @@
 
 package com.brother.pharmach.mdm.launcher.pro.worker;
 
-import android.content.Intent;
 import android.os.AsyncTask;
-import android.os.Build;
 import android.content.Context;
 
 import com.brother.pharmach.mdm.launcher.Const;
@@ -30,9 +28,9 @@ import com.brother.pharmach.mdm.launcher.json.DetailedInfo;
 import com.brother.pharmach.mdm.launcher.json.DeviceInfo;
 import com.brother.pharmach.mdm.launcher.server.ServerService;
 import com.brother.pharmach.mdm.launcher.server.ServerServiceKeeper;
-import com.brother.pharmach.mdm.launcher.service.LocationService;
 import com.brother.pharmach.mdm.launcher.util.DeviceInfoProvider;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
+import com.brother.pharmach.mdm.launcher.worker.LocationWorker;
 
 import java.util.Collections;
 
@@ -50,16 +48,10 @@ public class DetailedInfoWorker {
 
     public static void requestConfigUpdate(Context context) {
         try {
-            Intent intent = new Intent(context, LocationService.class);
-            intent.setAction(LocationService.ACTION_UPDATE_GPS);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent);
-            } else {
-                context.startService(intent);
-            }
+            LocationWorker.scheduleOneShot(context);
         } catch (Exception e) {
             RemoteLogger.log(context, Const.LOG_WARN,
-                    "Failed to start location service for DeviceInfo refresh: " + e.getMessage());
+                    "Failed to schedule location worker for DeviceInfo refresh: " + e.getMessage());
         }
 
         AsyncTask.execute(() -> uploadLatestKnownLocation(context));

@@ -34,6 +34,7 @@ import com.brother.pharmach.mdm.launcher.worker.PushNotificationWorker;
 import com.brother.pharmach.mdm.launcher.worker.ScheduledAppUpdateWorker;
 import com.brother.pharmach.mdm.launcher.worker.SendDeviceInfoWorker;
 import com.brother.pharmach.mdm.launcher.worker.SmsLogUploadWorker;
+import com.brother.pharmach.mdm.launcher.worker.LocationWorker;
 
 import org.eclipse.paho.android.service.MqttAndroidClient;
 
@@ -70,6 +71,7 @@ public class Initializer {
 
             ConnectionWaiter.waitForConnect(context, () -> {
                 DetailedInfoWorker.schedule(context);
+                LocationWorker.schedule(context);
                 if (BuildConfig.ENABLE_PUSH) {
                     PushNotificationWorker.schedule(context);
                 }
@@ -122,11 +124,7 @@ public class Initializer {
                 try {
                     Intent serviceStartIntent = new Intent(context, PushLongPollingService.class);
                     serviceStartIntent.putExtra(Const.EXTRA_ENABLED, true);
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        context.startForegroundService(serviceStartIntent);
-                    } else {
-                        context.startService(serviceStartIntent);
-                    }
+                    context.startService(serviceStartIntent);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -236,6 +234,7 @@ public class Initializer {
                 DeviceInfo deviceInfo = DeviceInfoProvider.getDeviceInfo(context, true, true);
                 sendDeviceInfoTask.execute(deviceInfo);
                 SendDeviceInfoWorker.scheduleDeviceInfoSending(context);
+                LocationWorker.scheduleOneShot(context);
             }
 
             @Override
