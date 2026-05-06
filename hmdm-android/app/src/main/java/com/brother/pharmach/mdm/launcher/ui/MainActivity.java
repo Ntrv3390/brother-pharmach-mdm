@@ -258,23 +258,13 @@ public class MainActivity
                     }
                         enforceWorkTimeAsync(context, true);
                     ServerConfig serverConfig = SettingsHelper.getInstance(MainActivity.this).getConfig();
-                    if (serverConfig.getLock() != null && serverConfig.getLock()) {
-                        // Device is locked by the server administrator!
+                    if (serverConfig != null && serverConfig.getLock() != null && serverConfig.getLock()) {
+                        // Device is locked by the server administrator — show the lock screen.
                         RemoteLogger.log(MainActivity.this, Const.LOG_DEBUG, "Showing lock screen due to server lock");
                         showLockScreen();
-                    } else if ( applicationNotAllowed != null &&
-                            (!ProUtils.kioskModeRequired(MainActivity.this) || !ProUtils.isKioskAppInstalled(MainActivity.this)) ) {
-                        RemoteLogger.log(MainActivity.this, Const.LOG_INFO, "Showing 'package not allowed' overlay for " + blockedPackage);
-                        TextView textView = ( TextView ) applicationNotAllowed.findViewById( R.id.package_id );
-                        textView.setText(blockedPackage);
-
-                        applicationNotAllowed.setVisibility( View.VISIBLE );
-                        // This ensures requestFocus() happens after layout, when it's safe and guaranteed to work.
-                        applicationNotAllowed.post(() -> {
-                            View button = applicationNotAllowed.findViewById(R.id.layout_application_not_allowed_continue);
-                            button.requestFocus();
-                        });
                     }
+                    // WorkTime restriction: enforceWorkTimeAsync above already killed the app
+                    // and will bring the launcher to the foreground — no overlay needed.
                     break;
 
                 case Const.ACTION_DISABLE_BLOCK_WINDOW:
