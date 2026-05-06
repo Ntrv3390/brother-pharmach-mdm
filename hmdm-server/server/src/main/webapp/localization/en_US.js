@@ -706,7 +706,7 @@ document.localization["en_US"] = {
   "form.file.external.url.placeholder": "File URL on an external resource",
   "form.file.path": "Path on server",
   "form.file.device.path": "Path on device",
-  "form.file.device.path.placeholder": "Path relative to /storage/emulated/0",
+  "form.file.device.path.placeholder": "Path relative to storage/emulated/0",
   "form.file.deleted": "DELETED",
   "form.file.copy.link": "Copy link: ${link}",
   "form.file.configurations.file": "File",
