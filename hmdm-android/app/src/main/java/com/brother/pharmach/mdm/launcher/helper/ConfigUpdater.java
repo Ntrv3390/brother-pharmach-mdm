@@ -343,11 +343,7 @@ public class ConfigUpdater {
     private void startLongPollingService() {
         try {
             Intent serviceStartIntent = new Intent(context, PushLongPollingService.class);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(serviceStartIntent);
-            } else {
-                context.startService(serviceStartIntent);
-            }
+            context.startService(serviceStartIntent);
         } catch (Exception e) {
             e.printStackTrace();
         }

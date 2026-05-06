@@ -105,7 +105,6 @@ import com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundApplicationS
 import com.brother.pharmach.mdm.launcher.receiver.ScreenOffReceiver;
 import com.brother.pharmach.mdm.launcher.server.ServerServiceKeeper;
 import com.brother.pharmach.mdm.launcher.server.UnsafeOkHttpClient;
-import com.brother.pharmach.mdm.launcher.service.LocationService;
 import com.brother.pharmach.mdm.launcher.service.PluginApiService;
 import com.brother.pharmach.mdm.launcher.service.StatusControlService;
 import com.brother.pharmach.mdm.launcher.task.GetServerConfigTask;
@@ -561,10 +560,6 @@ public class MainActivity
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_CODE_GPS_STATE_CHANGE) {
-            // User changed GPS state, let's update location service
-            startLocationServiceWithRetry();
-        }
     }
 
     @Override
@@ -1476,36 +1471,6 @@ public class MainActivity
         configUpdater.updateConfig(this, this, userInteraction);
     }
 
-    // Workaround against crash "App is in background" on Android 9: this is an Android OS bug
-    // https://stackoverflow.com/questions/52013545/android-9-0-not-allowed-to-start-service-app-is-in-background-after-onresume
-    private void startLocationServiceWithRetry() {
-        try {
-            startLocationService();
-        } catch (Exception e) {
-            // Android OS bug!!!
-            e.printStackTrace();
-
-            // Repeat an attempt to start service after one second
-            handler.postDelayed(new Runnable() {
-                public void run() {
-                    try {
-                        startLocationService();
-                    } catch (Exception e) {
-                        // Still failed, now give up!
-                        e.printStackTrace();
-                    }
-                }
-            }, 1000);
-        }
-    }
-
-    private void startLocationService() {
-        ServerConfig config = settingsHelper.getConfig();
-        Intent intent = new Intent(this, LocationService.class);
-        intent.setAction(config.getRequestUpdates() != null ? config.getRequestUpdates() : LocationService.ACTION_STOP);
-        startService(intent);
-    }
-
     @Override
     public void onConfigUpdateStart() {
         binding.setMessage( getString( R.string.main_activity_update_config ) );
@@ -1549,7 +1514,6 @@ public class MainActivity
 
     @Override
     public void onPoliciesUpdated() {
-        startLocationServiceWithRetry();
     }
 
     @Override

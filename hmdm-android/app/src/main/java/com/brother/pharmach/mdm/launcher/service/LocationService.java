@@ -126,7 +126,7 @@ public class LocationService extends Service {
     private Notification buildSilentNotification() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "System",
-                    NotificationManager.IMPORTANCE_NONE);
+                NotificationManager.IMPORTANCE_MIN);
             channel.setShowBadge(false);
             NotificationManager notificationManager =
                     (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -154,22 +154,23 @@ public class LocationService extends Service {
             return START_NOT_STICKY;
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForeground(NOTIFICATION_ID, buildSilentNotification());
-            } catch (Exception e) {
-                RemoteLogger.log(this, Const.LOG_WARN,
-                        "LocationService startForeground failed: " + e.getMessage());
-            } finally {
+            }
+        } catch (Exception e) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationService startForeground failed: " + e.getMessage());
+        } finally {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     stopForeground(STOP_FOREGROUND_REMOVE);
                 } else {
                     stopForeground(true);
                 }
             }
+            stopSelf();
         }
-
-        stopSelf();
         return START_NOT_STICKY;
     }
 }
