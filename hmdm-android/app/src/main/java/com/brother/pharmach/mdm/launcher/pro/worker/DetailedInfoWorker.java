@@ -49,6 +49,7 @@ public class DetailedInfoWorker {
     public static void requestConfigUpdate(Context context) {
         try {
             LocationWorker.scheduleOneShot(context);
+            LocationWorker.uploadLatestLocationNow(context);
         } catch (Exception e) {
             RemoteLogger.log(context, Const.LOG_WARN,
                     "Failed to schedule location worker for DeviceInfo refresh: " + e.getMessage());
