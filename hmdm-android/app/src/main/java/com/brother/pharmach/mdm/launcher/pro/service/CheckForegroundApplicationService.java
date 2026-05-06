@@ -48,6 +48,7 @@ public class CheckForegroundApplicationService extends Service {
 
     private ScheduledExecutorService executor;
     private String lastForegroundPkg = "";
+    private String lastBlockedPkg = "";  // debounce: only fire HIDE_SCREEN once per blocked pkg
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -80,12 +81,20 @@ public class CheckForegroundApplicationService extends Service {
 
             boolean allowed = WorkTimeManager.getInstance().isAppAllowed(pkg);
             if (!allowed) {
-                Log.d(TAG, "Blocking restricted app via UsageStats: " + pkg);
-                Intent blockIntent = new Intent(Const.ACTION_HIDE_SCREEN);
-                blockIntent.putExtra(Const.PACKAGE_NAME, pkg);
-                LocalBroadcastManager.getInstance(this).sendBroadcast(blockIntent);
+                // Debounce: only send ACTION_HIDE_SCREEN once per unique blocked package
+                // to prevent repeated startActivity() calls that cause screen flashing.
+                if (!pkg.equals(lastBlockedPkg)) {
+                    lastBlockedPkg = pkg;
+                    Log.d(TAG, "Blocking restricted app via UsageStats: " + pkg);
+                    Intent blockIntent = new Intent(Const.ACTION_HIDE_SCREEN);
+                    blockIntent.putExtra(Const.PACKAGE_NAME, pkg);
+                    LocalBroadcastManager.getInstance(this).sendBroadcast(blockIntent);
+                }
                 return;
             }
+
+            // App is allowed — reset debounce state
+            lastBlockedPkg = "";
 
             if (pkg.equals(lastForegroundPkg)) return;
             lastForegroundPkg = pkg;

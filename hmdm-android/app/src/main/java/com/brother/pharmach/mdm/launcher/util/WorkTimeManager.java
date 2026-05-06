@@ -458,7 +458,8 @@ public class WorkTimeManager {
         android.content.pm.PackageManager pm = context.getPackageManager();
 
         java.util.List<android.content.pm.ApplicationInfo> installedApps = pm.getInstalledApplications(0);
-        java.util.ArrayList<String> launchablePkgs = new java.util.ArrayList<>();
+        java.util.ArrayList<String> pkgsToSuspend = new java.util.ArrayList<>();
+        java.util.ArrayList<String> pkgsToUnsuspend = new java.util.ArrayList<>();
 
         for (android.content.pm.ApplicationInfo appInfo : installedApps) {
             String pkg = appInfo.packageName;
@@ -475,38 +476,48 @@ public class WorkTimeManager {
                 continue;
             }
 
-            launchablePkgs.add(pkg);
+            boolean allowed = !enforcementActive || isAppAllowed(pkg);
 
-            if (enforcementActive && !isAppAllowed(pkg) && am != null) {
-                // WorkTime rule: do NOT disable Recents globally; just auto-close restricted apps.
-                // Accessibility/UsageStats monitors and MainActivity then bring launcher to front.
-                try {
-                    java.lang.reflect.Method forceStopMethod = am.getClass().getMethod("forceStopPackage", String.class);
-                    forceStopMethod.invoke(am, pkg);
-                } catch (Exception e) {
+            if (allowed) {
+                pkgsToUnsuspend.add(pkg);
+            } else {
+                pkgsToSuspend.add(pkg);
+                // Fallback for non-device-owner
+                if (am != null) {
                     try {
-                        am.killBackgroundProcesses(pkg);
-                    } catch (Exception ex) {
-                        Log.e(TAG, "Failed to kill background processes for " + pkg, ex);
+                        java.lang.reflect.Method forceStopMethod = am.getClass().getMethod("forceStopPackage", String.class);
+                        forceStopMethod.invoke(am, pkg);
+                    } catch (Exception e) {
+                        try {
+                            am.killBackgroundProcesses(pkg);
+                        } catch (Exception ex) {
+                            Log.e(TAG, "Failed to kill background processes for " + pkg, ex);
+                        }
                     }
                 }
             }
         }
 
-        // If WorkTime enforcement is inactive (policy off or device exception window),
-        // clear any legacy suspended/hidden state left from older builds.
-        if (!enforcementActive && isDeviceOwner && dpm != null && adminComponent != null) {
-            Log.i(TAG, "Enforcement inactive: clearing legacy app suspension/hidden states for " + launchablePkgs.size() + " packages");
+        if (isDeviceOwner && dpm != null && adminComponent != null) {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
                 try {
-                    if (!launchablePkgs.isEmpty()) {
-                        dpm.setPackagesSuspended(adminComponent, launchablePkgs.toArray(new String[0]), false);
+                    if (!pkgsToSuspend.isEmpty()) {
+                        dpm.setPackagesSuspended(adminComponent, pkgsToSuspend.toArray(new String[0]), true);
+                    }
+                    if (!pkgsToUnsuspend.isEmpty()) {
+                        dpm.setPackagesSuspended(adminComponent, pkgsToUnsuspend.toArray(new String[0]), false);
                     }
                 } catch (Exception e) {
-                    Log.e(TAG, "Failed to clear package suspension states", e);
+                    Log.e(TAG, "Failed to update package suspension states", e);
                 }
             } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-                for (String pkg : launchablePkgs) {
+                for (String pkg : pkgsToSuspend) {
+                    try {
+                        dpm.setApplicationHidden(adminComponent, pkg, true);
+                    } catch (Exception e) {
+                    }
+                }
+                for (String pkg : pkgsToUnsuspend) {
                     try {
                         dpm.setApplicationHidden(adminComponent, pkg, false);
                     } catch (Exception e) {
@@ -515,7 +526,17 @@ public class WorkTimeManager {
             }
         }
 
-        Log.i(TAG, "WorkTime enforcement completed, launchable packages scanned=" + launchablePkgs.size());
+        Log.i(TAG, "WorkTime enforcement completed, suspended=" + pkgsToSuspend.size() + ", unsuspended=" + pkgsToUnsuspend.size());
+
+        // Clear any pre-existing restricted-app notifications from the shade
+        // (new ones are blocked by WorkTimeNotificationListenerService.onNotificationPosted,
+        // but notifications already in the shade before the worktime transition started
+        // must be swept here).
+        try {
+            com.brother.pharmach.mdm.launcher.service.WorkTimeNotificationListenerService.cancelAllRestricted();
+        } catch (Exception e) {
+            Log.w(TAG, "cancelAllRestricted failed", e);
+        }
 
         // Issue 2: Always clear restricted apps from the recents task stack after enforcement
         removeRestrictedFromRecents(context);

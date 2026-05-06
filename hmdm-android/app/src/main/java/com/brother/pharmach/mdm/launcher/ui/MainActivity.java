@@ -318,11 +318,14 @@ public class MainActivity
                 case com.brother.pharmach.mdm.launcher.util.WorkTimeManager.ACTION_WORKTIME_POLICY_UPDATED:
                     ServerConfig cfg = settingsHelper != null ? settingsHelper.getConfig() : null;
                     if (cfg != null) {
-                        showContent(cfg);
-                        // Issue 7: enforcement off main thread; bring to front if work time active
+                        // shouldRefreshUI() consumes the state change, so call it before showContent
                         com.brother.pharmach.mdm.launcher.util.WorkTimeManager wm2 =
                                 com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance();
-                        enforceWorkTimeAsync(context, wm2.isWorkTimeActive());
+                        boolean worktimeStateChanged = wm2.shouldRefreshUI();
+                        showContent(cfg);
+                        // Only bring launcher to front when worktime just became active (transition),
+                        // not on every periodic policy refresh.
+                        enforceWorkTimeAsync(context, worktimeStateChanged && wm2.isWorkTimeActive());
                     }
                     break;
             }
@@ -358,7 +361,9 @@ public class MainActivity
             wm.updatePolicy(context);
             if (settingsHelper != null && settingsHelper.getConfig() != null) {
                 showContentDebounced(settingsHelper.getConfig());
-                // Issue 7: enforcement off main thread; bring to front if work time active
+                // On screen unlock, enforce suspensions. Bring launcher to front only if
+                // worktime is active — the screen unlock itself means the user is present,
+                // so we should show the launcher home rather than a restricted app.
                 enforceWorkTimeAsync(context, wm.isWorkTimeActive());
             }
         }
@@ -371,12 +376,17 @@ public class MainActivity
                  com.brother.pharmach.mdm.launcher.util.WorkTimeManager wm =
                          com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance();
                   wm.updatePolicy(context);
-                 if (wm.shouldRefreshUI()) {
+                 // shouldRefreshUI() returns true only when worktime state actually transitions
+                 // (e.g., enforcement just started or ended). Use this to gate bringToFront.
+                 boolean stateChanged = wm.shouldRefreshUI();
+                 if (stateChanged) {
                      needRedrawContentAfterReconfigure = true;
                      showContentDebounced(settingsHelper.getConfig()); // Issue 7: debounced
                  }
-                  // Strict enforcement: run every tick so lingering apps are closed even without UI transitions.
-                  enforceWorkTimeAsync(context, wm.isWorkTimeActive());
+                  // Enforce every tick (suspend/kill restricted apps), but only bring
+                  // launcher to front when the worktime window actually transitions.
+                  // This prevents startActivity() from firing every 60s causing flashing.
+                  enforceWorkTimeAsync(context, stateChanged && wm.isWorkTimeActive());
                  return;
             }
 
@@ -596,8 +606,9 @@ public class MainActivity
         // Issue 5: refresh WorkTime policy on every resume so the Favorites page
         // never shows restricted apps after screen unlock or app switch
         com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance().updatePolicy(this);
-        enforceWorkTimeAsync(this,
-            com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance().isWorkTimeActive());
+        // Do NOT bringToFront here: we are already resuming (already coming to the foreground).
+        // Calling startActivity on an already-resuming activity causes a flash/loop.
+        enforceWorkTimeAsync(this, false);
 
         // On some Android firmwares, onResume is called before onCreate, so the fields are not initialized
         // Here we initialize all required fields to avoid crash at startup
