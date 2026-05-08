@@ -128,6 +128,9 @@ public interface DeviceMapper {
             "WHERE id = #{deviceId}"})
     void clearOldNumber(@Param("deviceId") Integer deviceId);
 
+    @Update({"UPDATE devices SET phone = #{phone} WHERE id = #{deviceId}"})
+    void updateDevicePhone(@Param("deviceId") Integer deviceId, @Param("phone") String phone);
+
     List<DeviceLookupItem> lookupDevices(@Param("userId") int userId,
                                          @Param("customerId") int customerId,
                                          @Param("filter") String filter,

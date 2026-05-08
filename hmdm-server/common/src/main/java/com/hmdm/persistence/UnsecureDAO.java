@@ -188,6 +188,10 @@ public class UnsecureDAO {
         this.deviceMapper.updateDeviceCustomProperties(id, device.getCustom1(), device.getCustom2(), device.getCustom3());
     }
 
+    public void updateDevicePhone(Integer id, String phone) {
+        this.deviceMapper.updateDevicePhone(id, phone);
+    }
+
     public void completeDeviceMigration(Integer id) {
         this.deviceMapper.clearOldNumber(id);
     }

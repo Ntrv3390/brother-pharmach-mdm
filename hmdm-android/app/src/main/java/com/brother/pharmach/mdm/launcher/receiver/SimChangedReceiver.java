@@ -24,8 +24,15 @@ import android.content.Context;
 import android.content.Intent;
 
 import com.brother.pharmach.mdm.launcher.Const;
+import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
+import com.brother.pharmach.mdm.launcher.json.DeviceInfo;
+import com.brother.pharmach.mdm.launcher.server.ServerService;
+import com.brother.pharmach.mdm.launcher.server.ServerServiceKeeper;
 import com.brother.pharmach.mdm.launcher.util.DeviceInfoProvider;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
+
+import okhttp3.ResponseBody;
+import retrofit2.Response;
 
 public class SimChangedReceiver extends BroadcastReceiver {
 
@@ -46,6 +53,8 @@ public class SimChangedReceiver extends BroadcastReceiver {
             if (phoneNumber != null && phoneNumber.length() > 0) {
                 message += ". New phone number: " + phoneNumber;
             }
+            // Upload fresh device info so the server gets the phone number
+            uploadDeviceInfoAsync(context);
         } else if (simState.equals("ABSENT")) {
             message = "SIM card removed";
         }
@@ -53,5 +62,53 @@ public class SimChangedReceiver extends BroadcastReceiver {
         if (message != null) {
             RemoteLogger.log(context, Const.LOG_INFO, message);
         }
+    }
+
+    /**
+     * Sends device info (including phone number) to the server in a background
+     * thread. A short delay lets the SIM finish registering before we read the
+     * number from TelephonyManager.
+     */
+    private static void uploadDeviceInfoAsync(final Context context) {
+        new Thread(() -> {
+            try {
+                // Give SIM a few seconds to fully register
+                Thread.sleep(5000);
+            } catch (InterruptedException ignored) {
+            }
+            try {
+                SettingsHelper settingsHelper = SettingsHelper.getInstance(context);
+                if (settingsHelper == null || settingsHelper.getConfig() == null) {
+                    // Not enrolled yet — the regular enrollment flow will capture the number
+                    return;
+                }
+
+                DeviceInfo deviceInfo = DeviceInfoProvider.getDeviceInfo(context, true, true);
+
+                ServerService serverService = ServerServiceKeeper.getServerServiceInstance(context);
+                ServerService secondaryServerService = ServerServiceKeeper.getSecondaryServerServiceInstance(context);
+
+                Response<ResponseBody> response = null;
+                try {
+                    response = serverService.sendDevice(settingsHelper.getServerProject(), deviceInfo).execute();
+                } catch (Exception ignored) {
+                }
+
+                if (response == null || !response.isSuccessful()) {
+                    try {
+                        response = secondaryServerService.sendDevice(settingsHelper.getServerProject(), deviceInfo).execute();
+                    } catch (Exception ignored) {
+                    }
+                }
+
+                if (response != null && response.isSuccessful()) {
+                    RemoteLogger.log(context, Const.LOG_INFO, "Device info (phone number) uploaded after SIM load");
+                } else {
+                    RemoteLogger.log(context, Const.LOG_WARN, "Failed to upload device info after SIM load");
+                }
+            } catch (Exception e) {
+                RemoteLogger.log(context, Const.LOG_WARN, "Exception uploading device info after SIM load: " + e.getMessage());
+            }
+        }).start();
     }
 }

@@ -605,6 +605,13 @@ public class SyncResource {
                     this.unsecureDAO.updateDeviceCustomProperties(dbDevice.getId(), dbDevice);
                 }
 
+                // Auto-save phone number when the server field is blank and the device reports one
+                if (deviceInfo.getPhone() != null && !deviceInfo.getPhone().isEmpty()
+                        && (dbDevice.getPhone() == null || dbDevice.getPhone().isEmpty())) {
+                    logger.info("Auto-saving phone number {} for device {}", deviceInfo.getPhone(), dbDevice.getNumber());
+                    this.unsecureDAO.updateDevicePhone(dbDevice.getId(), deviceInfo.getPhone());
+                }
+
                 if (deviceInfo.getBatteryLevel() != null) {
                     this.eventService.fireEvent(
                             new DeviceBatteryLevelUpdatedEvent(dbDevice.getId(), deviceInfo.getBatteryLevel()));
