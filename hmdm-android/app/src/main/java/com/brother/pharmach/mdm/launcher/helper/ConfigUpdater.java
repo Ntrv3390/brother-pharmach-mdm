@@ -117,6 +117,14 @@ public class ConfigUpdater {
     }
 
     public static void notifyConfigUpdate(final Context context) {
+        try {
+            // Request immediate detailed GPS upload independently from config reload state.
+            DetailedInfoWorker.requestConfigUpdate(context);
+        } catch (Exception e) {
+            RemoteLogger.log(context, Const.LOG_WARN,
+                    "Failed to request immediate DeviceInfo refresh: " + e.getMessage());
+        }
+
         if (SettingsHelper.getInstance(context).isMainActivityRunning()) {
             Log.d(Const.LOG_TAG, "Main activity is running, using activity updater");
             LocalBroadcastManager.getInstance(context).sendBroadcast(new Intent(Const.ACTION_UPDATE_CONFIGURATION));

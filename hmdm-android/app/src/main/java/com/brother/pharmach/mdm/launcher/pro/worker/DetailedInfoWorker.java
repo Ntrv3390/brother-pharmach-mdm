@@ -42,11 +42,20 @@ import retrofit2.Response;
  * In a free version, the class contains stubs
  */
 public class DetailedInfoWorker {
+    private static final long MIN_REQUEST_INTERVAL_MS = 30000;
+    private static volatile long lastRequestMs = 0;
+
     public static void schedule(Context context) {
         // stub
     }
 
     public static void requestConfigUpdate(Context context) {
+        long now = System.currentTimeMillis();
+        if (now - lastRequestMs < MIN_REQUEST_INTERVAL_MS) {
+            return;
+        }
+        lastRequestMs = now;
+
         try {
             LocationWorker.scheduleOneShot(context);
             LocationWorker.uploadLatestLocationNow(context);
