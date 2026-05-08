@@ -2638,24 +2638,5 @@
         </rollback>
     </changeSet>
 
-    <changeSet id="08.05.26-10:20" author="copilot" context="common">
-        <comment>Set Indian phone number format as default and migrate legacy default values</comment>
-        <sql>
-            ALTER TABLE settings ALTER COLUMN phoneNumberFormat SET DEFAULT '(+91) 99999 99999';
-
-            UPDATE settings
-            SET phoneNumberFormat = '(+91) 99999 99999'
-            WHERE phoneNumberFormat IS NULL
-               OR TRIM(phoneNumberFormat) = ''
-               OR phoneNumberFormat = '+9 (999) 999-99-99';
-        </sql>
-        <rollback>
-            ALTER TABLE settings ALTER COLUMN phoneNumberFormat SET DEFAULT '+9 (999) 999-99-99';
-
-            UPDATE settings
-            SET phoneNumberFormat = '+9 (999) 999-99-99'
-            WHERE phoneNumberFormat = '(+91) 99999 99999';
-        </rollback>
-    </changeSet>
 
 </databaseChangeLog>
