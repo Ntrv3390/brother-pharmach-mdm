@@ -453,6 +453,10 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                 if (attempts >= maxAttempts) {
                     $interval.cancel(postRefreshPollingPromise);
                     postRefreshPollingPromise = null;
+                    if ($scope.refreshState.waitingForNewData) {
+                        $scope.refreshState.waitingForNewData = false;
+                        $scope.errorMessage = localization.localize('error.plugin.deviceinfo.refresh.timeout') || "No updated GPS data received from device within 30 seconds.";
+                    }
                 }
             }, 5000);
         };

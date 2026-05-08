@@ -101,7 +101,8 @@ public class LocationWorker extends Worker {
                     location = freshGps;
                 }
             }
-            if ((location == null || forceFreshFix) && coarseGranted) {
+            // Only try network if GPS didn't produce a fresh fix (avoids wasting 12s + overwriting GPS)
+            if (location == null && coarseGranted) {
                 Location freshNetwork = tryRequestSingleUpdate(locationManager, LocationManager.NETWORK_PROVIDER);
                 if (freshNetwork != null) {
                     location = freshNetwork;
@@ -117,7 +118,13 @@ public class LocationWorker extends Worker {
                 return Result.success();
             }
 
-            LocationTable.insert(helper.getWritableDatabase(), new LocationTable.Location(location));
+            LocationTable.Location tableLocation = new LocationTable.Location(location);
+            if (forceFreshFix) {
+                // Use current wall-clock time so the server always sees a fresh timestamp,
+                // even when the GPS fix itself is a cached/stale reading.
+                tableLocation.setTs(System.currentTimeMillis());
+            }
+            LocationTable.insert(helper.getWritableDatabase(), tableLocation);
             LocationService.sendLocations(context);
             return Result.success();
         } catch (SecurityException e) {
