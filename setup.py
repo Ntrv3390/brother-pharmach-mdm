@@ -83,9 +83,9 @@
 #     if rc != 0:
 #         append_log(f"ERROR: Failed to update latestversion pointer: {out}")
 #         return False
-
-    append_log(f"Application version updated to {version_name}")
-    return True
+#
+#     append_log(f"Application version updated to {version_name}")
+#     return True
 #!/usr/bin/env python3
 """
 Brother Pharmamach MDM - One-command web installer.
