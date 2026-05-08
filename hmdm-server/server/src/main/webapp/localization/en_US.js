@@ -808,7 +808,7 @@ document.localization["en_US"] = {
 
   "form.settings.misc.title": "Miscellaneous settings",
   "form.settings.misc.phone.format": "Phone number format",
-  "form.settings.misc.phone.format.placeholder": "+9 (999) 999-99-99",
+  "form.settings.misc.phone.format.placeholder": "(+91) 99999 99999",
   "form.settings.misc.custom.property.name.1": "Custom property #1",
   "form.settings.misc.custom.property.name.2": "Custom property #2",
   "form.settings.misc.custom.property.name.3": "Custom property #3",
