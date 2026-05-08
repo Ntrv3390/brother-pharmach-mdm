@@ -253,6 +253,10 @@ public class PushNotificationWorker extends Worker {
             mqttReconnect();
         }
 
+        // Safety net for delayed/broken MQTT delivery: check queued push messages
+        // every worker cycle (15 min) and process configUpdated immediately.
+        doPushPoll();
+
         return forceConfigUpdateWork();
     }
 

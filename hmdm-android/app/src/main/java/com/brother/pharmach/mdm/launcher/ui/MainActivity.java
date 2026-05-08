@@ -219,6 +219,11 @@ public class MainActivity
     private static final long SHOW_CONTENT_DEBOUNCE_MS = 500;
     private long lastShowContentMs = 0;
 
+    // Auto-refresh config when push delivery is delayed: refresh if config is stale.
+    private static final long STALE_CONFIG_REFRESH_MS = 20 * 60 * 1000L;
+    private static final long STALE_CONFIG_MIN_RETRY_MS = 5 * 60 * 1000L;
+    private long lastStaleConfigRefreshAttemptMs = 0;
+
     // Issue 7: single-thread executor for background policy/enforcement work
     private static final java.util.concurrent.ExecutorService POLICY_EXECUTOR =
             java.util.concurrent.Executors.newSingleThreadExecutor();
@@ -376,6 +381,7 @@ public class MainActivity
                   // launcher to front when the worktime window actually transitions.
                   // This prevents startActivity() from firing every 60s causing flashing.
                   enforceWorkTimeAsync(context, stateChanged && wm.isWorkTimeActive());
+                   requestStaleConfigRefreshIfNeeded(context);
                  return;
             }
 
@@ -666,6 +672,36 @@ public class MainActivity
                 }
             }, 1000);
         }
+    }
+
+    private void requestStaleConfigRefreshIfNeeded(Context context) {
+        if (settingsHelper == null || configUpdater == null) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - lastStaleConfigRefreshAttemptMs < STALE_CONFIG_MIN_RETRY_MS) {
+            return;
+        }
+
+        long lastConfigUpdate = settingsHelper.getConfigUpdateTimestamp();
+        if (lastConfigUpdate != 0 && now - lastConfigUpdate < STALE_CONFIG_REFRESH_MS) {
+            return;
+        }
+
+        if (configUpdater.isConfigInitializing()) {
+            return;
+        }
+
+        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetwork = cm != null ? cm.getActiveNetworkInfo() : null;
+        if (activeNetwork == null || !activeNetwork.isConnected()) {
+            return;
+        }
+
+        lastStaleConfigRefreshAttemptMs = now;
+        RemoteLogger.log(context, Const.LOG_DEBUG, "Config is stale, requesting background refresh");
+        updateConfig(false);
     }
 
     private void startAppsAtBoot() {
