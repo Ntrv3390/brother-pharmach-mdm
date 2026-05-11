@@ -221,7 +221,6 @@
                         <span ng-if='!dbExport.loading'>&#8595; Export Database</span>
                         <span ng-if='dbExport.loading'>Exporting…</span>
                     </button>
-                    <p class='help-block' style='margin-top:4px;'>Downloads the full PostgreSQL database as a <code>.sql</code> file.</p>
                 </div>
             </div>
 
@@ -235,7 +234,6 @@
                                onchange='angular.element(this).scope().onImportFileSelected(this)'/>
                     </label>
                     <span ng-if='dbImport.fileName' style='margin-left:8px; font-style:italic;'>{{dbImport.fileName}}</span>
-                    <p class='help-block' style='margin-top:4px;'>Replaces the entire database with the uploaded SQL dump.</p>
                 </div>
             </div>
 
