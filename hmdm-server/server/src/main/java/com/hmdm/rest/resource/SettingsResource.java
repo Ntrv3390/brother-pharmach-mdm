@@ -30,6 +30,11 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.StreamingOutput;
+import javax.ws.rs.core.HttpHeaders;
+
+import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
+import org.glassfish.jersey.media.multipart.FormDataParam;
 
 import com.hmdm.persistence.CustomerDAO;
 import com.hmdm.persistence.UnsecureDAO;
@@ -45,6 +50,11 @@ import com.hmdm.rest.json.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 
@@ -223,5 +233,206 @@ public class SettingsResource {
             log.error("Unexpected error when saving misc settings", e);
             return Response.INTERNAL_ERROR();
         }
+    }
+
+    // =================================================================================================================
+    @ApiOperation(
+            value = "Export database",
+            notes = "Exports the full PostgreSQL database as a SQL dump file"
+    )
+    @GET
+    @Path("/db/export")
+    @Produces("application/octet-stream")
+    public javax.ws.rs.core.Response exportDatabase() {
+        if (!SecurityContext.get().hasPermission("settings")) {
+            log.error("Unauthorized attempt to export database by user " +
+                    SecurityContext.get().getCurrentUserName());
+            return javax.ws.rs.core.Response.status(403).build();
+        }
+        try {
+            String dbHost = getEnv("DB_HOST", "postgres");
+            String dbPort = getEnv("DB_PORT", "5432");
+            String dbName = getEnv("DB_NAME", "hmdm");
+            String dbUser = getEnv("DB_USER", "hmdm");
+            String dbPassword = getEnv("DB_PASSWORD", "hmdm");
+
+            ProcessBuilder pb = new ProcessBuilder(
+                    "pg_dump",
+                    "-h", dbHost,
+                    "-p", dbPort,
+                    "-U", dbUser,
+                    "--no-password",
+                    "-d", dbName,
+                    "--format=plain",
+                    "--encoding=UTF8"
+            );
+            pb.environment().put("PGPASSWORD", dbPassword);
+            pb.redirectErrorStream(false);
+
+            Process process = pb.start();
+
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            String filename = "hmdm_backup_" + timestamp + ".sql";
+
+            StreamingOutput stream = output -> {
+                try (InputStream in = process.getInputStream()) {
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    while ((bytesRead = in.read(buffer)) != -1) {
+                        output.write(buffer, 0, bytesRead);
+                    }
+                }
+                try {
+                    int exitCode = process.waitFor();
+                    if (exitCode != 0) {
+                        log.error("pg_dump exited with code: {}", exitCode);
+                    }
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    log.warn("pg_dump wait interrupted");
+                }
+            };
+
+            return javax.ws.rs.core.Response.ok(stream)
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .header("Content-Type", "application/octet-stream")
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Unexpected error during database export", e);
+            return javax.ws.rs.core.Response.serverError().build();
+        }
+    }
+
+    // =================================================================================================================
+    @ApiOperation(
+            value = "Import database",
+            notes = "Imports a SQL file and replaces the current PostgreSQL database"
+    )
+    @POST
+    @Path("/db/import")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response importDatabase(
+            @FormDataParam("file") InputStream uploadedInputStream,
+            @FormDataParam("file") FormDataContentDisposition fileDetail) {
+        if (!SecurityContext.get().hasPermission("settings")) {
+            log.error("Unauthorized attempt to import database by user " +
+                    SecurityContext.get().getCurrentUserName());
+            return Response.PERMISSION_DENIED();
+        }
+        File tempFile = null;
+        try {
+            String dbHost = getEnv("DB_HOST", "postgres");
+            String dbPort = getEnv("DB_PORT", "5432");
+            String dbName = getEnv("DB_NAME", "hmdm");
+            String dbUser = getEnv("DB_USER", "hmdm");
+            String dbPassword = getEnv("DB_PASSWORD", "hmdm");
+
+            // Save uploaded SQL to a temp file
+            tempFile = File.createTempFile("hmdm_import_", ".sql");
+            try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = uploadedInputStream.read(buffer)) != -1) {
+                    fos.write(buffer, 0, bytesRead);
+                }
+            }
+
+            // Drop and recreate the database, then restore
+            // We use psql to execute the SQL dump directly
+            // First terminate all connections to the database
+            ProcessBuilder terminatePb = new ProcessBuilder(
+                    "psql",
+                    "-h", dbHost,
+                    "-p", dbPort,
+                    "-U", dbUser,
+                    "--no-password",
+                    "-d", "postgres",
+                    "-c", "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '" + dbName + "' AND pid <> pg_backend_pid();"
+            );
+            terminatePb.environment().put("PGPASSWORD", dbPassword);
+            terminatePb.redirectErrorStream(true);
+            Process terminateProcess = terminatePb.start();
+            terminateProcess.waitFor();
+
+            // Drop database
+            ProcessBuilder dropPb = new ProcessBuilder(
+                    "psql",
+                    "-h", dbHost,
+                    "-p", dbPort,
+                    "-U", dbUser,
+                    "--no-password",
+                    "-d", "postgres",
+                    "-c", "DROP DATABASE IF EXISTS \"" + dbName + "\";"
+            );
+            dropPb.environment().put("PGPASSWORD", dbPassword);
+            dropPb.redirectErrorStream(true);
+            Process dropProcess = dropPb.start();
+            byte[] dropOutput = dropProcess.getInputStream().readAllBytes();
+            int dropExit = dropProcess.waitFor();
+            if (dropExit != 0) {
+                log.error("Failed to drop database: {}", new String(dropOutput));
+                return Response.ERROR("error.db.import.failed");
+            }
+
+            // Recreate database
+            ProcessBuilder createPb = new ProcessBuilder(
+                    "psql",
+                    "-h", dbHost,
+                    "-p", dbPort,
+                    "-U", dbUser,
+                    "--no-password",
+                    "-d", "postgres",
+                    "-c", "CREATE DATABASE \"" + dbName + "\" WITH OWNER \"" + dbUser + "\" ENCODING 'UTF8';"
+            );
+            createPb.environment().put("PGPASSWORD", dbPassword);
+            createPb.redirectErrorStream(true);
+            Process createProcess = createPb.start();
+            byte[] createOutput = createProcess.getInputStream().readAllBytes();
+            int createExit = createProcess.waitFor();
+            if (createExit != 0) {
+                log.error("Failed to create database: {}", new String(createOutput));
+                return Response.ERROR("error.db.import.failed");
+            }
+
+            // Run psql to import the SQL file
+            ProcessBuilder importPb = new ProcessBuilder(
+                    "psql",
+                    "-h", dbHost,
+                    "-p", dbPort,
+                    "-U", dbUser,
+                    "--no-password",
+                    "-d", dbName,
+                    "-f", tempFile.getAbsolutePath()
+            );
+            importPb.environment().put("PGPASSWORD", dbPassword);
+            importPb.redirectErrorStream(true);
+            Process importProcess = importPb.start();
+            byte[] importOutput = importProcess.getInputStream().readAllBytes();
+            int importExit = importProcess.waitFor();
+
+            if (importExit != 0) {
+                log.error("psql import failed (exit {}): {}", importExit, new String(importOutput));
+                return Response.ERROR("error.db.import.failed");
+            }
+
+            log.info("Database import completed successfully by user: {}",
+                    SecurityContext.get().getCurrentUserName());
+            return Response.OK();
+
+        } catch (Exception e) {
+            log.error("Unexpected error during database import", e);
+            return Response.INTERNAL_ERROR();
+        } finally {
+            if (tempFile != null) {
+                tempFile.delete();
+            }
+        }
+    }
+
+    private static String getEnv(String name, String defaultValue) {
+        String val = System.getenv(name);
+        return (val != null && !val.isEmpty()) ? val : defaultValue;
     }
 }

@@ -51,6 +51,10 @@ angular.module('headwind-kiosk')
             updateUserRolesCommonSettings: {url: 'rest/private/settings/userRoles/common', method: 'POST'},
             updateMiscSettings: {url: 'rest/private/settings/misc', method: 'POST'},
             updateLanguageSettings: {url: 'rest/private/settings/lang', method: 'POST'},
+            importDatabase: {url: 'rest/private/settings/db/import', method: 'POST',
+                headers: {'Content-Type': undefined},
+                transformRequest: angular.identity
+            },
         })
     })
     .factory('updatesService', function ($resource) {

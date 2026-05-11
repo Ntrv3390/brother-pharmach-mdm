@@ -195,6 +195,87 @@
             </div>
         </form>
 
+        <!-- ================================================================ -->
+        <!-- Database Import / Export                                          -->
+        <!-- ================================================================ -->
+        <form class='form-horizontal' style="margin-top: 50px;">
+            <div class="text-center">
+                <h4>Database Import / Export</h4>
+            </div>
+
+            <div class='form-group' ng-if="dbExport.error">
+                <div class='col-sm-12'><div class='error'>{{dbExport.error}}</div></div>
+            </div>
+            <div class='form-group' ng-if="dbImport.error">
+                <div class='col-sm-12'><div class='error'>{{dbImport.error}}</div></div>
+            </div>
+            <div class='form-group' ng-if="dbImport.success">
+                <div class='col-sm-12'><div class='success'>{{dbImport.success}}</div></div>
+            </div>
+
+            <!-- Export -->
+            <div class='form-group'>
+                <label class='col-sm-6 control-label'>Export Database</label>
+                <div class='col-sm-6'>
+                    <button type='button' class='btn btn-primary' ng-click='exportDatabase()' ng-disabled='dbExport.loading'>
+                        <span ng-if='!dbExport.loading'>&#8595; Export Database</span>
+                        <span ng-if='dbExport.loading'>Exporting…</span>
+                    </button>
+                    <p class='help-block' style='margin-top:4px;'>Downloads the full PostgreSQL database as a <code>.sql</code> file.</p>
+                </div>
+            </div>
+
+            <!-- Import file picker -->
+            <div class='form-group'>
+                <label class='col-sm-6 control-label'>Import Database</label>
+                <div class='col-sm-6'>
+                    <label class='btn btn-default' style='cursor:pointer; margin-bottom:0;'>
+                        Choose SQL File
+                        <input type='file' accept='.sql' style='display:none;'
+                               onchange='angular.element(this).scope().onImportFileSelected(this)'/>
+                    </label>
+                    <span ng-if='dbImport.fileName' style='margin-left:8px; font-style:italic;'>{{dbImport.fileName}}</span>
+                    <p class='help-block' style='margin-top:4px;'>Replaces the entire database with the uploaded SQL dump.</p>
+                </div>
+            </div>
+
+            <!-- Import submit button -->
+            <div class='form-group'>
+                <div class='col-sm-offset-6 col-sm-6'>
+                    <button type='button' class='btn btn-danger' ng-click='showImportConfirm()'
+                            ng-disabled='dbImport.loading || !dbImport.selectedFile'>
+                        <span ng-if='!dbImport.loading'>&#8593; Import Database</span>
+                        <span ng-if='dbImport.loading'>Importing…</span>
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <!-- Confirmation Modal Overlay -->
+        <div ng-if='dbImport.showConfirm'
+             style='position:fixed; top:0; left:0; width:100%; height:100%;
+                    background:rgba(0,0,0,0.5); z-index:9999;
+                    display:flex; align-items:center; justify-content:center;'>
+            <div style='background:#fff; border-radius:6px; padding:30px; max-width:480px; width:90%; box-shadow:0 4px 20px rgba(0,0,0,0.3);'>
+                <h4 style='margin-top:0; color:#c9302c;'>&#9888; Confirm Database Import</h4>
+                <p style='margin:16px 0;'>
+                    You are about to <strong>replace the entire database</strong> with the contents of:<br/>
+                    <code style='word-break:break-all;'>{{dbImport.fileName}}</code>
+                </p>
+                <p style='color:#c9302c; font-weight:bold; margin-bottom:20px;'>
+                    This action is irreversible. All current data will be permanently deleted.
+                </p>
+                <div style='text-align:right;'>
+                    <button type='button' class='btn btn-default' ng-click='cancelImport()' style='margin-right:10px;'>
+                        Cancel
+                    </button>
+                    <button type='button' class='btn btn-danger' ng-click='confirmImport()'>
+                        Yes, Replace Database
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <form class='form-horizontal' ng-if="false">
 
             <div class="text-center" style="margin-top: 50px">
