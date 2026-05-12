@@ -253,6 +253,46 @@ angular
         return count > 0 ? count : "None";
       }
 
+      function areAllAppsSelected(selectedApps) {
+        var apps = $scope.applications || [];
+        if (apps.length === 0) {
+          return false;
+        }
+        return apps.every(function (app) {
+          return !!selectedApps[app.pkg];
+        });
+      }
+
+      function applyWildcardSelection(selectedApps) {
+        if (!selectedApps || !selectedApps["*"]) {
+          return;
+        }
+        ($scope.applications || []).forEach(function (app) {
+          selectedApps[app.pkg] = true;
+        });
+      }
+
+      function syncAllAppsFlags() {
+        $scope.selectedAppsDuringWork["*"] = areAllAppsSelected(
+          $scope.selectedAppsDuringWork,
+        );
+        $scope.selectedAppsOutsideWork["*"] = areAllAppsSelected(
+          $scope.selectedAppsOutsideWork,
+        );
+        // sync 24h derived state
+        var apps = $scope.applications || [];
+        apps.forEach(function (app) {
+          $scope.app24h[app.pkg] =
+            !!$scope.selectedAppsDuringWork[app.pkg] &&
+            !!$scope.selectedAppsOutsideWork[app.pkg];
+        });
+        $scope.app24h['*'] =
+          apps.length > 0 &&
+          apps.every(function (app) {
+            return $scope.app24h[app.pkg];
+          });
+      }
+
       function normalizePolicy(device, policy) {
         var merged = angular.extend({}, DEFAULT_POLICY, policy || {});
         merged.deviceId = device.deviceId;
@@ -525,6 +565,7 @@ angular
         } else {
           $scope.selectedAppsDuringWork = {};
         }
+        syncAllAppsFlags();
       };
 
       $scope.toggleAllAppsOutsideWork = function () {
@@ -535,22 +576,41 @@ angular
         } else {
           $scope.selectedAppsOutsideWork = {};
         }
+        syncAllAppsFlags();
       };
 
       $scope.toggleIndividualAppDuringWork = function () {
-        var allSelected = ($scope.applications || []).every(function (app) {
-          return $scope.selectedAppsDuringWork[app.pkg];
-        });
-
-        $scope.selectedAppsDuringWork["*"] = allSelected;
+        syncAllAppsFlags();
       };
 
       $scope.toggleIndividualAppOutsideWork = function () {
-        var allSelected = ($scope.applications || []).every(function (app) {
-          return $scope.selectedAppsOutsideWork[app.pkg];
-        });
+        syncAllAppsFlags();
+      };
 
-        $scope.selectedAppsOutsideWork["*"] = allSelected;
+      // 24 Hrs column — checks/unchecks both during + after for one app
+      $scope.toggle24h = function (pkg) {
+        var checked = !!$scope.app24h[pkg];
+        $scope.selectedAppsDuringWork[pkg] = checked;
+        $scope.selectedAppsOutsideWork[pkg] = checked;
+        syncAllAppsFlags();
+      };
+
+      // 24 Hrs header — checks/unchecks both columns for all apps
+      $scope.toggleAll24h = function () {
+        var checked = !!$scope.app24h['*'];
+        ($scope.applications || []).forEach(function (app) {
+          $scope.selectedAppsDuringWork[app.pkg] = checked;
+          $scope.selectedAppsOutsideWork[app.pkg] = checked;
+          $scope.app24h[app.pkg] = checked;
+        });
+        if (checked) {
+          $scope.selectedAppsDuringWork["*"] = areAllAppsSelected($scope.selectedAppsDuringWork);
+          $scope.selectedAppsOutsideWork["*"] = areAllAppsSelected($scope.selectedAppsOutsideWork);
+        } else {
+          $scope.selectedAppsDuringWork = {};
+          $scope.selectedAppsOutsideWork = {};
+          $scope.app24h = {};
+        }
       };
 
       $scope.countSelectedApps = function (selectedApps) {
@@ -620,6 +680,12 @@ angular
 
         var assignApps = function (apps) {
           $scope.applications = apps || [];
+          $scope.app24h = $scope.app24h || {};
+          applyWildcardSelection($scope.selectedAppsDuringWork || {});
+          applyWildcardSelection($scope.selectedAppsOutsideWork || {});
+          if ($scope.selectedAppsDuringWork && $scope.selectedAppsOutsideWork) {
+            syncAllAppsFlags();
+          }
           $scope.appsLoading = false;
         };
 
@@ -696,6 +762,12 @@ angular
           function (response) {
             var apps = normalizeApplicationsResponse(response);
             $scope.applications = apps;
+            $scope.app24h = $scope.app24h || {};
+            applyWildcardSelection($scope.selectedAppsDuringWork || {});
+            applyWildcardSelection($scope.selectedAppsOutsideWork || {});
+            if ($scope.selectedAppsDuringWork && $scope.selectedAppsOutsideWork) {
+              syncAllAppsFlags();
+            }
             $scope.appsLoading = false;
           },
           function (error) {
@@ -738,8 +810,9 @@ angular
         $scope.selectedAppsOutsideWork = parseAppsString(
           $scope.editingPolicy.allowedAppsOutsideWork,
         );
-        $scope.policyDuringSearchText = "";
-        $scope.policyOutsideSearchText = "";
+        $scope.app24h = {};
+        $scope.policyAppsSearchText = "";
+        syncAllAppsFlags();
 
         modalInstance = $uibModal.open({
           templateUrl: POLICY_MODAL_TEMPLATE,

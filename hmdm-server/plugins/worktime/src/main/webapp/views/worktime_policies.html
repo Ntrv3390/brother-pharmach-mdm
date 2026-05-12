@@ -1,9 +1,9 @@
 <div ng-controller="WorkTimeAdminController" class="worktime-admin-page">
   <style>
     .worktime-policy-modal .modal-dialog {
-      width: 96vw;
-      max-width: 1480px;
-      margin: 20px auto;
+      width: 92vw;
+      max-width: 1320px;
+      margin: 12px auto;
     }
 
     .worktime-exception-modal .modal-dialog {
@@ -312,7 +312,7 @@
     }
 
     .worktime-modal-header {
-      padding: 18px 22px;
+      padding: 14px 18px;
       background: linear-gradient(135deg, #2f78b8 0%, #3f96d8 100%);
       color: #ffffff;
       border: 0;
@@ -320,12 +320,12 @@
 
     .worktime-modal-title {
       margin: 0;
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 700;
     }
 
     .worktime-modal-body {
-      padding: 22px;
+      padding: 14px;
       background: #f8fbff;
       flex: 1 1 auto;
       overflow-y: auto;
@@ -333,7 +333,7 @@
     }
 
     .worktime-modal-footer {
-      padding: 16px 22px 22px;
+      padding: 10px 14px 14px;
       border: 0;
       border-top: 1px solid #e0eaf6;
       background: #f8fbff;
@@ -354,15 +354,27 @@
     .worktime-form-card {
       background: #ffffff;
       border: 1px solid #e3ecf6;
-      border-radius: 16px;
-      padding: 18px;
-      margin-bottom: 16px;
+      border-radius: 14px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+
+    .worktime-policy-top-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .worktime-compact-stack {
+      display: grid;
+      gap: 10px;
     }
 
     .worktime-inline-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
+      gap: 10px;
     }
 
     .worktime-field {
@@ -386,15 +398,16 @@
       line-height: 1.5;
     }
 
-    .worktime-app-columns {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
+    .worktime-app-grid {
+      border: 1px solid #dce7f2;
+      background: #ffffff;
+      border-radius: 14px;
+      overflow: hidden;
     }
 
     .worktime-form-title {
-      margin: 0 0 12px;
-      font-size: 15px;
+      margin: 0 0 8px;
+      font-size: 14px;
       font-weight: 700;
       color: #22354b;
     }
@@ -402,19 +415,19 @@
     .worktime-modal-body .form-control {
       border-radius: 12px;
       border: 1px solid #d8e3ef;
-      min-height: 42px;
+      min-height: 38px;
       box-shadow: none;
     }
 
     .worktime-day-picker {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 8px;
     }
 
     .worktime-day-btn {
-      min-width: 68px;
-      padding: 10px 14px;
+      min-width: 54px;
+      padding: 7px 12px;
       border-radius: 999px;
       background: #eef4fb;
       color: #35567c;
@@ -427,44 +440,107 @@
       color: #ffffff;
     }
 
-    .worktime-app-panel {
-      border: 1px solid #dce7f2;
-      background: #fdfefe;
-      border-radius: 14px;
-      max-height: 280px;
+    .worktime-app-grid-scroll {
+      max-height: 220px;
       overflow-y: auto;
-      padding: 10px;
     }
 
-    .worktime-app-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: 10px;
+    .worktime-app-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    .worktime-app-table th,
+    .worktime-app-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #edf2f8;
+      vertical-align: middle;
       color: #29405d;
-      margin-bottom: 6px;
-      background: #f8fbff;
     }
 
-    .worktime-app-item:last-child {
-      margin-bottom: 0;
+    .worktime-app-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #f7faff;
+      font-size: 12px;
+      font-weight: 700;
+      color: #375577;
     }
 
-    .worktime-app-item.muted {
+    .worktime-app-table tbody tr:nth-child(odd) {
+      background: #fcfdff;
+    }
+
+    .worktime-app-table tbody tr.muted {
       opacity: 0.55;
+    }
+
+    .worktime-checkbox-cell {
+      width: 170px;
+      text-align: center;
+    }
+
+    .worktime-checkbox-cell input {
+      transform: scale(1.1);
+    }
+
+    .worktime-app-name {
+      font-weight: 700;
+      color: #22354b;
+    }
+
+    .worktime-app-pkg {
+      margin-top: 2px;
+      font-size: 12px;
+      color: #7b8ea6;
+      word-break: break-all;
+    }
+
+    .worktime-app-empty {
+      padding: 14px 12px;
+      color: #7b8ea6;
+      text-align: center;
+      font-size: 13px;
     }
 
     .worktime-count-chip {
       display: inline-flex;
       align-items: center;
-      padding: 4px 10px;
+      padding: 3px 8px;
       border-radius: 999px;
       background: #eef4fb;
       color: #33557b;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       margin-left: 6px;
+    }
+
+    .worktime-24h-col {
+      background: #f0f7ff;
+      border-left: 2px solid #c6ddf5;
+    }
+
+    .worktime-app-table thead .worktime-24h-col {
+      color: #1e5799;
+    }
+
+    .worktime-column-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      line-height: 1.2;
+    }
+
+    .worktime-column-header label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin: 0;
+      font-weight: 600;
     }
 
     @media (max-width: 767px) {
@@ -487,9 +563,20 @@
         padding: 16px;
       }
 
-      .worktime-inline-grid,
-      .worktime-app-columns {
+      .worktime-inline-grid {
         grid-template-columns: 1fr;
+      }
+
+      .worktime-policy-top-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .worktime-checkbox-cell {
+        width: 120px;
+      }
+
+      .worktime-app-grid-scroll {
+        max-height: 260px;
       }
     }
   </style>
@@ -666,118 +753,135 @@
     </div>
 
     <div class="worktime-modal-body">
-      <div class="worktime-form-card">
-        <h5 class="worktime-form-title">Policy Status</h5>
-        <label style="display:flex; align-items:center; gap:10px; font-weight:600; margin:0;">
-          <input type="checkbox" ng-model="editingPolicy.enabled" />
-          Enable work time enforcement for this device
-        </label>
-      </div>
-
-      <div class="worktime-form-card">
-        <h5 class="worktime-form-title">Working Window</h5>
-        <div class="worktime-inline-grid">
-          <div class="worktime-field">
-            <label>Start Time (HH:MM)</label>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <select class="form-control" ng-model="policyTime.startHour" ng-options="option.value as option.label for option in timeHourOptions"></select>
-              <span>:</span>
-              <select class="form-control" ng-model="policyTime.startMinute" ng-options="option.value as option.label for option in timeMinuteOptions"></select>
-            </div>
-          </div>
-          <div class="worktime-field">
-            <label>End Time (HH:MM)</label>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <select class="form-control" ng-model="policyTime.endHour" ng-options="option.value as option.label for option in timeHourOptions"></select>
-              <span>:</span>
-              <select class="form-control" ng-model="policyTime.endMinute" ng-options="option.value as option.label for option in timeMinuteOptions"></select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="worktime-form-card">
-        <h5 class="worktime-form-title">Working Days</h5>
-        <div class="worktime-day-picker">
-          <button
-            type="button"
-            class="worktime-day-btn"
-            ng-repeat="day in days"
-            ng-class="{'active': hasPolicyDay(day.id)}"
-            ng-click="togglePolicyDay(day.id)">
-            {{day.label}}
-          </button>
-        </div>
-      </div>
-
-      <div class="worktime-app-columns">
-        <div class="worktime-form-card" style="margin-bottom:0;">
-          <h5 class="worktime-form-title">
-            Allowed During Work
-            <span class="worktime-count-chip">{{countSelectedApps(selectedAppsDuringWork)}}</span>
-          </h5>
-          <input type="text" class="form-control" ng-model="policyDuringSearchText" placeholder="Search applications" style="margin-bottom:12px;" />
-          <div class="worktime-app-panel">
-            <label class="worktime-app-item">
-              <input type="checkbox" ng-model="selectedAppsDuringWork['*']" ng-change="toggleAllAppsDuringWork()" />
-              <div>
-                <strong>All Apps</strong>
-              </div>
+      <div class="worktime-policy-top-grid">
+        <div class="worktime-compact-stack">
+          <div class="worktime-form-card">
+            <h5 class="worktime-form-title">Policy Status</h5>
+            <label style="display:flex; align-items:center; gap:8px; font-weight:600; margin:0;">
+              <input type="checkbox" ng-model="editingPolicy.enabled" />
+              Enable enforcement
             </label>
-            <label
-              class="worktime-app-item"
-              ng-class="{'muted': selectedAppsDuringWork['*']}"
-              ng-repeat="app in getFilteredApps(policyDuringSearchText) track by (app.id || app.pkg || $index)">
-              <input
-                type="checkbox"
-                ng-model="selectedAppsDuringWork[app.pkg]"
-                ng-change="toggleIndividualAppDuringWork()" />
-              <div>
-                <strong>{{app.name || app.applicationName || app.pkg}}</strong>
-                <div class="text-muted" style="font-size:12px;">{{app.pkg}}</div>
-              </div>
-            </label>
-            <div class="text-muted" ng-if="appsLoading" style="padding:10px 12px;">
-              Loading applications...
-            </div>
-            <div class="text-muted" ng-if="!appsLoading && getFilteredApps(policyDuringSearchText).length === 0" style="padding:10px 12px;">
-              No applications found.
+          </div>
+
+          <div class="worktime-form-card">
+            <h5 class="worktime-form-title">Working Days</h5>
+            <div class="worktime-day-picker">
+              <button
+                type="button"
+                class="worktime-day-btn"
+                ng-repeat="day in days"
+                ng-class="{'active': hasPolicyDay(day.id)}"
+                ng-click="togglePolicyDay(day.id)">
+                {{day.label}}
+              </button>
             </div>
           </div>
         </div>
 
-        <div class="worktime-form-card" style="margin-bottom:0;">
-          <h5 class="worktime-form-title">
-            Allowed After Work
-            <span class="worktime-count-chip">{{countSelectedApps(selectedAppsOutsideWork)}}</span>
-          </h5>
-          <input type="text" class="form-control" ng-model="policyOutsideSearchText" placeholder="Search applications" style="margin-bottom:12px;" />
-          <div class="worktime-app-panel">
-            <label class="worktime-app-item">
-              <input type="checkbox" ng-model="selectedAppsOutsideWork['*']" ng-change="toggleAllAppsOutsideWork()" />
-              <div>
-                <strong>All Apps</strong>
+        <div class="worktime-form-card">
+          <h5 class="worktime-form-title">Working Window</h5>
+          <div style="display:grid; gap:10px;">
+            <div class="worktime-field">
+              <label>Start Time (HH:MM)</label>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <select class="form-control" ng-model="policyTime.startHour" ng-options="option.value as option.label for option in timeHourOptions"></select>
+                <span>:</span>
+                <select class="form-control" ng-model="policyTime.startMinute" ng-options="option.value as option.label for option in timeMinuteOptions"></select>
               </div>
-            </label>
-            <label
-              class="worktime-app-item"
-              ng-class="{'muted': selectedAppsOutsideWork['*']}"
-              ng-repeat="app in getFilteredApps(policyOutsideSearchText) track by (app.id || app.pkg || $index)">
-              <input
-                type="checkbox"
-                ng-model="selectedAppsOutsideWork[app.pkg]"
-                ng-change="toggleIndividualAppOutsideWork()" />
-              <div>
-                <strong>{{app.name || app.applicationName || app.pkg}}</strong>
-                <div class="text-muted" style="font-size:12px;">{{app.pkg}}</div>
+            </div>
+            <div class="worktime-field">
+              <label>End Time (HH:MM)</label>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <select class="form-control" ng-model="policyTime.endHour" ng-options="option.value as option.label for option in timeHourOptions"></select>
+                <span>:</span>
+                <select class="form-control" ng-model="policyTime.endMinute" ng-options="option.value as option.label for option in timeMinuteOptions"></select>
               </div>
-            </label>
-            <div class="text-muted" ng-if="appsLoading" style="padding:10px 12px;">
-              Loading applications...
             </div>
-            <div class="text-muted" ng-if="!appsLoading && getFilteredApps(policyOutsideSearchText).length === 0" style="padding:10px 12px;">
-              No applications found.
-            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="worktime-form-card" style="margin-bottom:0;">
+        <h5 class="worktime-form-title">
+          <span class="worktime-count-chip">During: {{countSelectedApps(selectedAppsDuringWork)}}</span>
+          <span class="worktime-count-chip">After: {{countSelectedApps(selectedAppsOutsideWork)}}</span>
+        </h5>
+        <input type="text" class="form-control" ng-model="policyAppsSearchText" placeholder="Search applications" style="margin-bottom:12px;" />
+        <div class="worktime-app-grid">
+          <div class="worktime-app-grid-scroll">
+            <table class="worktime-app-table">
+              <thead>
+                <tr>
+                  <th>Applications</th>
+                  <th class="worktime-checkbox-cell">
+                    <div class="worktime-column-header">
+                      <span>During Work</span>
+                      <label>
+                        <input type="checkbox" ng-model="selectedAppsDuringWork['*']" ng-change="toggleAllAppsDuringWork()" />
+                        <span>All</span>
+                      </label>
+                    </div>
+                  </th>
+                  <th class="worktime-checkbox-cell">
+                    <div class="worktime-column-header">
+                      <span>After Work</span>
+                      <label>
+                        <input type="checkbox" ng-model="selectedAppsOutsideWork['*']" ng-change="toggleAllAppsOutsideWork()" />
+                        <span>All</span>
+                      </label>
+                    </div>
+                  </th>
+                  <th class="worktime-checkbox-cell worktime-24h-col">
+                    <div class="worktime-column-header">
+                      <span>24 Hrs</span>
+                      <label>
+                        <input type="checkbox" ng-model="app24h['*']" ng-change="toggleAll24h()" />
+                        <span>All</span>
+                      </label>
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr ng-if="appsLoading">
+                  <td colspan="4" class="worktime-app-empty">Loading applications...</td>
+                </tr>
+                <tr ng-if="!appsLoading && getFilteredApps(policyAppsSearchText).length === 0">
+                  <td colspan="4" class="worktime-app-empty">No applications found.</td>
+                </tr>
+                <tr
+                  ng-if="!appsLoading"
+                  ng-repeat="app in getFilteredApps(policyAppsSearchText) track by (app.id || app.pkg || $index)"
+                  ng-class="{'muted': selectedAppsDuringWork['*'] || selectedAppsOutsideWork['*']}"
+                >
+                  <td>
+                    <div class="worktime-app-name">{{app.name || app.applicationName || app.pkg}}</div>
+                    <div class="worktime-app-pkg">{{app.pkg}}</div>
+                  </td>
+                  <td class="worktime-checkbox-cell">
+                    <input
+                      type="checkbox"
+                      ng-model="selectedAppsDuringWork[app.pkg]"
+                      ng-change="toggleIndividualAppDuringWork()"
+                    />
+                  </td>
+                  <td class="worktime-checkbox-cell">
+                    <input
+                      type="checkbox"
+                      ng-model="selectedAppsOutsideWork[app.pkg]"
+                      ng-change="toggleIndividualAppOutsideWork()"
+                    />
+                  </td>
+                  <td class="worktime-checkbox-cell worktime-24h-col">
+                    <input
+                      type="checkbox"
+                      ng-model="app24h[app.pkg]"
+                      ng-change="toggle24h(app.pkg)"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
