@@ -46,9 +46,8 @@
       class="pointer collapse-control"
       style="display: inline"
       ng-click="toggleParamsVisibility('main')"
-      localized
     >
-      plugin.deviceinfo.dynamic.params.all
+      Dynamic Parameters
     </h4>
   </div>
 
@@ -171,9 +170,8 @@
           type="button"
           class="btn btn-default"
           ng-click="search()"
-          localized
         >
-          button.search
+          Search
         </button>
       </div>
     </div>
@@ -404,9 +402,8 @@
       class="btn btn-default"
       ng-click="doExport()"
       ng-disabled="loading"
-      localized
     >
-      button.plugin.deviceinfo.export
+      Export
     </button>
   </div>
 
@@ -476,6 +473,7 @@
           >
             {{('plugin.deviceinfo.title.group.' + fieldName) | localize}}
           </th>
+          <th class="text-right">Map</th>
         </tr>
 
         <tr
@@ -499,6 +497,22 @@
             <span
               ng-if="!item[fieldName].isBoolean && !item[fieldName].isEnumerated"
               >{{item[fieldName].value}}</span
+            >
+          </td>
+          <td class="text-right" style="white-space: nowrap;">
+            <a
+              ng-if="item.gpsLat && item.gpsLon && item.gpsLat.value !== null && item.gpsLon.value !== null && item.gpsLat.value !== '' && item.gpsLon.value !== ''"
+              ng-href="https://www.google.com/maps?q={{item.gpsLat.value}},{{item.gpsLon.value}}"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn btn-link btn-xs"
+              style="padding: 0;"
+            >
+              <span class="glyphicon glyphicon-map-marker"></span>
+            </a>
+            <span
+              ng-if="!item.gpsLat || !item.gpsLon || item.gpsLat.value === null || item.gpsLon.value === null || item.gpsLat.value === '' || item.gpsLon.value === ''"
+              >-</span
             >
           </td>
         </tr>

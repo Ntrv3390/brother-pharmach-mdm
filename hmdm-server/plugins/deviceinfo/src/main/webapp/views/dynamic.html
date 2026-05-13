@@ -40,7 +40,7 @@
             ng-class="{'glyphicon-chevron-down': collapseState.main, 'glyphicon-chevron-up': !collapseState.main}"
             ng-click="toggleParamsVisibility('main')"></span>
         <h4 class='pointer collapse-control' style="display: inline"
-            ng-click="toggleParamsVisibility('main')" localized>plugin.deviceinfo.dynamic.params.all</h4>
+            ng-click="toggleParamsVisibility('main')">Dynamic Parameters</h4>
     </div>
 
     <sarsha-spinner name="spinner2">
@@ -104,7 +104,7 @@
             </div>
 
             <div class="col-sm-2 text-left">
-                <button type='button' class='btn btn-default' ng-click='search()' localized>button.search</button>
+                <button type='button' class='btn btn-default' ng-click='search()'>Search</button>
             </div>
         </div>
 
@@ -244,8 +244,7 @@
     </form>
 
     <div class="text-left margin-top">
-        <button type='submit' class='btn btn-default' ng-click='doExport()' ng-disabled="loading"
-                localized>button.plugin.deviceinfo.export</button>
+        <button type='submit' class='btn btn-default' ng-click='doExport()' ng-disabled="loading">Export</button>
     </div>
 
     <div class="text-center margin-top" ng-if="formData.totalItems > formData.pageSize">
@@ -282,6 +281,7 @@
                     <th ng-repeat="fieldName in allFields" ng-if="fieldsSelection[fieldName] === true">
                         {{('plugin.deviceinfo.title.group.' + fieldName) | localize}}
                     </th>
+                    <th class="text-right">Map</th>
                 </tr>
 
                 <tr ng-repeat="record in data" ng-init="item = parseDynamicInfoRecord(record)">
@@ -291,6 +291,17 @@
                         <span ng-if="item[fieldName].isBoolean">{{('plugin.deviceinfo.boolean.' + item[fieldName].value) | localize}}</span>
                         <span ng-if="item[fieldName].isEnumerated">{{('plugin.deviceinfo.state.' + fieldName + '.' + item[fieldName].value) | localize}}</span>
                         <span ng-if="!item[fieldName].isBoolean && !item[fieldName].isEnumerated">{{item[fieldName].value}}</span>
+                    </td>
+                    <td class="text-right" style="white-space: nowrap;">
+                        <a ng-if="item.gpsLat && item.gpsLon && item.gpsLat.value !== null && item.gpsLon.value !== null && item.gpsLat.value !== '' && item.gpsLon.value !== ''"
+                           ng-href="https://www.google.com/maps?q={{item.gpsLat.value}},{{item.gpsLon.value}}"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           class="btn btn-link btn-xs"
+                           style="padding: 0;">
+                            <span class="glyphicon glyphicon-map-marker"></span>
+                        </a>
+                        <span ng-if="!item.gpsLat || !item.gpsLon || item.gpsLat.value === null || item.gpsLon.value === null || item.gpsLat.value === '' || item.gpsLon.value === ''">-</span>
                     </td>
                 </tr>
             </table>
