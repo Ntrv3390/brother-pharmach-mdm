@@ -65,6 +65,16 @@ public class PushNotificationProcessor {
             ConfigUpdater.notifyConfigUpdate(context);
             // The configUpdated should be broadcasted after the configuration update is completed
             return;
+        } else if (message.getMessageType().equals(PushMessage.TYPE_FETCH_GPS_URGENT)) {
+            // Silent urgent GPS refresh requested by admin.
+            try {
+                LocationWorker.scheduleOneShot(context);
+                LocationWorker.uploadLatestLocationNow(context);
+            } catch (Exception e) {
+                RemoteLogger.log(context, Const.LOG_WARN,
+                        "Failed to process urgent GPS refresh push: " + e.getMessage());
+            }
+            return;
         } else if (message.getMessageType().equals(PushMessage.TYPE_RUN_APP)) {
             // Run application
             runApplication(context, message.getPayloadJSON());

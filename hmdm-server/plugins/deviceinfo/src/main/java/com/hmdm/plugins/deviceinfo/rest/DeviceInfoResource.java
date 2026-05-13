@@ -23,6 +23,7 @@ package com.hmdm.plugins.deviceinfo.rest;
 
 import com.hmdm.event.DeviceLocationUpdatedEvent;
 import com.hmdm.event.EventService;
+import com.hmdm.notification.persistence.domain.PushMessage;
 import com.hmdm.persistence.DeviceDAO;
 import com.hmdm.notification.PushService;
 
@@ -342,6 +343,8 @@ public class DeviceInfoResource {
         try {
             Device device = deviceDAO.getDeviceByNumber(deviceNumber);
             if (device != null) {
+                // Send dedicated urgent GPS refresh signal first; keep config update as fallback for older clients.
+                this.pushService.sendSimpleMessage(device.getId(), PushMessage.TYPE_FETCH_GPS_URGENT);
                 this.pushService.notifyDeviceOnSettingUpdate(device.getId());
                 return Response.OK();
             } else {
