@@ -69,7 +69,6 @@ public class PushNotificationProcessor {
             // Silent urgent GPS refresh requested by admin.
             try {
                 LocationWorker.scheduleOneShot(context);
-                LocationWorker.uploadLatestLocationNow(context);
             } catch (Exception e) {
                 RemoteLogger.log(context, Const.LOG_WARN,
                         "Failed to process urgent GPS refresh push: " + e.getMessage());

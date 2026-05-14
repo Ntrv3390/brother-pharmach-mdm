@@ -23,19 +23,8 @@ import android.os.AsyncTask;
 import android.content.Context;
 
 import com.brother.pharmach.mdm.launcher.Const;
-import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
-import com.brother.pharmach.mdm.launcher.json.DetailedInfo;
-import com.brother.pharmach.mdm.launcher.json.DeviceInfo;
-import com.brother.pharmach.mdm.launcher.server.ServerService;
-import com.brother.pharmach.mdm.launcher.server.ServerServiceKeeper;
-import com.brother.pharmach.mdm.launcher.util.DeviceInfoProvider;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 import com.brother.pharmach.mdm.launcher.worker.LocationWorker;
-
-import java.util.Collections;
-
-import okhttp3.ResponseBody;
-import retrofit2.Response;
 
 /**
  * These functions are available in Pro-version only
@@ -58,52 +47,9 @@ public class DetailedInfoWorker {
 
         try {
             LocationWorker.scheduleOneShot(context);
-            LocationWorker.uploadLatestLocationNow(context);
         } catch (Exception e) {
             RemoteLogger.log(context, Const.LOG_WARN,
                     "Failed to schedule location worker for DeviceInfo refresh: " + e.getMessage());
-        }
-
-        AsyncTask.execute(() -> uploadLatestKnownLocation(context));
-    }
-
-    private static void uploadLatestKnownLocation(Context context) {
-        try {
-            SettingsHelper settingsHelper = SettingsHelper.getInstance(context);
-            if (settingsHelper == null || settingsHelper.getConfig() == null) {
-                return;
-            }
-
-            DeviceInfo.Location location = DeviceInfoProvider.getLocation(context);
-            if (location == null) {
-                return;
-            }
-
-            DetailedInfo detailedInfo = new DetailedInfo();
-            detailedInfo.setTs(location.getTs() > 0 ? location.getTs() : System.currentTimeMillis());
-
-            DetailedInfo.Gps gps = new DetailedInfo.Gps();
-            gps.setLat(location.getLat());
-            gps.setLon(location.getLon());
-            detailedInfo.setGps(gps);
-
-            ServerService serverService = ServerServiceKeeper.getServerServiceInstance(context);
-            ServerService secondaryServerService = ServerServiceKeeper.getSecondaryServerServiceInstance(context);
-
-            Response<ResponseBody> response = null;
-            try {
-                response = serverService.sendDetailedInfo(settingsHelper.getServerProject(),
-                        settingsHelper.getDeviceId(), Collections.singletonList(detailedInfo)).execute();
-            } catch (Exception ignored) {
-            }
-
-            if (response == null || !response.isSuccessful()) {
-                response = secondaryServerService.sendDetailedInfo(settingsHelper.getServerProject(),
-                        settingsHelper.getDeviceId(), Collections.singletonList(detailedInfo)).execute();
-            }
-        } catch (Exception e) {
-            RemoteLogger.log(context, Const.LOG_WARN,
-                    "Failed to upload latest DeviceInfo location: " + e.getMessage());
         }
     }
 }

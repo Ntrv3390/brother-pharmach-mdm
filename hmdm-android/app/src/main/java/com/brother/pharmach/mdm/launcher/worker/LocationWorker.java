@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.ExistingWorkPolicy;
 import androidx.work.OneTimeWorkRequest;
+import androidx.work.OutOfQuotaPolicy;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 import androidx.work.Worker;
@@ -33,7 +34,10 @@ public class LocationWorker extends Worker {
 
     private static final String WORK_TAG_PERIODIC = "com.brother.pharmach.mdm.launcher.WORK_TAG_LOCATION_PERIODIC";
     private static final String WORK_TAG_ONE_SHOT = "com.brother.pharmach.mdm.launcher.WORK_TAG_LOCATION_ONE_SHOT";
-    private static final long FRESH_FIX_WAIT_SECONDS = 12;
+    private static final long FRESH_FIX_WAIT_SECONDS = 30;
+    private static final long URGENT_MAX_FIX_AGE_MS = TimeUnit.MINUTES.toMillis(2);
+    private static final long PERIODIC_MAX_FIX_AGE_MS = TimeUnit.MINUTES.toMillis(30);
+    private static final float MAX_FIX_ACCURACY_METERS = 2000f;
 
     private final Context context;
 
@@ -58,15 +62,12 @@ public class LocationWorker extends Worker {
         OneTimeWorkRequest request = new OneTimeWorkRequest.Builder(LocationWorker.class)
                 .addTag(Const.WORK_TAG_COMMON)
                 .addTag(WORK_TAG_ONE_SHOT)
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build();
         WorkManager.getInstance(context.getApplicationContext()).enqueueUniqueWork(
                 WORK_TAG_ONE_SHOT,
                 ExistingWorkPolicy.REPLACE,
                 request);
-    }
-
-    public static void uploadLatestLocationNow(Context context) {
-        new Thread(() -> captureAndUpload(context.getApplicationContext(), true)).start();
     }
 
     @NonNull
@@ -94,24 +95,42 @@ public class LocationWorker extends Worker {
                 return Result.success();
             }
 
-            Location location = getBestLastKnownLocation(locationManager);
-            if ((location == null || forceFreshFix) && fineGranted) {
-                Location freshGps = tryRequestSingleUpdate(locationManager, LocationManager.GPS_PROVIDER);
-                if (freshGps != null) {
-                    location = freshGps;
-                }
-            }
-            // Only try network if GPS didn't produce a fresh fix (avoids wasting 12s + overwriting GPS)
-            if (location == null && coarseGranted) {
-                Location freshNetwork = tryRequestSingleUpdate(locationManager, LocationManager.NETWORK_PROVIDER);
-                if (freshNetwork != null) {
-                    location = freshNetwork;
-                }
+            long maxFixAgeMs = forceFreshFix ? URGENT_MAX_FIX_AGE_MS : PERIODIC_MAX_FIX_AGE_MS;
+
+            Location lastKnown = getBestLastKnownLocation(locationManager);
+            if (!isLocationFresh(lastKnown, maxFixAgeMs)) {
+                lastKnown = null;
             }
 
+            Location freshGps = fineGranted
+                    ? tryRequestSingleUpdate(locationManager, LocationManager.GPS_PROVIDER)
+                    : null;
+            if (!isLocationFresh(freshGps, maxFixAgeMs)) {
+                freshGps = null;
+            }
+
+            Location freshNetwork = coarseGranted
+                    ? tryRequestSingleUpdate(locationManager, LocationManager.NETWORK_PROVIDER)
+                    : null;
+            if (!isLocationFresh(freshNetwork, maxFixAgeMs)) {
+                freshNetwork = null;
+            }
+
+            Location location = chooseBestLocation(lastKnown, freshGps, freshNetwork);
+
             if (location == null) {
+                if (forceFreshFix) {
+                    RemoteLogger.log(context, Const.LOG_WARN,
+                            "LocationWorker: urgent refresh failed to get a fresh fix (GPS: " +
+                                    (freshGps != null ? "ok" : "null") + ", Network: " +
+                                    (freshNetwork != null ? "ok" : "null") + ")");
+                }
                 return Result.success();
             }
+
+            RemoteLogger.log(context, Const.LOG_INFO, "LocationWorker: success using " +
+                    location.getProvider() + " (freshness: " +
+                    (System.currentTimeMillis() - location.getTime()) / 1000 + "s)");
 
             DatabaseHelper helper = DatabaseHelper.instance(context);
             if (helper == null) {
@@ -119,11 +138,12 @@ public class LocationWorker extends Worker {
             }
 
             LocationTable.Location tableLocation = new LocationTable.Location(location);
-            if (forceFreshFix) {
-                // Use current wall-clock time so the server always sees a fresh timestamp,
-                // even when the GPS fix itself is a cached/stale reading.
-                tableLocation.setTs(System.currentTimeMillis());
+
+            if (forceFreshFix && LocationService.sendUrgentLocation(context, tableLocation)) {
+                RemoteLogger.log(context, Const.LOG_INFO, "LocationWorker: urgent location uploaded successfully");
+                return Result.success();
             }
+
             LocationTable.insert(helper.getWritableDatabase(), tableLocation);
             LocationService.sendLocations(context);
             return Result.success();
@@ -186,5 +206,70 @@ public class LocationWorker extends Worker {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private static boolean isLocationFresh(Location location, long maxAgeMs) {
+        if (location == null) {
+            return false;
+        }
+        if (location.getLatitude() == 0 && location.getLongitude() == 0) {
+            return false;
+        }
+
+        long ageMs = System.currentTimeMillis() - location.getTime();
+        if (ageMs < 0) {
+            ageMs = 0;
+        }
+        if (ageMs > maxAgeMs) {
+            return false;
+        }
+
+        return !location.hasAccuracy() || location.getAccuracy() <= MAX_FIX_ACCURACY_METERS;
+    }
+
+    private static Location chooseBestLocation(Location... locations) {
+        Location best = null;
+        for (Location candidate : locations) {
+            if (candidate == null) {
+                continue;
+            }
+            if (best == null || isBetterLocation(candidate, best)) {
+                best = candidate;
+            }
+        }
+        return best;
+    }
+
+    private static boolean isBetterLocation(Location candidate, Location currentBest) {
+        if (currentBest == null) {
+            return true;
+        }
+
+        long candidateAge = Math.max(0, System.currentTimeMillis() - candidate.getTime());
+        long currentAge = Math.max(0, System.currentTimeMillis() - currentBest.getTime());
+        if (candidateAge + 30_000L < currentAge) {
+            return true;
+        }
+        if (currentAge + 30_000L < candidateAge) {
+            return false;
+        }
+
+        float candidateAccuracy = candidate.hasAccuracy() ? candidate.getAccuracy() : MAX_FIX_ACCURACY_METERS;
+        float currentAccuracy = currentBest.hasAccuracy() ? currentBest.getAccuracy() : MAX_FIX_ACCURACY_METERS;
+        if (candidateAccuracy + 50f < currentAccuracy) {
+            return true;
+        }
+        if (currentAccuracy + 50f < candidateAccuracy) {
+            return false;
+        }
+
+        String candidateProvider = candidate.getProvider() == null ? "" : candidate.getProvider();
+        String currentProvider = currentBest.getProvider() == null ? "" : currentBest.getProvider();
+        if (LocationManager.GPS_PROVIDER.equals(candidateProvider)
+                && !LocationManager.GPS_PROVIDER.equals(currentProvider)) {
+            return true;
+        }
+
+        return candidate.getTime() > currentBest.getTime();
     }
 }

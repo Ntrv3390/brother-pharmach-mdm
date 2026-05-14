@@ -40,6 +40,7 @@ import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.json.DetailedInfo;
 import com.brother.pharmach.mdm.launcher.server.ServerService;
 import com.brother.pharmach.mdm.launcher.server.ServerServiceKeeper;
+import com.brother.pharmach.mdm.launcher.util.DynamicInfoHelper;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
 import java.util.LinkedList;
@@ -64,6 +65,59 @@ public class LocationService extends Service {
         }
         NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
         return activeNetwork != null && activeNetwork.isConnectedOrConnecting();
+    }
+
+    private static Response<ResponseBody> sendDetailedInfo(Context context, String project, String deviceId,
+                                                           List<DetailedInfo> detailedInfos) {
+        ServerService serverService = ServerServiceKeeper.getServerServiceInstance(context);
+        ServerService secondaryServerService = ServerServiceKeeper.getSecondaryServerServiceInstance(context);
+
+        Response<ResponseBody> response = null;
+        try {
+            response = serverService.sendDetailedInfo(project, deviceId, detailedInfos).execute();
+        } catch (Exception ignored) {
+        }
+
+        if ((response == null || !response.isSuccessful()) && secondaryServerService != null) {
+            try {
+                response = secondaryServerService.sendDetailedInfo(project, deviceId, detailedInfos).execute();
+            } catch (Exception ignored) {
+            }
+        }
+
+        return response;
+    }
+
+    public static synchronized boolean sendUrgentLocation(Context context, LocationTable.Location location) {
+        if (!isNetworkConnected(context) || location == null) {
+            return false;
+        }
+
+        SettingsHelper settingsHelper = SettingsHelper.getInstance(context);
+        if (settingsHelper == null) {
+            return false;
+        }
+
+        String deviceId = settingsHelper.getDeviceId();
+        String project = settingsHelper.getServerProject();
+        if (deviceId == null || project == null) {
+            return false;
+        }
+
+        try {
+            List<DetailedInfo> detailedInfos = new LinkedList<>();
+            detailedInfos.add(DynamicInfoHelper.buildDetailedInfo(context, location));
+
+            Response<ResponseBody> response = sendDetailedInfo(context, project, deviceId, detailedInfos);
+            if (response != null && response.isSuccessful()) {
+                settingsHelper.setExternalIp(response.headers().get(Const.HEADER_IP_ADDRESS));
+                return true;
+            }
+        } catch (Exception e) {
+            RemoteLogger.log(context, Const.LOG_WARN, "Exception sending urgent location: " + e.getMessage());
+        }
+
+        return false;
     }
 
     public static synchronized void sendLocations(Context context) {
@@ -92,31 +146,24 @@ public class LocationService extends Service {
             return;
         }
 
-        ServerService serverService = ServerServiceKeeper.getServerServiceInstance(context);
         try {
             List<DetailedInfo> detailedInfos = new LinkedList<>();
             for (LocationTable.Location loc : locations) {
-                DetailedInfo detailedInfo = new DetailedInfo();
-                detailedInfo.setTs(loc.getTs());
-
-                DetailedInfo.Gps gps = new DetailedInfo.Gps();
-                gps.setLat(loc.getLat());
-                gps.setLon(loc.getLon());
-
-                detailedInfo.setGps(gps);
-                detailedInfos.add(detailedInfo);
+                detailedInfos.add(DynamicInfoHelper.buildDetailedInfo(context, loc));
             }
 
-            Response<ResponseBody> response = serverService.sendDetailedInfo(project, deviceId, detailedInfos)
-                    .execute();
-            if (response.isSuccessful()) {
+            Response<ResponseBody> response = sendDetailedInfo(context, project, deviceId, detailedInfos);
+            if (response != null && response.isSuccessful()) {
+                settingsHelper.setExternalIp(response.headers().get(Const.HEADER_IP_ADDRESS));
                 LocationTable.delete(db.getWritableDatabase(), locations);
                 if (locations.size() == 50) {
                     sendLocations(context);
                 }
             } else {
+                int code = response != null ? response.code() : -1;
+                String message = response != null ? response.message() : "no response";
                 RemoteLogger.log(context, Const.LOG_WARN,
-                        "Failed to send locations: " + response.code() + " " + response.message());
+                        "Failed to send locations: " + code + " " + message);
             }
         } catch (Exception e) {
             RemoteLogger.log(context, Const.LOG_WARN, "Exception sending locations: " + e.getMessage());
