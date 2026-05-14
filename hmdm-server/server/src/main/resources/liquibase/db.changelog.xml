@@ -2657,4 +2657,27 @@
         <addUniqueConstraint tableName="device_apps" columnNames="device_id, pkg" constraintName="uk_device_apps_pkg"/>
     </changeSet>
 
+    <!-- Fallback for environments where context="common" change sets are not executed -->
+    <changeSet id="2026-05-14-device-apps-fallback" author="antigravity">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="device_apps"/>
+            </not>
+        </preConditions>
+        <createTable tableName="device_apps">
+            <column name="id" type="SERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="device_id" type="INT">
+                <constraints nullable="false" foreignKeyName="fk_device_apps_device_id" referencedTableName="devices" referencedColumnNames="id" deleteCascade="true"/>
+            </column>
+            <column name="pkg" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(500)"/>
+            <column name="version" type="VARCHAR(100)"/>
+        </createTable>
+        <addUniqueConstraint tableName="device_apps" columnNames="device_id, pkg" constraintName="uk_device_apps_pkg"/>
+    </changeSet>
+
 </databaseChangeLog>
