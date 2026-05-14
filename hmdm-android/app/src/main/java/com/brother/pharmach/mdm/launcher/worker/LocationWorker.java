@@ -97,7 +97,7 @@ public class LocationWorker extends Worker {
 
             long maxFixAgeMs = forceFreshFix ? URGENT_MAX_FIX_AGE_MS : PERIODIC_MAX_FIX_AGE_MS;
 
-            Location lastKnown = getBestLastKnownLocation(locationManager);
+            Location lastKnown = forceFreshFix ? null : getBestLastKnownLocation(locationManager);
             if (!isLocationFresh(lastKnown, maxFixAgeMs)) {
                 lastKnown = null;
             }
@@ -109,11 +109,12 @@ public class LocationWorker extends Worker {
                 freshGps = null;
             }
 
-            Location freshNetwork = coarseGranted
-                    ? tryRequestSingleUpdate(locationManager, LocationManager.NETWORK_PROVIDER)
-                    : null;
-            if (!isLocationFresh(freshNetwork, maxFixAgeMs)) {
-                freshNetwork = null;
+            Location freshNetwork = null;
+            if (freshGps == null && coarseGranted) {
+                freshNetwork = tryRequestSingleUpdate(locationManager, LocationManager.NETWORK_PROVIDER);
+                if (!isLocationFresh(freshNetwork, maxFixAgeMs)) {
+                    freshNetwork = null;
+                }
             }
 
             Location location = chooseBestLocation(lastKnown, freshGps, freshNetwork);
