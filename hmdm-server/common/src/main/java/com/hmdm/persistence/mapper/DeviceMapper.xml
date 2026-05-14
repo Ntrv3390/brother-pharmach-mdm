@@ -549,4 +549,12 @@
     </insert>
 
 
+    <delete id="removeDeviceApps">
+        DELETE FROM device_apps WHERE device_id = #{deviceId} AND pkg IN
+        <foreach item="pkg" index="index" collection="pkgs"
+                 open="(" separator="," close=")">
+            #{pkg}
+        </foreach>
+    </delete>
+
 </mapper>

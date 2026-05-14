@@ -184,6 +184,51 @@ public class UnsecureDAO {
         this.deviceMapper.updateDeviceInfo(id, info, imeiUpdateTs, publicIp);
     }
 
+    @Transactional
+    public void reconcileDeviceApps(Integer deviceId, List<Application> applications) {
+        if (applications == null) {
+            return;
+        }
+
+        List<DeviceApplication> existingApps = this.deviceMapper.getDeviceInstalledApplications(deviceId);
+        Map<String, DeviceApplication> existingMap = existingApps.stream()
+                .collect(Collectors.toMap(DeviceApplication::getPkg, a -> a));
+
+        Set<String> processedPkgs = new HashSet<>();
+        for (Application app : applications) {
+            if (app.getPkg() == null) {
+                continue;
+            }
+            String pkg = app.getPkg().trim();
+            if (pkg.isEmpty()) {
+                continue;
+            }
+            if (!processedPkgs.add(pkg)) {
+                continue;
+            }
+            app.setPkg(pkg);
+
+            if (existingMap.containsKey(pkg)) {
+                DeviceApplication existing = existingMap.get(pkg);
+                if (!Objects.equals(existing.getName(), app.getName()) ||
+                    !Objects.equals(existing.getVersion(), app.getVersion())) {
+                    this.deviceMapper.updateDeviceApp(deviceId, app);
+                }
+            } else {
+                this.deviceMapper.insertDeviceApp(deviceId, app);
+            }
+        }
+
+        List<String> pkgsToRemove = existingMap.keySet().stream()
+                .filter(pkg -> !processedPkgs.contains(pkg))
+                .collect(Collectors.toList());
+
+        if (!pkgsToRemove.isEmpty()) {
+            this.deviceMapper.removeDeviceApps(deviceId, pkgsToRemove);
+        }
+    }
+
+
     public void updateDeviceCustomProperties(Integer id, Device device) {
         this.deviceMapper.updateDeviceCustomProperties(id, device.getCustom1(), device.getCustom2(), device.getCustom3());
     }

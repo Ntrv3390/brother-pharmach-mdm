@@ -192,16 +192,16 @@ public interface DeviceMapper {
     @Delete("DELETE FROM deviceApplicationSettings WHERE extRefId = #{id}")
     void deleteDeviceApplicationSettings(@Param("id") Integer deviceId);
 
-    @Select("SELECT " +
-            "    deviceApps.app ->> 'pkg' AS pkg, " +
-            "    deviceApps.app ->> 'version' AS version, " +
-            "    deviceApps.app ->> 'name' AS name " +
-            "FROM (" +
-            "    SELECT jsonb_array_elements(infojson -> 'applications') AS app " +
-            "    FROM devices " +
-            "    WHERE id = #{deviceId}" +
-            ") deviceApps")
+    @Select("SELECT pkg, name, version FROM device_apps WHERE device_id = #{deviceId}")
     List<DeviceApplication> getDeviceInstalledApplications(@Param("deviceId") int deviceId);
+
+    @Insert("INSERT INTO device_apps (device_id, pkg, name, version) VALUES (#{deviceId}, #{app.pkg}, #{app.name}, #{app.version})")
+    void insertDeviceApp(@Param("deviceId") Integer deviceId, @Param("app") Application app);
+
+    @Update("UPDATE device_apps SET name = #{app.name}, version = #{app.version} WHERE device_id = #{deviceId} AND pkg = #{app.pkg}")
+    void updateDeviceApp(@Param("deviceId") Integer deviceId, @Param("app") Application app);
+
+    void removeDeviceApps(@Param("deviceId") Integer deviceId, @Param("pkgs") List<String> pkgs);
 
     @Update("INSERT INTO deviceStatuses (deviceId, configFilesStatus, applicationsStatus) " +
             "VALUES (#{deviceId}, #{filesStatus}, #{appsStatus})" +

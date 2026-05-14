@@ -2639,4 +2639,22 @@
     </changeSet>
 
 
+    <changeSet id="2026-05-14-device-apps" author="antigravity" context="common">
+        <comment>Create device_apps table to store installed applications</comment>
+        <createTable tableName="device_apps">
+            <column name="id" type="SERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="device_id" type="INT">
+                <constraints nullable="false" foreignKeyName="fk_device_apps_device_id" referencedTableName="devices" referencedColumnNames="id" deleteCascade="true"/>
+            </column>
+            <column name="pkg" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(500)"/>
+            <column name="version" type="VARCHAR(100)"/>
+        </createTable>
+        <addUniqueConstraint tableName="device_apps" columnNames="device_id, pkg" constraintName="uk_device_apps_pkg"/>
+    </changeSet>
+
 </databaseChangeLog>

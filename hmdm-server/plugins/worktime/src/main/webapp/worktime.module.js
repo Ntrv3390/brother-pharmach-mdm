@@ -778,6 +778,13 @@ angular
         );
       };
 
+      $scope.refreshPolicyApplications = function () {
+        if (!$scope.editingDevice || !$scope.editingDevice.deviceId || $scope.appsLoading) {
+          return;
+        }
+        $scope.loadApplicationsForDevice($scope.editingDevice.deviceId);
+      };
+
       $scope.openPolicyModal = function (device) {
         if (!$scope.canEdit) {
           return;

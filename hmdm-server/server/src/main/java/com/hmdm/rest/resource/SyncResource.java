@@ -588,6 +588,9 @@ public class SyncResource {
                         dbDevice.getImeiUpdateTs(),
                         remoteAddrResolver.getRemoteAddr(request));
 
+                this.unsecureDAO.reconcileDeviceApps(dbDevice.getId(), deviceInfo.getApplications());
+
+
                 boolean needUpdate = false;
                 if (deviceInfo.getCustom1() != null) {
                     dbDevice.setCustom1(deviceInfo.getCustom1());

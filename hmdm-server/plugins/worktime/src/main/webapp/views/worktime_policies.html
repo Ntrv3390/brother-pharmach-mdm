@@ -806,6 +806,17 @@
           <span class="worktime-count-chip">During: {{countSelectedApps(selectedAppsDuringWork)}}</span>
           <span class="worktime-count-chip">After: {{countSelectedApps(selectedAppsOutsideWork)}}</span>
         </h5>
+        <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+          <button
+            type="button"
+            class="worktime-btn-secondary"
+            ng-click="refreshPolicyApplications()"
+            ng-disabled="appsLoading || !editingDevice || !editingDevice.deviceId"
+          >
+            <span ng-if="!appsLoading">Refresh Apps</span>
+            <span ng-if="appsLoading">Refreshing...</span>
+          </button>
+        </div>
         <input type="text" class="form-control" ng-model="policyAppsSearchText" placeholder="Search applications" style="margin-bottom:12px;" />
         <div class="worktime-app-grid">
           <div class="worktime-app-grid-scroll">
