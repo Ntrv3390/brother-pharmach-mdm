@@ -33,10 +33,19 @@ import java.net.NetworkInterface;
 import java.util.Collections;
 import java.util.List;
 
+import android.content.SharedPreferences;
+import android.net.wifi.WifiConfiguration;
+
 public final class DynamicInfoHelper {
 
     private DynamicInfoHelper() {
     }
+
+    private static final String PREFS_NAME = "traffic_stats_cache";
+    private static final String LAST_TOTAL_TX = "last_total_tx";
+    private static final String LAST_TOTAL_RX = "last_total_rx";
+    private static final String LAST_MOBILE_TX = "last_mobile_tx";
+    private static final String LAST_MOBILE_RX = "last_mobile_rx";
 
     public static DetailedInfo buildDetailedInfo(Context context, LocationTable.Location location) {
         DetailedInfo detailedInfo = new DetailedInfo();
@@ -52,13 +61,24 @@ public final class DynamicInfoHelper {
         populateDevice(context, device);
         detailedInfo.setDevice(device);
 
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+
         DetailedInfo.Wifi wifi = new DetailedInfo.Wifi();
-        populateWifi(context, wifi, device);
+        populateWifi(context, wifi, device, prefs);
         detailedInfo.setWifi(wifi);
 
         DetailedInfo.Mobile mobile = new DetailedInfo.Mobile();
-        populateMobile(context, mobile, device);
+        populateMobile(context, mobile, device, prefs);
         detailedInfo.setMobile(mobile);
+
+        // Populate device IP with the active one
+        if (device.getIp() == null) {
+            if (wifi.getIp() != null) {
+                device.setIp(wifi.getIp());
+            } else if (mobile.getIp() != null) {
+                device.setIp(mobile.getIp());
+            }
+        }
 
         // Keep second SIM payload optional for compatibility and to avoid fragile slot-specific APIs.
         detailedInfo.setMobile2(null);
@@ -146,9 +166,18 @@ public final class DynamicInfoHelper {
             device.setMobileData(isCellularConnected(context));
         } catch (Exception ignored) {
         }
+
+        try {
+            IntentFilter filter = new IntentFilter("android.hardware.usb.action.USB_STATE");
+            Intent intent = context.registerReceiver(null, filter);
+            if (intent != null) {
+                device.setUsbStorage(intent.getBooleanExtra("connected", false));
+            }
+        } catch (Exception ignored) {
+        }
     }
 
-    private static void populateWifi(Context context, DetailedInfo.Wifi wifi, DetailedInfo.Device device) {
+    private static void populateWifi(Context context, DetailedInfo.Wifi wifi, DetailedInfo.Device device, SharedPreferences prefs) {
         try {
             WifiManager wifiManager = (WifiManager) context.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
             if (wifiManager == null) {
@@ -172,6 +201,8 @@ public final class DynamicInfoHelper {
                 if (ssid != null && !"<unknown ssid>".equalsIgnoreCase(ssid)) {
                     wifi.setSsid(ssid.replace("\"", ""));
                 }
+
+                wifi.setSecurity(getWifiSecurity(wifiManager, wifiInfo));
             }
 
             wifi.setState(device.getWifi() != null && device.getWifi()
@@ -180,15 +211,50 @@ public final class DynamicInfoHelper {
 
             if (Const.WIFI_STATE_CONNECTED.equals(wifi.getState())) {
                 wifi.setIp(Formatter.formatIpAddress(wifiInfo.getIpAddress()));
-                wifi.setTx(TrafficStats.getMobileTxBytes()); // Best effort, TrafficStats doesn't distinguish well
-                wifi.setRx(TrafficStats.getMobileRxBytes());
+                
+                long currentTotalTx = TrafficStats.getTotalTxBytes();
+                long currentTotalRx = TrafficStats.getTotalRxBytes();
+                long lastTotalTx = prefs.getLong(LAST_TOTAL_TX, 0);
+                long lastTotalRx = prefs.getLong(LAST_TOTAL_RX, 0);
+                
+                // Approximate WiFi as Total - Mobile
+                long currentMobileTx = TrafficStats.getMobileTxBytes();
+                long currentMobileRx = TrafficStats.getMobileRxBytes();
+                
+                long wifiTx = currentTotalTx - currentMobileTx;
+                long wifiRx = currentTotalRx - currentMobileRx;
+                
+                wifi.setTx(wifiTx >= lastTotalTx ? wifiTx - lastTotalTx : wifiTx);
+                wifi.setRx(wifiRx >= lastTotalRx ? wifiRx - lastTotalRx : wifiRx);
+                
+                prefs.edit().putLong(LAST_TOTAL_TX, wifiTx).putLong(LAST_TOTAL_RX, wifiRx).apply();
             }
         } catch (Exception ignored) {
             wifi.setState(Const.WIFI_STATE_FAILED);
         }
     }
 
-    private static void populateMobile(Context context, DetailedInfo.Mobile mobile, DetailedInfo.Device device) {
+    private static String getWifiSecurity(WifiManager wifiManager, WifiInfo wifiInfo) {
+        try {
+            String ssid = wifiInfo.getSSID();
+            if (ssid == null) return null;
+            List<WifiConfiguration> configs = wifiManager.getConfiguredNetworks();
+            if (configs != null) {
+                for (WifiConfiguration config : configs) {
+                    if (config.SSID != null && config.SSID.equals(ssid)) {
+                        if (config.allowedKeyManagement.get(WifiConfiguration.KeyMgmt.WPA_PSK)) return "WPA-PSK";
+                        if (config.allowedKeyManagement.get(WifiConfiguration.KeyMgmt.WPA_EAP)) return "WPA-EAP";
+                        if (config.allowedKeyManagement.get(WifiConfiguration.KeyMgmt.NONE)) return "OPEN";
+                        return "Protected";
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private static void populateMobile(Context context, DetailedInfo.Mobile mobile, DetailedInfo.Device device, SharedPreferences prefs) {
         try {
             TelephonyManager telephonyManager = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
             if (telephonyManager != null) {
@@ -197,6 +263,8 @@ public final class DynamicInfoHelper {
                     mobile.setCarrier(operator);
                 }
                 mobile.setSimState(mapSimState(telephonyManager.getSimState()));
+                mobile.setNumber(DeviceInfoProvider.getPhoneNumber(context));
+                mobile.setImsi(DeviceInfoProvider.getImsi(context));
             }
         } catch (Exception ignored) {
         }
@@ -207,8 +275,17 @@ public final class DynamicInfoHelper {
 
         if (Const.MOBILE_STATE_CONNECTED.equals(mobile.getState())) {
             mobile.setIp(getMobileIpAddress());
-            mobile.setTx(TrafficStats.getMobileTxBytes());
-            mobile.setRx(TrafficStats.getMobileRxBytes());
+            
+            long currentMobileTx = TrafficStats.getMobileTxBytes();
+            long currentMobileRx = TrafficStats.getMobileRxBytes();
+            long lastMobileTx = prefs.getLong(LAST_MOBILE_TX, 0);
+            long lastMobileRx = prefs.getLong(LAST_MOBILE_RX, 0);
+
+            mobile.setTx(currentMobileTx >= lastMobileTx ? currentMobileTx - lastMobileTx : currentMobileTx);
+            mobile.setRx(currentMobileRx >= lastMobileRx ? currentMobileRx - lastMobileRx : currentMobileRx);
+            
+            prefs.edit().putLong(LAST_MOBILE_TX, currentMobileTx).putLong(LAST_MOBILE_RX, currentMobileRx).apply();
+            
             mobile.setRssi(getMobileRssi(context));
         }
     }
