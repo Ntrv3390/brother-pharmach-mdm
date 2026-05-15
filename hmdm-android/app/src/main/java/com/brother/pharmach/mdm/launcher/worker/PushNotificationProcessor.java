@@ -42,6 +42,7 @@ import com.brother.pharmach.mdm.launcher.json.Application;
 import com.brother.pharmach.mdm.launcher.json.Download;
 import com.brother.pharmach.mdm.launcher.json.PushMessage;
 import com.brother.pharmach.mdm.launcher.json.ServerConfig;
+import com.brother.pharmach.mdm.launcher.service.LocationService;
 import com.brother.pharmach.mdm.launcher.util.InstallUtils;
 import com.brother.pharmach.mdm.launcher.util.LegacyUtils;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
@@ -67,6 +68,19 @@ public class PushNotificationProcessor {
             return;
         } else if (message.getMessageType().equals(PushMessage.TYPE_FETCH_GPS_URGENT)) {
             // Silent urgent GPS refresh requested by admin.
+            try {
+                Intent serviceIntent = new Intent(context, LocationService.class);
+                serviceIntent.setAction(LocationService.ACTION_UPDATE_GPS);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent);
+                } else {
+                    context.startService(serviceIntent);
+                }
+            } catch (Exception e) {
+                RemoteLogger.log(context, Const.LOG_WARN,
+                        "Failed to start urgent GPS foreground service: " + e.getMessage());
+            }
+
             try {
                 LocationWorker.scheduleOneShot(context);
             } catch (Exception e) {

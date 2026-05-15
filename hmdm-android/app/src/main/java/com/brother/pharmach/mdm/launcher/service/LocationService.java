@@ -42,6 +42,7 @@ import com.brother.pharmach.mdm.launcher.server.ServerService;
 import com.brother.pharmach.mdm.launcher.server.ServerServiceKeeper;
 import com.brother.pharmach.mdm.launcher.util.DynamicInfoHelper;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
+import com.brother.pharmach.mdm.launcher.worker.LocationWorker;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -196,28 +197,57 @@ public class LocationService extends Service {
 
     @Override
     public int onStartCommand(Intent inputIntent, int flags, int startId) {
-        if (ACTION_STOP.equals(inputIntent != null ? inputIntent.getAction() : null)) {
+        String action = inputIntent != null ? inputIntent.getAction() : null;
+        if (ACTION_STOP.equals(action)) {
             stopSelf();
             return START_NOT_STICKY;
         }
 
+        boolean foregroundStarted = startForegroundSafely();
+        if (ACTION_UPDATE_GPS.equals(action)) {
+            new Thread(() -> {
+                try {
+                    LocationWorker.runUrgentNow(getApplicationContext());
+                } catch (Exception e) {
+                    RemoteLogger.log(getApplicationContext(), Const.LOG_WARN,
+                            "Urgent GPS refresh in LocationService failed: " + e.getMessage());
+                } finally {
+                    stopForegroundSafely(foregroundStarted);
+                    stopSelf();
+                }
+            }, "urgent-gps-refresh").start();
+            return START_NOT_STICKY;
+        }
+
+        stopForegroundSafely(foregroundStarted);
+        stopSelf();
+        return START_NOT_STICKY;
+    }
+
+    private boolean startForegroundSafely() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForeground(NOTIFICATION_ID, buildSilentNotification());
+                return true;
             }
         } catch (Exception e) {
             RemoteLogger.log(this, Const.LOG_WARN,
                     "LocationService startForeground failed: " + e.getMessage());
-        } finally {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    stopForeground(STOP_FOREGROUND_REMOVE);
-                } else {
-                    stopForeground(true);
-                }
-            }
-            stopSelf();
         }
-        return START_NOT_STICKY;
+        return false;
+    }
+
+    private void stopForegroundSafely(boolean foregroundStarted) {
+        if (!foregroundStarted || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return;
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                stopForeground(STOP_FOREGROUND_REMOVE);
+            } else {
+                stopForeground(true);
+            }
+        } catch (Exception ignored) {
+        }
     }
 }

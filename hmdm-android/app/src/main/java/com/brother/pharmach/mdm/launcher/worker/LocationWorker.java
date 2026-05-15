@@ -70,6 +70,12 @@ public class LocationWorker extends Worker {
                 request);
     }
 
+    // Executes an urgent GPS refresh immediately in the current process.
+    // This bypasses WorkManager scheduling latency and is used by push-triggered refreshes.
+    public static Result runUrgentNow(Context context) {
+        return captureAndUpload(context, true);
+    }
+
     @NonNull
     @Override
     public Result doWork() {
