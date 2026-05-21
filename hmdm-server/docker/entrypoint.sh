@@ -308,6 +308,29 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Fix any localhost / wrong-host URLs stored in the database so that every
+# app version always points to the correct public BASE_URL, regardless of
+# what was in the DB when the version was originally uploaded.
+# ---------------------------------------------------------------------------
+echo "==> [hmdm] Rewriting any localhost URLs in applicationversions to ${BASE_URL}..."
+PGPASSWORD="${DB_PASSWORD}" psql \
+    -h "${DB_HOST}" \
+    -p "${DB_PORT}" \
+    -U "${DB_USER}" \
+    -d "${DB_NAME}" \
+    -c "UPDATE applicationversions
+        SET url        = regexp_replace(url,        'https?://[^/]*(:[0-9]+)?', '${BASE_URL}', 'g')
+        WHERE url        ~ 'https?://localhost';
+        UPDATE applicationversions
+        SET urlarmeabi = regexp_replace(urlarmeabi, 'https?://[^/]*(:[0-9]+)?', '${BASE_URL}', 'g')
+        WHERE urlarmeabi ~ 'https?://localhost';
+        UPDATE applicationversions
+        SET urlarm64   = regexp_replace(urlarm64,   'https?://[^/]*(:[0-9]+)?', '${BASE_URL}', 'g')
+        WHERE urlarm64   ~ 'https?://localhost';" 2>&1 \
+    && echo "==> [hmdm] URL rewrite done." \
+    || echo "==> [hmdm] WARNING: URL rewrite skipped (DB may not be initialized yet)."
+
+# ---------------------------------------------------------------------------
 # Start Tomcat
 # ---------------------------------------------------------------------------
 echo "==> [hmdm] Starting Tomcat..."
