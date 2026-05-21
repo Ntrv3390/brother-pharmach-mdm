@@ -75,6 +75,10 @@ angular
         },
         save: { method: "POST", url: "/rest/plugins/worktime/private/device" },
         remove: { method: "DELETE" },
+        removeException: {
+          method: "DELETE",
+          url: "/rest/plugins/worktime/private/device/exception/:exceptionId",
+        },
       },
     );
   })
@@ -117,7 +121,6 @@ angular
       authService,
     ) {
       var POLICY_MODAL_TEMPLATE = "worktimePolicyModalTemplate.html";
-      var EXCEPTION_MODAL_TEMPLATE = "worktimeExceptionModalTemplate.html";
       var DEFAULT_POLICY = {
         startTime: "09:00",
         endTime: "17:00",
@@ -422,6 +425,66 @@ angular
         return { from: from, to: to };
       }
 
+      function createDefaultHolidayDraft() {
+        var defaultStart = new Date();
+        defaultStart.setMinutes(defaultStart.getMinutes() + 1, 0, 0);
+        var defaultEnd = new Date(defaultStart.getTime() + 60 * 60 * 1000);
+
+        return {
+          dateFrom: defaultStart,
+          dateTo: defaultEnd,
+          timeFrom:
+            ("0" + defaultStart.getHours()).slice(-2) +
+            ":" +
+            ("0" + defaultStart.getMinutes()).slice(-2),
+          timeTo:
+            ("0" + defaultEnd.getHours()).slice(-2) +
+            ":" +
+            ("0" + defaultEnd.getMinutes()).slice(-2),
+        };
+      }
+
+      function decorateException(exception) {
+        var range = getExceptionRange(exception);
+        if (!range) {
+          return exception;
+        }
+
+        var now = new Date();
+        exception.dateFrom = range.from;
+        exception.dateTo = range.to;
+        exception.active = now >= range.from && now <= range.to;
+        exception.upcoming = now < range.from;
+        return exception;
+      }
+
+      function sortExceptions(left, right) {
+        if (!!left.active !== !!right.active) {
+          return left.active ? -1 : 1;
+        }
+
+        var leftRange = getExceptionRange(left);
+        var rightRange = getExceptionRange(right);
+
+        if (!leftRange && !rightRange) {
+          return 0;
+        }
+        if (!leftRange) {
+          return 1;
+        }
+        if (!rightRange) {
+          return -1;
+        }
+
+        var leftStart = leftRange.from.getTime();
+        var rightStart = rightRange.from.getTime();
+        if (leftStart !== rightStart) {
+          return leftStart - rightStart;
+        }
+
+        return leftRange.to.getTime() - rightRange.to.getTime();
+      }
+
       function normalizeExceptions(device) {
         var exceptions = angular.isArray(device.exceptions)
           ? angular.copy(device.exceptions)
@@ -437,6 +500,7 @@ angular
           var end = new Date(device.endDateTime);
           if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && now <= end) {
             exceptions.push({
+              id: device.id,
               dateFrom: start,
               dateTo: end,
               timeFrom:
@@ -453,19 +517,65 @@ angular
 
         return exceptions
           .map(function (exception) {
-            var range = getExceptionRange(exception);
-            if (!range) {
-              return exception;
-            }
-            exception.dateFrom = range.from;
-            exception.dateTo = range.to;
-            exception.active = now >= range.from && now <= range.to;
-            return exception;
+            return decorateException(exception);
           })
           .filter(function (exception) {
             var range = getExceptionRange(exception);
             return !range || now <= range.to;
-          });
+          })
+          .sort(sortExceptions);
+      }
+
+      function pickFeaturedException(exceptions) {
+        if (!angular.isArray(exceptions) || exceptions.length === 0) {
+          return null;
+        }
+
+        for (var i = 0; i < exceptions.length; i++) {
+          if (exceptions[i] && exceptions[i].active) {
+            return exceptions[i];
+          }
+        }
+
+        return exceptions[0];
+      }
+
+      function applyExceptionState(device) {
+        device.exceptions = normalizeExceptions(device);
+        device.hasActiveException = device.exceptions.some(function (exception) {
+          return !!exception.active;
+        });
+        device.displayException = pickFeaturedException(device.exceptions);
+        return device;
+      }
+
+      function buildExceptionEntryFromPayload(payload, responseData) {
+        var start = parseLocalDate(payload.startDateTime);
+        var end = parseLocalDate(payload.endDateTime);
+        var entry = {
+          id: responseData && responseData.id ? responseData.id : payload.id,
+          dateFrom: start,
+          dateTo: end,
+          timeFrom: null,
+          timeTo: null,
+          startDateTime: payload.startDateTime,
+          endDateTime: payload.endDateTime,
+        };
+
+        if (start && !isNaN(start.getTime())) {
+          entry.timeFrom =
+            ("0" + start.getHours()).slice(-2) +
+            ":" +
+            ("0" + start.getMinutes()).slice(-2);
+        }
+        if (end && !isNaN(end.getTime())) {
+          entry.timeTo =
+            ("0" + end.getHours()).slice(-2) +
+            ":" +
+            ("0" + end.getMinutes()).slice(-2);
+        }
+
+        return decorateException(entry);
       }
 
       function buildDeviceRows(overrides, policies) {
@@ -479,10 +589,7 @@ angular
             var row = angular.copy(device);
             row.deviceName = row.deviceName || "Device " + row.deviceId;
             row.policy = normalizePolicy(row, policyMap[row.deviceId]);
-            row.exceptions = normalizeExceptions(row);
-            row.hasActiveException = row.exceptions.some(function (exception) {
-              return !!exception.active;
-            });
+            applyExceptionState(row);
             return row;
           })
           .sort(function (left, right) {
@@ -820,6 +927,14 @@ angular
         $scope.app24h = {};
         $scope.policyAppsSearchText = "";
         syncAllAppsFlags();
+        $scope.exceptionSaving = false;
+        $scope.editingException = createDefaultHolidayDraft();
+        $scope.exceptionTime = {
+          fromHour: parsePolicyTimeParts($scope.editingException.timeFrom, 9, 0).hour,
+          fromMinute: parsePolicyTimeParts($scope.editingException.timeFrom, 9, 0).minute,
+          toHour: parsePolicyTimeParts($scope.editingException.timeTo, 10, 0).hour,
+          toMinute: parsePolicyTimeParts($scope.editingException.timeTo, 10, 0).minute,
+        };
 
         modalInstance = $uibModal.open({
           templateUrl: POLICY_MODAL_TEMPLATE,
@@ -834,6 +949,9 @@ angular
           $scope.editingDevice = null;
           $scope.editingPolicy = null;
           $scope.policyTime = null;
+          $scope.editingException = null;
+          $scope.exceptionTime = null;
+          $scope.exceptionSaving = false;
         });
       };
 
@@ -895,66 +1013,6 @@ angular
         }
       };
 
-      $scope.openExceptionModal = function (device) {
-        if (!$scope.canEdit) {
-          return;
-        }
-
-        var existing =
-          device.exceptions && device.exceptions.length > 0
-            ? angular.copy(device.exceptions[0])
-            : null;
-        var defaultStart = new Date();
-        defaultStart.setMinutes(defaultStart.getMinutes() + 1, 0, 0);
-        var defaultEnd = new Date(defaultStart.getTime() + 60 * 60 * 1000);
-
-        $scope.error = null;
-        $scope.editingDevice = device;
-        $scope.editingException = existing || {
-          dateFrom: defaultStart,
-          dateTo: defaultEnd,
-          timeFrom:
-            ("0" + defaultStart.getHours()).slice(-2) +
-            ":" +
-            ("0" + defaultStart.getMinutes()).slice(-2),
-          timeTo:
-            ("0" + defaultEnd.getHours()).slice(-2) +
-            ":" +
-            ("0" + defaultEnd.getMinutes()).slice(-2),
-        };
-        var fromParts = parsePolicyTimeParts(
-          $scope.editingException.timeFrom,
-          9,
-          0,
-        );
-        var toParts = parsePolicyTimeParts(
-          $scope.editingException.timeTo,
-          10,
-          0,
-        );
-        $scope.exceptionTime = {
-          fromHour: fromParts.hour,
-          fromMinute: fromParts.minute,
-          toHour: toParts.hour,
-          toMinute: toParts.minute,
-        };
-
-        modalInstance = $uibModal.open({
-          templateUrl: EXCEPTION_MODAL_TEMPLATE,
-          scope: $scope,
-          windowClass: "worktime-exception-modal",
-          backdrop: "static",
-          keyboard: true,
-        });
-
-        modalInstance.result.finally(function () {
-          modalInstance = null;
-          $scope.editingDevice = null;
-          $scope.editingException = null;
-          $scope.exceptionTime = null;
-        });
-      };
-
       $scope.saveException = function () {
         if (
           !$scope.editingDevice ||
@@ -1009,18 +1067,46 @@ angular
           function (response) {
             $scope.exceptionSaving = false;
             if (response && response.status === "OK") {
-              if (modalInstance) {
-                modalInstance.close();
+              var savedEntry = buildExceptionEntryFromPayload(
+                payload,
+                response.data,
+              );
+              if (!$scope.editingDevice.exceptions) {
+                $scope.editingDevice.exceptions = [];
               }
+              $scope.editingDevice.exceptions.push(savedEntry);
+              applyExceptionState($scope.editingDevice);
+              $scope.editingException = createDefaultHolidayDraft();
+              $scope.exceptionTime = {
+                fromHour: parsePolicyTimeParts(
+                  $scope.editingException.timeFrom,
+                  9,
+                  0,
+                ).hour,
+                fromMinute: parsePolicyTimeParts(
+                  $scope.editingException.timeFrom,
+                  9,
+                  0,
+                ).minute,
+                toHour: parsePolicyTimeParts(
+                  $scope.editingException.timeTo,
+                  10,
+                  0,
+                ).hour,
+                toMinute: parsePolicyTimeParts(
+                  $scope.editingException.timeTo,
+                  10,
+                  0,
+                ).minute,
+              };
               showSuccess(
-                "Exception saved for " +
+                "Holiday added for " +
                   ($scope.editingDevice.deviceName ||
                     "Device " + $scope.editingDevice.deviceId),
               );
-              $scope.refresh(true);
             } else {
               $scope.error =
-                (response && response.message) || "Failed to save exception";
+                (response && response.message) || "Failed to save holiday";
             }
           },
           function (error) {
@@ -1032,22 +1118,28 @@ angular
         );
       };
 
-      $scope.deleteException = function (device) {
-        if (!$scope.canEdit || !confirm("Delete this exception?")) {
+      $scope.deleteException = function (device, exception) {
+        if (!$scope.canEdit || !exception || !exception.id) {
           return;
         }
 
-        WorkTimeDevice.remove(
-          { deviceId: device.deviceId },
+        if (!confirm("Delete this holiday?")) {
+          return;
+        }
+
+        WorkTimeDevice.removeException(
+          { exceptionId: exception.id },
           function () {
-            if (modalInstance) {
-              modalInstance.close();
+            if (device && angular.isArray(device.exceptions)) {
+              device.exceptions = device.exceptions.filter(function (item) {
+                return item.id !== exception.id;
+              });
+              applyExceptionState(device);
             }
             showSuccess(
-              "Exception removed for " +
+              "Holiday removed for " +
                 (device.deviceName || "Device " + device.deviceId),
             );
-            $scope.refresh(true);
           },
           function (error) {
             $scope.error =
@@ -1057,10 +1149,27 @@ angular
         );
       };
 
-      $scope.closeExceptionModal = function () {
-        if (modalInstance) {
-          modalInstance.close();
+      $scope.getDeviceHolidayBadgeLabel = function (device) {
+        if (!device) {
+          return "No Holidays";
         }
+        if (device.hasActiveException) {
+          return "Active Holiday";
+        }
+        if (device.displayException) {
+          return "Upcoming Holiday";
+        }
+        return "No Holidays";
+      };
+
+      $scope.getDeviceHolidayBadgeClass = function (device) {
+        if (!device) {
+          return "state-ok";
+        }
+        if (device.hasActiveException) {
+          return "state-alert";
+        }
+        return device.displayException ? "state-alert" : "state-ok";
       };
 
       refreshPromise = $interval(function () {

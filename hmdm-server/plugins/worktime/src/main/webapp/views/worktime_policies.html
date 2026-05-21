@@ -658,10 +658,9 @@
             </span>
             <span
               class="worktime-badge"
-              ng-class="device.hasActiveException ? 'state-alert' : 'state-ok'"
+              ng-class="getDeviceHolidayBadgeClass(device)"
             >
-              {{device.hasActiveException ? 'Active Exception' : 'No Active
-              Exception'}}
+              {{getDeviceHolidayBadgeLabel(device)}}
             </span>
           </div>
         </div>
@@ -695,19 +694,19 @@
 
         <div
           class="worktime-exception-strip"
-          ng-if="device.exceptions.length > 0"
+          ng-if="device.displayException"
         >
           <div class="worktime-exception-title">
             <i class="glyphicon glyphicon-warning-sign"></i>
             <span
-              >{{device.exceptions[0].active ? 'Exception Active' : 'Exception
+              >{{device.displayException.active ? 'Holiday Active' : 'Holiday
               Scheduled'}}</span
             >
           </div>
           <p class="worktime-exception-copy">
-            {{device.exceptions[0].dateFrom | date:'MMM d, yyyy'}}
-            {{device.exceptions[0].timeFrom}} to {{device.exceptions[0].dateTo |
-            date:'MMM d, yyyy'}} {{device.exceptions[0].timeTo}}
+            {{device.displayException.dateFrom | date:'MMM d, yyyy'}}
+            {{device.displayException.timeFrom}} to {{device.displayException.dateTo |
+            date:'MMM d, yyyy'}} {{device.displayException.timeTo}}
           </p>
         </div>
 
@@ -720,26 +719,6 @@
           >
             <i class="glyphicon glyphicon-edit"></i>
             Change Policy
-          </button>
-          <button
-            type="button"
-            class="worktime-btn-secondary"
-            ng-if="!device.hasActiveException"
-            ng-click="openExceptionModal(device)"
-            ng-disabled="!canEdit"
-          >
-            <i class="glyphicon glyphicon-time"></i>
-            Create Exception
-          </button>
-          <button
-            type="button"
-            class="worktime-btn-danger"
-            ng-if="device.exceptions.length > 0"
-            ng-click="deleteException(device)"
-            ng-disabled="!canEdit"
-          >
-            <i class="glyphicon glyphicon-trash"></i>
-            Remove Exception
           </button>
         </div>
       </div>
@@ -896,26 +875,10 @@
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="worktime-modal-footer">
-      <button type="button" class="worktime-btn-secondary" ng-click="closePolicyModal()">Close</button>
-      <button type="button" class="worktime-btn-primary" ng-click="savePolicy()" ng-disabled="policySaving">
-        <span ng-if="!policySaving">Save Policy</span>
-        <span ng-if="policySaving">Saving...</span>
-      </button>
-    </div>
-  </script>
+      <div class="worktime-form-card" style="margin-top:14px; margin-bottom:0;">
+        <h5 class="worktime-form-title">Create Holiday</h5>
 
-  <script type="text/ng-template" id="worktimeExceptionModalTemplate.html">
-    <div class="worktime-modal-header">
-      <button type="button" class="close" ng-click="closeExceptionModal()" style="color:#fff; opacity:0.92; text-shadow:none;">&times;</button>
-      <h4 class="worktime-modal-title">Create Exception for {{editingDevice.deviceName}}</h4>
-    </div>
-
-    <div class="worktime-modal-body">
-      <div class="worktime-form-card">
-        <h5 class="worktime-form-title">Exception Window</h5>
         <div class="worktime-inline-grid">
           <div class="worktime-field">
             <label>Start Date</label>
@@ -927,9 +890,9 @@
           </div>
         </div>
 
-        <div class="worktime-inline-grid" style="margin-top:14px;">
+        <div class="worktime-inline-grid" style="margin-top:12px;">
           <div class="worktime-field">
-            <label>Time From (HH:MM)</label>
+            <label>Start Time (HH:MM)</label>
             <div style="display:flex; align-items:center; gap:8px;">
               <select class="form-control" ng-model="exceptionTime.fromHour" ng-options="option.value as option.label for option in timeHourOptions"></select>
               <span>:</span>
@@ -937,7 +900,7 @@
             </div>
           </div>
           <div class="worktime-field">
-            <label>Time To (HH:MM)</label>
+            <label>End Time (HH:MM)</label>
             <div style="display:flex; align-items:center; gap:8px;">
               <select class="form-control" ng-model="exceptionTime.toHour" ng-options="option.value as option.label for option in timeHourOptions"></select>
               <span>:</span>
@@ -945,20 +908,73 @@
             </div>
           </div>
         </div>
-      </div>
 
-      <div class="worktime-form-card" style="margin-bottom:0;">
-        <div class="worktime-note-box">
-          This exception temporarily disables work time enforcement for the selected device.
+        <div style="display:flex; justify-content:flex-end; margin-top:12px;">
+          <button
+            type="button"
+            class="worktime-btn-primary"
+            ng-click="saveException()"
+            ng-disabled="exceptionSaving"
+          >
+            <span ng-if="!exceptionSaving">Add Holiday</span>
+            <span ng-if="exceptionSaving">Adding...</span>
+          </button>
+        </div>
+
+        <div class="worktime-note-box" style="margin-top:12px; margin-bottom:10px;">
+          Holidays temporarily disable work time enforcement for this device.
+        </div>
+
+        <div ng-if="!editingDevice.exceptions || editingDevice.exceptions.length === 0" class="worktime-app-empty" style="padding:10px 0;">
+          No holidays configured.
+        </div>
+
+        <div ng-if="editingDevice.exceptions && editingDevice.exceptions.length > 0" class="worktime-app-grid">
+          <div class="worktime-app-grid-scroll" style="max-height:220px;">
+            <table class="worktime-app-table">
+              <thead>
+                <tr>
+                  <th>Holiday Window</th>
+                  <th class="worktime-checkbox-cell">Status</th>
+                  <th class="worktime-checkbox-cell">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr ng-repeat="holiday in editingDevice.exceptions track by (holiday.id || $index)">
+                  <td>
+                    <div class="worktime-app-name">
+                      {{holiday.dateFrom | date:'MMM d, yyyy'}} {{holiday.timeFrom}} to
+                      {{holiday.dateTo | date:'MMM d, yyyy'}} {{holiday.timeTo}}
+                    </div>
+                  </td>
+                  <td class="worktime-checkbox-cell">
+                    <span class="worktime-badge" ng-class="holiday.active ? 'state-alert' : 'state-ok'">
+                      {{holiday.active ? 'Active' : 'Scheduled'}}
+                    </span>
+                  </td>
+                  <td class="worktime-checkbox-cell">
+                    <button
+                      type="button"
+                      class="worktime-btn-danger"
+                      ng-click="deleteException(editingDevice, holiday)"
+                      ng-disabled="!canEdit"
+                    >
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
 
     <div class="worktime-modal-footer">
-      <button type="button" class="worktime-btn-secondary" ng-click="closeExceptionModal()">Close</button>
-      <button type="button" class="worktime-btn-primary" ng-click="saveException()" ng-disabled="exceptionSaving">
-        <span ng-if="!exceptionSaving">Save Exception</span>
-        <span ng-if="exceptionSaving">Saving...</span>
+      <button type="button" class="worktime-btn-secondary" ng-click="closePolicyModal()">Close</button>
+      <button type="button" class="worktime-btn-primary" ng-click="savePolicy()" ng-disabled="policySaving">
+        <span ng-if="!policySaving">Save Policy</span>
+        <span ng-if="policySaving">Saving...</span>
       </button>
     </div>
   </script>

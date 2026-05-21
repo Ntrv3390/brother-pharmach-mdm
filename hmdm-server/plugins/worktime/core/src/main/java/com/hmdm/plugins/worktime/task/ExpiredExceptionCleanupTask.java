@@ -54,7 +54,7 @@ public class ExpiredExceptionCleanupTask {
 
                 if (shouldSendStartBoundaryPush(override, now)) {
                     sendConfigUpdated(override.getDeviceId());
-                    workTimeDAO.markExceptionStartPushSent(override.getCustomerId(), override.getDeviceId());
+                    workTimeDAO.markExceptionStartPushSentById(override.getId());
                     startBoundaryPushCount++;
                     log.info("Sent persisted start boundary push for device {} in customer {}",
                             override.getDeviceId(), override.getCustomerId());
@@ -62,7 +62,7 @@ public class ExpiredExceptionCleanupTask {
 
                 if (shouldSendEndBoundaryPush(override, now)) {
                     sendConfigUpdated(override.getDeviceId());
-                    workTimeDAO.markExceptionEndPushSent(override.getCustomerId(), override.getDeviceId());
+                    workTimeDAO.markExceptionEndPushSentById(override.getId());
                     endBoundaryPushCount++;
                     log.info("Sent persisted end boundary push for device {} in customer {}",
                             override.getDeviceId(), override.getCustomerId());
@@ -71,7 +71,7 @@ public class ExpiredExceptionCleanupTask {
                 if (isExpired(override, now)) {
                     log.info("Deleting expired exception for device {} in customer {}", 
                              override.getDeviceId(), override.getCustomerId());
-                    workTimeDAO.deleteDeviceOverride(override.getCustomerId(), override.getDeviceId());
+                    workTimeDAO.deleteDeviceOverrideById(override.getCustomerId(), override.getId());
                     sendConfigUpdated(override.getDeviceId());
                     cleanedCount++;
                 }

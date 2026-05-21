@@ -1,6 +1,7 @@
 package com.brother.pharmach.mdm.launcher.json;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import java.util.Collections;
 import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -13,6 +14,7 @@ public class EffectiveWorkTimePolicy {
     private List<String> allowedOutside;
     private Long exceptionStartDateTime;
     private Long exceptionEndDateTime;
+    private List<ExceptionWindow> exceptionWindows;
 
     public boolean isEnforcementEnabled() {
         return enforcementEnabled;
@@ -76,5 +78,35 @@ public class EffectiveWorkTimePolicy {
 
     public void setExceptionEndDateTime(Long exceptionEndDateTime) {
         this.exceptionEndDateTime = exceptionEndDateTime;
+    }
+
+    public List<ExceptionWindow> getExceptionWindows() {
+        return exceptionWindows == null ? Collections.emptyList() : exceptionWindows;
+    }
+
+    public void setExceptionWindows(List<ExceptionWindow> exceptionWindows) {
+        this.exceptionWindows = exceptionWindows;
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ExceptionWindow {
+        private Long startDateTime;
+        private Long endDateTime;
+
+        public Long getStartDateTime() {
+            return startDateTime;
+        }
+
+        public void setStartDateTime(Long startDateTime) {
+            this.startDateTime = startDateTime;
+        }
+
+        public Long getEndDateTime() {
+            return endDateTime;
+        }
+
+        public void setEndDateTime(Long endDateTime) {
+            this.endDateTime = endDateTime;
+        }
     }
 }

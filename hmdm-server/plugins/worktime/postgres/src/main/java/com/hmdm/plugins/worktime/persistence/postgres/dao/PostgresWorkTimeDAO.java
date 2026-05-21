@@ -46,8 +46,18 @@ public class PostgresWorkTimeDAO implements WorkTimeDAO {
     }
 
     @Override
+    public List<WorkTimeDeviceOverride> getDeviceOverridesForDevice(int customerId, int deviceId) {
+        return mapper.getDeviceOverridesForDevice(customerId, deviceId);
+    }
+
+    @Override
     public WorkTimeDeviceOverride getDeviceOverride(int customerId, int deviceId) {
         return mapper.getDeviceOverride(customerId, deviceId);
+    }
+
+    @Override
+    public WorkTimeDeviceOverride getDeviceOverrideById(int customerId, int id) {
+        return mapper.getDeviceOverrideById(customerId, id);
     }
 
     @Override
@@ -61,17 +71,34 @@ public class PostgresWorkTimeDAO implements WorkTimeDAO {
             policy.setEndBoundaryPushSent(Boolean.TRUE);
         }
 
-        WorkTimeDeviceOverride existing = mapper.getDeviceOverride(policy.getCustomerId(), policy.getDeviceId());
-        if (existing == null) {
+        if (policy.getId() != null && policy.getId() > 0) {
+            WorkTimeDeviceOverride existing = mapper.getDeviceOverrideById(policy.getCustomerId(), policy.getId());
+            if (existing != null) {
+                mapper.updateDeviceOverride(policy);
+                return;
+            }
+        }
+
+        if (policy.getId() == null || policy.getId() <= 0) {
             mapper.insertDeviceOverride(policy);
-        } else {
-            mapper.updateDeviceOverride(policy);
         }
     }
 
     @Override
     @Transactional
     public void deleteDeviceOverride(int customerId, int deviceId) {
+        mapper.deleteDeviceOverride(customerId, deviceId);
+    }
+
+    @Override
+    @Transactional
+    public void deleteDeviceOverrideById(int customerId, int id) {
+        mapper.deleteDeviceOverrideById(customerId, id);
+    }
+
+    @Override
+    @Transactional
+    public void deleteDeviceOverridesForDevice(int customerId, int deviceId) {
         mapper.deleteDeviceOverride(customerId, deviceId);
     }
 
@@ -85,6 +112,18 @@ public class PostgresWorkTimeDAO implements WorkTimeDAO {
     @Transactional
     public void markExceptionEndPushSent(int customerId, int deviceId) {
         mapper.markExceptionEndPushSent(customerId, deviceId);
+    }
+
+    @Override
+    @Transactional
+    public void markExceptionStartPushSentById(int id) {
+        mapper.markExceptionStartPushSentById(id);
+    }
+
+    @Override
+    @Transactional
+    public void markExceptionEndPushSentById(int id) {
+        mapper.markExceptionEndPushSentById(id);
     }
 
     @Override

@@ -313,6 +313,20 @@ public class WorkTimeManager {
             return false;
         }
 
+        List<EffectiveWorkTimePolicy.ExceptionWindow> windows = policy.getExceptionWindows();
+        if (windows != null && !windows.isEmpty()) {
+            long now = System.currentTimeMillis();
+            for (EffectiveWorkTimePolicy.ExceptionWindow window : windows) {
+                if (window == null || window.getStartDateTime() == null || window.getEndDateTime() == null) {
+                    continue;
+                }
+                if (now >= window.getStartDateTime() && now <= window.getEndDateTime()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         Long exceptionStart = policy.getExceptionStartDateTime();
         Long exceptionEnd = policy.getExceptionEndDateTime();
         if (exceptionStart == null || exceptionEnd == null) {

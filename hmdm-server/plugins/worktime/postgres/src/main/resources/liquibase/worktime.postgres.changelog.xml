@@ -582,6 +582,39 @@
         </sql>
     </changeSet>
 
+    <changeSet id="worktime-device-override-multi-exception-index-2026-05-21" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_device_override"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM pg_indexes
+                WHERE tablename = 'worktime_device_override'
+                  AND indexname = 'idx_worktime_device_override_customer_device_window'
+            </sqlCheck>
+        </preConditions>
+        <createIndex indexName="idx_worktime_device_override_customer_device_window" tableName="worktime_device_override">
+            <column name="customer_id"/>
+            <column name="device_id"/>
+            <column name="start_datetime"/>
+            <column name="end_datetime"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="worktime-drop-legacy-device-override-unique-2026-05-21" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_device_override"/>
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*)
+                FROM information_schema.table_constraints
+                WHERE table_name = 'worktime_device_override'
+                  AND constraint_name = 'uk_worktime_user_customer'
+                  AND constraint_type = 'UNIQUE'
+            </sqlCheck>
+        </preConditions>
+        <dropUniqueConstraint
+                tableName="worktime_device_override"
+                constraintName="uk_worktime_user_customer"/>
+    </changeSet>
+
     <changeSet id="worktime-remove-group-disable-overrides-2026-04-13" author="worktime-plugin">
         <preConditions onFail="MARK_RAN">
             <tableExists tableName="worktime_device_override"/>

@@ -16,15 +16,27 @@ public interface WorkTimeDAO {
     // Device override management (admin only)
     List<WorkTimeDeviceOverride> getDeviceOverrides(int customerId);
 
+    List<WorkTimeDeviceOverride> getDeviceOverridesForDevice(int customerId, int deviceId);
+
     WorkTimeDeviceOverride getDeviceOverride(int customerId, int deviceId);
+
+    WorkTimeDeviceOverride getDeviceOverrideById(int customerId, int id);
 
     void saveDeviceOverride(WorkTimeDeviceOverride policy);
 
     void deleteDeviceOverride(int customerId, int deviceId);
 
+    void deleteDeviceOverrideById(int customerId, int id);
+
+    void deleteDeviceOverridesForDevice(int customerId, int deviceId);
+
     void markExceptionStartPushSent(int customerId, int deviceId);
 
     void markExceptionEndPushSent(int customerId, int deviceId);
+
+    void markExceptionStartPushSentById(int id);
+
+    void markExceptionEndPushSentById(int id);
 
     // Get all device overrides across all customers (for cleanup task)
     List<WorkTimeDeviceOverride> getAllDeviceOverrides();

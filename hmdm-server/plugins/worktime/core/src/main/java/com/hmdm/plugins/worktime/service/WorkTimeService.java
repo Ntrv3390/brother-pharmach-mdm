@@ -8,12 +8,18 @@ import javax.inject.Inject;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
 
 public class WorkTimeService {
+
+    private static final ZoneId WORKTIME_ZONE = ZoneId.of("Asia/Kolkata");
 
     private final WorkTimeDAO dao;
     private final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
@@ -33,55 +39,115 @@ public class WorkTimeService {
         Set<String> outside = parseAllowed(base != null ? base.getAllowedAppsOutsideWork() : "*");
         boolean enforcementEnabled = base == null || base.getEnabled() == null || base.getEnabled();
 
+        List<EffectiveWorkTimePolicy.ExceptionWindow> exceptionWindows = mergeExceptionWindows(
+                dao.getDeviceOverridesForDevice(customerId, deviceId),
+                now
+        );
+        EffectiveWorkTimePolicy.ExceptionWindow activeWindow = findActiveWindow(exceptionWindows, now);
+
         // If base policy disabled => no enforcement (except active exception metadata exposure)
         if (!enforcementEnabled) {
-            return new EffectiveWorkTimePolicy(false, start, end, days, during, outside);
+            return new EffectiveWorkTimePolicy(false, start, end, days, during, outside,
+                    activeWindow == null ? null : activeWindow.getStartDateTime(),
+                    activeWindow == null ? null : activeWindow.getEndDateTime(),
+                    exceptionWindows);
         }
 
-        // Check device override
-        WorkTimeDeviceOverride override = dao.getDeviceOverride(customerId, deviceId);
-        if (override != null && !override.isEnabled()) {
-            Long exceptionStartMillis = override.getStartDateTime() != null ? override.getStartDateTime().getTime() : null;
-            Long exceptionEndMillis = override.getEndDateTime() != null ? override.getEndDateTime().getTime() : null;
-            if (isExceptionActive(override, now)) {
-                return new EffectiveWorkTimePolicy(false, start, end, days,
-                        during,
-                        outside,
-                        exceptionStartMillis,
-                        exceptionEndMillis);
-            }
-            if (isExceptionExpired(override, now)) {
-                dao.deleteDeviceOverride(customerId, deviceId);
-            } else {
-                return new EffectiveWorkTimePolicy(true,
-                        start,
-                        end,
-                        days,
-                        during,
-                        outside,
-                        exceptionStartMillis,
-                        exceptionEndMillis);
-            }
+        if (activeWindow != null) {
+            return new EffectiveWorkTimePolicy(false,
+                    start,
+                    end,
+                    days,
+                    during,
+                    outside,
+                    activeWindow.getStartDateTime(),
+                    activeWindow.getEndDateTime(),
+                    exceptionWindows);
         }
 
         // Default path: per-device policy only
-        return new EffectiveWorkTimePolicy(true, start, end, days, during, outside);
+        return new EffectiveWorkTimePolicy(true, start, end, days, during, outside,
+                null, null, exceptionWindows);
     }
 
-    private boolean isExceptionActive(WorkTimeDeviceOverride override, LocalDateTime now) {
-        if (override.getStartDateTime() == null || override.getEndDateTime() == null) {
-            return false;
+    private List<EffectiveWorkTimePolicy.ExceptionWindow> mergeExceptionWindows(List<WorkTimeDeviceOverride> overrides,
+                                                                               LocalDateTime now) {
+        List<Interval> intervals = new ArrayList<>();
+        for (WorkTimeDeviceOverride override : overrides) {
+            if (override == null || override.isEnabled() || override.getStartDateTime() == null || override.getEndDateTime() == null) {
+                continue;
+            }
+
+            LocalDateTime start = override.getStartDateTime().toLocalDateTime();
+            LocalDateTime end = override.getEndDateTime().toLocalDateTime();
+            if (end.isBefore(now)) {
+                continue;
+            }
+            intervals.add(new Interval(start, end));
         }
-        LocalDateTime start = override.getStartDateTime().toLocalDateTime();
-        LocalDateTime end = override.getEndDateTime().toLocalDateTime();
-        return !now.isBefore(start) && !now.isAfter(end);
+
+        if (intervals.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        intervals.sort(Comparator.comparing(Interval::getStart).thenComparing(Interval::getEnd));
+        List<Interval> merged = new ArrayList<>();
+        Interval current = intervals.get(0);
+        for (int i = 1; i < intervals.size(); i++) {
+            Interval next = intervals.get(i);
+            if (!next.getStart().isAfter(current.getEnd())) {
+                if (next.getEnd().isAfter(current.getEnd())) {
+                    current = new Interval(current.getStart(), next.getEnd());
+                }
+            } else {
+                merged.add(current);
+                current = next;
+            }
+        }
+        merged.add(current);
+
+        List<EffectiveWorkTimePolicy.ExceptionWindow> windows = new ArrayList<>();
+        for (Interval interval : merged) {
+            if (interval.getEnd().isBefore(now)) {
+                continue;
+            }
+            windows.add(new EffectiveWorkTimePolicy.ExceptionWindow(
+                    interval.getStart().atZone(WORKTIME_ZONE).toInstant().toEpochMilli(),
+                    interval.getEnd().atZone(WORKTIME_ZONE).toInstant().toEpochMilli()));
+        }
+        return windows;
     }
 
-    private boolean isExceptionExpired(WorkTimeDeviceOverride override, LocalDateTime now) {
-        if (override.getEndDateTime() == null) {
-            return false;
+    private EffectiveWorkTimePolicy.ExceptionWindow findActiveWindow(List<EffectiveWorkTimePolicy.ExceptionWindow> windows,
+                                                                     LocalDateTime now) {
+        long nowMillis = now.atZone(WORKTIME_ZONE).toInstant().toEpochMilli();
+        for (EffectiveWorkTimePolicy.ExceptionWindow window : windows) {
+            if (window.getStartDateTime() == null || window.getEndDateTime() == null) {
+                continue;
+            }
+            if (nowMillis >= window.getStartDateTime() && nowMillis <= window.getEndDateTime()) {
+                return window;
+            }
         }
-        return now.isAfter(override.getEndDateTime().toLocalDateTime());
+        return null;
+    }
+
+    private static class Interval {
+        private final LocalDateTime start;
+        private final LocalDateTime end;
+
+        Interval(LocalDateTime start, LocalDateTime end) {
+            this.start = start;
+            this.end = end;
+        }
+
+        LocalDateTime getStart() {
+            return start;
+        }
+
+        LocalDateTime getEnd() {
+            return end;
+        }
     }
 
     private Set<String> parseAllowed(String raw) {

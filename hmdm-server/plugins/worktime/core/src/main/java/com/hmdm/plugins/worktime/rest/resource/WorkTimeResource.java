@@ -3,6 +3,9 @@ package com.hmdm.plugins.worktime.rest.resource;
 import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -90,6 +93,63 @@ public class WorkTimeResource {
         if (policy.getEnabled() == null) {
             policy.setEnabled(true);
         }
+    }
+
+    private boolean isExceptionOverride(WorkTimeDeviceOverride override) {
+        return override != null
+                && !override.isEnabled()
+                && override.getStartDateTime() != null
+                && override.getEndDateTime() != null;
+    }
+
+    private WorkTimeDeviceOverride createDefaultDeviceOverride(Device device, int customerId) {
+        WorkTimeDeviceOverride override = new WorkTimeDeviceOverride();
+        override.setCustomerId(customerId);
+        override.setDeviceId(device.getId());
+        override.setDeviceName(device.getNumber());
+        override.setEnabled(true);
+        override.setExceptions(new ArrayList<>());
+        return override;
+    }
+
+    private WorkTimeDeviceOverride copyDeviceOverride(WorkTimeDeviceOverride source, Device device) {
+        WorkTimeDeviceOverride target = new WorkTimeDeviceOverride();
+        target.setId(source.getId());
+        target.setCustomerId(source.getCustomerId());
+        target.setDeviceId(source.getDeviceId());
+        target.setDeviceName(device.getNumber());
+        target.setEnabled(source.isEnabled());
+        target.setStartTime(source.getStartTime());
+        target.setEndTime(source.getEndTime());
+        target.setStartDateTime(source.getStartDateTime());
+        target.setEndDateTime(source.getEndDateTime());
+        target.setDaysOfWeek(source.getDaysOfWeek());
+        target.setAllowedAppsDuringWork(source.getAllowedAppsDuringWork());
+        target.setAllowedAppsOutsideWork(source.getAllowedAppsOutsideWork());
+        target.setPriority(source.getPriority());
+        target.setCreatedAt(source.getCreatedAt());
+        target.setUpdatedAt(source.getUpdatedAt());
+        target.setStartBoundaryPushSent(source.getStartBoundaryPushSent());
+        target.setEndBoundaryPushSent(source.getEndBoundaryPushSent());
+        target.setExceptions(new ArrayList<>());
+        return target;
+    }
+
+    private Map<String, Object> buildExceptionMap(WorkTimeDeviceOverride override,
+                                                  LocalDateTime now,
+                                                  DateTimeFormatter dateFmt,
+                                                  DateTimeFormatter timeFmt) {
+        Map<String, Object> ex = new HashMap<>();
+        ex.put("id", override.getId());
+        ex.put("dateFrom", override.getStartDateTime().toLocalDateTime().toLocalDate().format(dateFmt));
+        ex.put("dateTo", override.getEndDateTime().toLocalDateTime().toLocalDate().format(dateFmt));
+        ex.put("timeFrom", override.getStartDateTime().toLocalDateTime().toLocalTime().format(timeFmt));
+        ex.put("timeTo", override.getEndDateTime().toLocalDateTime().toLocalTime().format(timeFmt));
+        ex.put("active", !now.isBefore(override.getStartDateTime().toLocalDateTime())
+                && !now.isAfter(override.getEndDateTime().toLocalDateTime()));
+        ex.put("startDateTime", override.getStartDateTime());
+        ex.put("endDateTime", override.getEndDateTime());
+        return ex;
     }
 
     private void sendConfigUpdatedTwice(int deviceId) {
@@ -248,54 +308,43 @@ public class WorkTimeResource {
         // Get overrides for those devices
         List<WorkTimeDeviceOverride> overrides = workTimeDAO.getDeviceOverrides(customerId);
 
+        Map<Integer, List<WorkTimeDeviceOverride>> overridesByDevice = new HashMap<>();
+        for (WorkTimeDeviceOverride override : overrides) {
+            overridesByDevice.computeIfAbsent(override.getDeviceId(), ignored -> new ArrayList<>()).add(override);
+        }
+
         // Combine devices with their overrides
         List<WorkTimeDeviceOverride> result = new java.util.ArrayList<>();
         DateTimeFormatter dateFmt = DateTimeFormatter.ISO_LOCAL_DATE;
         DateTimeFormatter timeFmt = DateTimeFormatter.ofPattern("HH:mm");
         LocalDateTime now = LocalDateTime.now(WORKTIME_ZONE);
         for (Device device : allDevices) {
-            WorkTimeDeviceOverride override = overrides.stream()
-                    .filter(o -> o.getDeviceId() == device.getId())
-                    .findFirst()
-                    .orElse(null);
+            List<WorkTimeDeviceOverride> deviceOverrides = overridesByDevice.getOrDefault(device.getId(), Collections.emptyList());
+            WorkTimeDeviceOverride summary = null;
+            List<Map<String, Object>> exceptionList = new ArrayList<>();
 
-            if (override == null) {
-                // Create a default override (no exceptions, enabled)
-                override = new WorkTimeDeviceOverride();
-                override.setCustomerId(customerId);
-                override.setDeviceId(device.getId());
-                override.setDeviceName(device.getNumber());
-                override.setEnabled(true);
-                override.setExceptions(new java.util.ArrayList<>());
-            } else {
-                override.setDeviceName(device.getNumber());
-            }
-
-            if (override.getExceptions() == null) {
-                override.setExceptions(new java.util.ArrayList<>());
-            }
-            if (!override.isEnabled() && override.getStartDateTime() != null && override.getEndDateTime() != null) {
-                LocalDateTime start = override.getStartDateTime().toLocalDateTime();
-                LocalDateTime end = override.getEndDateTime().toLocalDateTime();
-                if (now.isAfter(end)) {
-                    workTimeDAO.deleteDeviceOverride(customerId, device.getId());
-                    override.setEnabled(true);
-                    override.setStartDateTime((java.sql.Timestamp) null);
-                    override.setEndDateTime((java.sql.Timestamp) null);
-                    override.setExceptions(new java.util.ArrayList<>());
-                    result.add(override);
+            for (WorkTimeDeviceOverride override : deviceOverrides) {
+                if (!isExceptionOverride(override)) {
                     continue;
                 }
-                boolean active = !now.isBefore(start) && !now.isAfter(end);
-                Map<String, Object> ex = new java.util.HashMap<>();
-                ex.put("dateFrom", start.toLocalDate().format(dateFmt));
-                ex.put("dateTo", end.toLocalDate().format(dateFmt));
-                ex.put("timeFrom", start.toLocalTime().format(timeFmt));
-                ex.put("timeTo", end.toLocalTime().format(timeFmt));
-                ex.put("active", active);
-                override.getExceptions().add(ex);
+
+                LocalDateTime end = override.getEndDateTime().toLocalDateTime();
+                if (now.isAfter(end)) {
+                    workTimeDAO.deleteDeviceOverrideById(customerId, override.getId());
+                    continue;
+                }
+
+                if (summary == null) {
+                    summary = copyDeviceOverride(override, device);
+                }
+                exceptionList.add(buildExceptionMap(override, now, dateFmt, timeFmt));
             }
-            result.add(override);
+
+            if (summary == null) {
+                summary = createDefaultDeviceOverride(device, customerId);
+            }
+            summary.setExceptions(exceptionList);
+            result.add(summary);
         }
 
         return Response.OK(result);
@@ -362,6 +411,13 @@ public class WorkTimeResource {
             return Response.ERROR("endDateTime must be after startDateTime");
         }
 
+        if (override.getId() != null && override.getId() > 0) {
+            WorkTimeDeviceOverride existing = workTimeDAO.getDeviceOverrideById(customerId, override.getId());
+            if (existing == null) {
+                return Response.DEVICE_NOT_FOUND_ERROR();
+            }
+        }
+
         if (override.getPriority() == null) {
             override.setPriority(0);
         }
@@ -390,10 +446,33 @@ public class WorkTimeResource {
             return Response.DEVICE_NOT_FOUND_ERROR();
         }
 
-        workTimeDAO.deleteDeviceOverride(customerId, deviceId);
+        workTimeDAO.deleteDeviceOverridesForDevice(customerId, deviceId);
 
         // Notify device about policy update
         sendConfigUpdatedTwice(deviceId);
+
+        return Response.OK();
+    }
+
+    @DELETE
+    @Path("/device/exception/{id}")
+    public Response deleteDeviceException(@PathParam("id") int exceptionId) {
+        User current = SecurityContext.get().getCurrentUser().orElse(null);
+        if (current == null) {
+            return Response.PERMISSION_DENIED();
+        }
+        if (!SecurityContext.get().isSuperAdmin() && !this.userDAO.isOrgAdmin(current)) {
+            return Response.PERMISSION_DENIED();
+        }
+
+        int customerId = getCustomerId();
+        WorkTimeDeviceOverride existing = workTimeDAO.getDeviceOverrideById(customerId, exceptionId);
+        if (existing == null) {
+            return Response.DEVICE_NOT_FOUND_ERROR();
+        }
+
+        workTimeDAO.deleteDeviceOverrideById(customerId, exceptionId);
+        sendConfigUpdatedTwice(existing.getDeviceId());
 
         return Response.OK();
     }

@@ -106,7 +106,16 @@
         FROM worktime_device_override uo
         LEFT JOIN devices ON devices.id = uo.device_id
         WHERE uo.customer_id = #{customerId}
-        ORDER BY uo.priority DESC NULLS LAST, uo.id
+        ORDER BY uo.device_id, uo.start_datetime NULLS LAST, uo.end_datetime NULLS LAST, uo.id
+    </select>
+
+    <select id="getDeviceOverridesForDevice" resultMap="deviceOverrideResult">
+        SELECT uo.*, devices.number as device_name
+        FROM worktime_device_override uo
+        LEFT JOIN devices ON devices.id = uo.device_id
+        WHERE uo.customer_id = #{customerId}
+          AND uo.device_id = #{deviceId}
+        ORDER BY uo.start_datetime NULLS LAST, uo.end_datetime NULLS LAST, uo.id
     </select>
 
     <select id="getDeviceOverride" resultMap="deviceOverrideResult">
@@ -114,6 +123,15 @@
         FROM worktime_device_override uo
         LEFT JOIN devices ON devices.id = uo.device_id
         WHERE uo.customer_id = #{customerId} AND uo.device_id = #{deviceId}
+        ORDER BY uo.id
+        LIMIT 1
+    </select>
+
+    <select id="getDeviceOverrideById" resultMap="deviceOverrideResult">
+        SELECT uo.*, devices.number as device_name
+        FROM worktime_device_override uo
+        LEFT JOIN devices ON devices.id = uo.device_id
+        WHERE uo.customer_id = #{customerId} AND uo.id = #{id}
         LIMIT 1
     </select>
 
@@ -156,6 +174,7 @@
     <update id="updateDeviceOverride" parameterType="com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride">
         UPDATE worktime_device_override
         SET
+            device_id = #{deviceId},
             start_time = #{startTime},
             end_time = #{endTime},
             start_datetime = #{startDateTime},
@@ -168,7 +187,7 @@
             start_boundary_push_sent = #{startBoundaryPushSent},
             end_boundary_push_sent = #{endBoundaryPushSent},
             updated_at = now()
-        WHERE customer_id = #{customerId} AND device_id = #{deviceId}
+        WHERE customer_id = #{customerId} AND id = #{id}
     </update>
 
     <update id="markExceptionStartPushSent">
@@ -179,6 +198,14 @@
         WHERE customer_id = #{customerId} AND device_id = #{deviceId}
     </update>
 
+    <update id="markExceptionStartPushSentById">
+        UPDATE worktime_device_override
+        SET
+            start_boundary_push_sent = TRUE,
+            updated_at = now()
+        WHERE id = #{id}
+    </update>
+
     <update id="markExceptionEndPushSent">
         UPDATE worktime_device_override
         SET
@@ -187,9 +214,22 @@
         WHERE customer_id = #{customerId} AND device_id = #{deviceId}
     </update>
 
+    <update id="markExceptionEndPushSentById">
+        UPDATE worktime_device_override
+        SET
+            end_boundary_push_sent = TRUE,
+            updated_at = now()
+        WHERE id = #{id}
+    </update>
+
     <delete id="deleteDeviceOverride">
         DELETE FROM worktime_device_override
         WHERE customer_id = #{customerId} AND device_id = #{deviceId}
+    </delete>
+
+    <delete id="deleteDeviceOverrideById">
+        DELETE FROM worktime_device_override
+        WHERE customer_id = #{customerId} AND id = #{id}
     </delete>
 
     <select id="getAllDeviceOverrides" resultMap="deviceOverrideResult">
