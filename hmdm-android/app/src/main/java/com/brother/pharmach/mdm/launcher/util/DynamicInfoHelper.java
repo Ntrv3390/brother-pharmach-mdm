@@ -48,8 +48,15 @@ public final class DynamicInfoHelper {
     private static final String LAST_MOBILE_RX = "last_mobile_rx";
 
     public static DetailedInfo buildDetailedInfo(Context context, LocationTable.Location location) {
+        return buildDetailedInfo(context, location, false);
+    }
+
+    public static DetailedInfo buildDetailedInfo(
+            Context context,
+            LocationTable.Location location,
+            boolean isUrgent) {
         DetailedInfo detailedInfo = new DetailedInfo();
-        detailedInfo.setTs(location.getTs());
+        detailedInfo.setTs(isUrgent ? System.currentTimeMillis() : location.getTs());
 
         DetailedInfo.Gps gps = new DetailedInfo.Gps();
         gps.setState(location.getTs() > System.currentTimeMillis() - 60_000L ? Const.GPS_STATE_ACTIVE : Const.GPS_STATE_LOST);

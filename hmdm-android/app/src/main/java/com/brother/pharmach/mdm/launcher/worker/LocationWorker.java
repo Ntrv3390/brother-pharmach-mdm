@@ -7,6 +7,7 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Looper;
+import android.os.PowerManager;
 
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
@@ -26,6 +27,9 @@ import com.brother.pharmach.mdm.launcher.service.LocationService;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 public class LocationWorker extends Worker {
@@ -34,10 +38,17 @@ public class LocationWorker extends Worker {
 
     private static final String WORK_TAG_PERIODIC = "com.brother.pharmach.mdm.launcher.WORK_TAG_LOCATION_PERIODIC";
     private static final String WORK_TAG_ONE_SHOT = "com.brother.pharmach.mdm.launcher.WORK_TAG_LOCATION_ONE_SHOT";
-    private static final long FRESH_FIX_WAIT_SECONDS = 30;
+    private static final long GPS_FIX_WAIT_SECONDS = 20;
+    private static final long NETWORK_FIX_WAIT_SECONDS = 30;
     private static final long URGENT_MAX_FIX_AGE_MS = TimeUnit.MINUTES.toMillis(2);
     private static final long PERIODIC_MAX_FIX_AGE_MS = TimeUnit.MINUTES.toMillis(30);
     private static final float MAX_FIX_ACCURACY_METERS = 2000f;
+    private static final long WAKE_LOCK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(40);
+    private static final long URGENT_DEDUP_WINDOW_MS = TimeUnit.SECONDS.toMillis(10);
+
+    private static final Object URGENT_LOCK = new Object();
+    private static volatile boolean urgentCaptureInProgress = false;
+    private static volatile long lastUrgentUploadTimeMs = 0L;
 
     private final Context context;
 
@@ -81,10 +92,15 @@ public class LocationWorker extends Worker {
     public Result doWork() {
         boolean forceFreshFix = getTags().contains(WORK_TAG_ONE_SHOT);
         return captureAndUpload(context, forceFreshFix);
+    }
+
+    @NonNull
+    private static Result captureAndUpload(Context context, boolean forceFreshFix) {
+        if (forceFreshFix && !beginUrgentCapture(context)) {
+            return Result.success();
         }
 
-        @NonNull
-        private static Result captureAndUpload(Context context, boolean forceFreshFix) {
+        PowerManager.WakeLock wakeLock = null;
         boolean fineGranted = ContextCompat.checkSelfPermission(context,
                 Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         boolean coarseGranted = ContextCompat.checkSelfPermission(context,
@@ -96,41 +112,62 @@ public class LocationWorker extends Worker {
         }
 
         try {
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "LocationWorker: started (urgent=" + forceFreshFix + ")");
+
+            if (forceFreshFix) {
+                wakeLock = acquireWakeLock(context);
+            }
+
             LocationManager locationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
             if (locationManager == null) {
+                RemoteLogger.log(context, Const.LOG_WARN, "LocationWorker: LocationManager is null");
                 return Result.success();
             }
 
             long maxFixAgeMs = forceFreshFix ? URGENT_MAX_FIX_AGE_MS : PERIODIC_MAX_FIX_AGE_MS;
+            long now = System.currentTimeMillis();
 
-            Location lastKnown = forceFreshFix ? null : getBestLastKnownLocation(locationManager);
-            if (!isLocationFresh(lastKnown, maxFixAgeMs)) {
-                lastKnown = null;
-            }
+            Location lastKnownAny = getBestLastKnownLocation(locationManager);
+            Location lastKnownFresh = isLocationFresh(lastKnownAny, maxFixAgeMs) ? lastKnownAny : null;
 
-            Location freshGps = fineGranted
-                    ? tryRequestSingleUpdate(locationManager, LocationManager.GPS_PROVIDER)
-                    : null;
+            RemoteLogger.log(context, Const.LOG_INFO, "LocationWorker: requesting fresh location updates");
+
+            ParallelProviderResult parallelResult = requestProvidersInParallel(
+                    context,
+                    locationManager,
+                    fineGranted,
+                    coarseGranted,
+                    maxFixAgeMs);
+
+            Location freshGps = parallelResult.gps;
             if (!isLocationFresh(freshGps, maxFixAgeMs)) {
                 freshGps = null;
             }
 
-            Location freshNetwork = null;
-            if (freshGps == null && coarseGranted) {
-                freshNetwork = tryRequestSingleUpdate(locationManager, LocationManager.NETWORK_PROVIDER);
-                if (!isLocationFresh(freshNetwork, maxFixAgeMs)) {
-                    freshNetwork = null;
-                }
+            Location freshNetwork = parallelResult.network;
+            if (!isLocationFresh(freshNetwork, maxFixAgeMs)) {
+                freshNetwork = null;
             }
 
-            Location location = chooseBestLocation(lastKnown, freshGps, freshNetwork);
+            Location location = parallelResult.firstFresh != null
+                    ? parallelResult.firstFresh
+                    : chooseBestLocation(lastKnownFresh, freshGps, freshNetwork);
+
+            if (location == null && forceFreshFix) {
+                // For urgent requests, upload the best available fallback even if stale.
+                location = chooseBestLocation(parallelResult.rawGps, parallelResult.rawNetwork, lastKnownAny);
+                if (location != null) {
+                    long ageMs = Math.max(0, now - location.getTime());
+                    RemoteLogger.log(context, Const.LOG_WARN,
+                            "LocationWorker: using stale fallback location, age=" + (ageMs / 1000) + "s");
+                }
+            }
 
             if (location == null) {
                 if (forceFreshFix) {
                     RemoteLogger.log(context, Const.LOG_WARN,
-                            "LocationWorker: urgent refresh failed to get a fresh fix (GPS: " +
-                                    (freshGps != null ? "ok" : "null") + ", Network: " +
-                                    (freshNetwork != null ? "ok" : "null") + ")");
+                            "LocationWorker: urgent refresh could not find any location to upload");
                 }
                 return Result.success();
             }
@@ -151,7 +188,14 @@ public class LocationWorker extends Worker {
                 return Result.success();
             }
 
+            if (forceFreshFix) {
+                // Preserve urgent click semantics if upload is delayed and goes through queue.
+                tableLocation.setTs(System.currentTimeMillis());
+            }
+
             LocationTable.insert(helper.getWritableDatabase(), tableLocation);
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "LocationWorker: queued location for regular upload path");
             LocationService.sendLocations(context);
             return Result.success();
         } catch (SecurityException e) {
@@ -161,6 +205,176 @@ public class LocationWorker extends Worker {
         } catch (Exception e) {
             RemoteLogger.log(context, Const.LOG_WARN, "LocationWorker failed: " + e.getMessage());
             return Result.success();
+        } finally {
+            releaseWakeLock(wakeLock);
+            if (forceFreshFix) {
+                finishUrgentCapture();
+            }
+        }
+    }
+
+    private static boolean beginUrgentCapture(Context context) {
+        synchronized (URGENT_LOCK) {
+            long now = System.currentTimeMillis();
+            if (urgentCaptureInProgress) {
+                RemoteLogger.log(context, Const.LOG_INFO,
+                        "LocationWorker: urgent capture skipped (already in progress)");
+                return false;
+            }
+            if (now - lastUrgentUploadTimeMs < URGENT_DEDUP_WINDOW_MS) {
+                RemoteLogger.log(context, Const.LOG_INFO,
+                        "LocationWorker: urgent capture skipped (dedup window)");
+                return false;
+            }
+            urgentCaptureInProgress = true;
+            lastUrgentUploadTimeMs = now;
+            return true;
+        }
+    }
+
+    private static void finishUrgentCapture() {
+        synchronized (URGENT_LOCK) {
+            urgentCaptureInProgress = false;
+        }
+    }
+
+    private static PowerManager.WakeLock acquireWakeLock(Context context) {
+        try {
+            PowerManager powerManager = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+            if (powerManager == null) {
+                RemoteLogger.log(context, Const.LOG_WARN,
+                        "LocationWorker: failed to acquire wake lock (PowerManager is null)");
+                return null;
+            }
+            PowerManager.WakeLock wakeLock = powerManager.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "hmdm:UrgentLocationWorker");
+            wakeLock.setReferenceCounted(false);
+            wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS);
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "LocationWorker: wake lock acquired for urgent capture");
+            return wakeLock;
+        } catch (Exception e) {
+            RemoteLogger.log(context, Const.LOG_WARN,
+                    "LocationWorker: failed to acquire wake lock: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private static void releaseWakeLock(PowerManager.WakeLock wakeLock) {
+        if (wakeLock == null) {
+            return;
+        }
+        try {
+            if (wakeLock.isHeld()) {
+                wakeLock.release();
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static ParallelProviderResult requestProvidersInParallel(
+            Context context,
+            LocationManager locationManager,
+            boolean allowGps,
+            boolean allowNetwork,
+            long maxFixAgeMs) {
+        ParallelProviderResult result = new ParallelProviderResult();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Future<Location> gpsFuture = null;
+        Future<Location> networkFuture = null;
+
+        try {
+            if (allowGps) {
+                gpsFuture = executor.submit(() -> {
+                    RemoteLogger.log(context, Const.LOG_INFO,
+                            "LocationWorker: GPS request started");
+                    return tryRequestSingleUpdate(locationManager, LocationManager.GPS_PROVIDER, GPS_FIX_WAIT_SECONDS);
+                });
+            }
+
+            if (allowNetwork) {
+                networkFuture = executor.submit(() -> {
+                    RemoteLogger.log(context, Const.LOG_INFO,
+                            "LocationWorker: Network request started");
+                    return tryRequestSingleUpdate(locationManager, LocationManager.NETWORK_PROVIDER, NETWORK_FIX_WAIT_SECONDS);
+                });
+            }
+
+            long deadlineNs = System.nanoTime() + TimeUnit.SECONDS.toNanos(NETWORK_FIX_WAIT_SECONDS + 2);
+            boolean gpsPending = gpsFuture != null;
+            boolean networkPending = networkFuture != null;
+
+            while ((gpsPending || networkPending) && System.nanoTime() < deadlineNs) {
+                if (gpsPending && gpsFuture.isDone()) {
+                    result.rawGps = getFutureResult(gpsFuture, 0);
+                    gpsPending = false;
+                    if (isLocationFresh(result.rawGps, maxFixAgeMs) && result.firstFresh == null) {
+                        result.firstFresh = result.rawGps;
+                    }
+                }
+
+                if (networkPending && networkFuture.isDone()) {
+                    result.rawNetwork = getFutureResult(networkFuture, 0);
+                    networkPending = false;
+                    if (isLocationFresh(result.rawNetwork, maxFixAgeMs) && result.firstFresh == null) {
+                        result.firstFresh = result.rawNetwork;
+                    }
+                }
+
+                if (result.firstFresh != null) {
+                    break;
+                }
+
+                if (gpsPending || networkPending) {
+                    try {
+                        Thread.sleep(200);
+                    } catch (InterruptedException ignored) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+
+            if (result.rawGps == null && gpsFuture != null) {
+                result.rawGps = getFutureResult(gpsFuture, 0);
+            }
+            if (result.rawNetwork == null && networkFuture != null) {
+                result.rawNetwork = getFutureResult(networkFuture, 0);
+            }
+
+            result.gps = isLocationFresh(result.rawGps, maxFixAgeMs) ? result.rawGps : null;
+            result.network = isLocationFresh(result.rawNetwork, maxFixAgeMs) ? result.rawNetwork : null;
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "LocationWorker: provider results gps=" + (result.rawGps != null)
+                            + ", network=" + (result.rawNetwork != null));
+        } catch (Exception e) {
+            RemoteLogger.log(context, Const.LOG_WARN,
+                    "LocationWorker: provider request failed: " + e.getMessage());
+        } finally {
+            if (gpsFuture != null && !gpsFuture.isDone()) {
+                gpsFuture.cancel(true);
+            }
+            if (networkFuture != null && !networkFuture.isDone()) {
+                networkFuture.cancel(true);
+            }
+            executor.shutdownNow();
+        }
+
+        return result;
+    }
+
+    private static Location getFutureResult(Future<Location> future, long timeoutSeconds) {
+        if (future == null) {
+            return null;
+        }
+        try {
+            if (timeoutSeconds <= 0) {
+                return future.isDone() ? future.get() : null;
+            }
+            return future.get(timeoutSeconds, TimeUnit.SECONDS);
+        } catch (Exception ignored) {
+            return null;
         }
     }
 
@@ -191,7 +405,7 @@ public class LocationWorker extends Worker {
         return best;
     }
 
-    private static Location tryRequestSingleUpdate(LocationManager locationManager, String provider) {
+    private static Location tryRequestSingleUpdate(LocationManager locationManager, String provider, long timeoutSeconds) {
         try {
             if (!locationManager.isProviderEnabled(provider)) {
                 return null;
@@ -204,10 +418,13 @@ public class LocationWorker extends Worker {
             };
 
             locationManager.requestSingleUpdate(provider, listener, Looper.getMainLooper());
-            latch.await(FRESH_FIX_WAIT_SECONDS, TimeUnit.SECONDS);
+            boolean received = latch.await(timeoutSeconds, TimeUnit.SECONDS);
             try {
                 locationManager.removeUpdates(listener);
             } catch (Exception ignored) {
+            }
+            if (!received) {
+                return null;
             }
             return result[0];
         } catch (Exception ignored) {
@@ -278,5 +495,13 @@ public class LocationWorker extends Worker {
         }
 
         return candidate.getTime() > currentBest.getTime();
+    }
+
+    private static class ParallelProviderResult {
+        private Location rawGps;
+        private Location rawNetwork;
+        private Location gps;
+        private Location network;
+        private Location firstFresh;
     }
 }

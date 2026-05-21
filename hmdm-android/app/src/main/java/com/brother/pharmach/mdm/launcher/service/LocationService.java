@@ -90,6 +90,13 @@ public class LocationService extends Service {
     }
 
     public static synchronized boolean sendUrgentLocation(Context context, LocationTable.Location location) {
+        return sendUrgentLocation(context, location, true);
+    }
+
+    public static synchronized boolean sendUrgentLocation(
+            Context context,
+            LocationTable.Location location,
+            boolean isUrgent) {
         if (!isNetworkConnected(context) || location == null) {
             return false;
         }
@@ -107,7 +114,7 @@ public class LocationService extends Service {
 
         try {
             List<DetailedInfo> detailedInfos = new LinkedList<>();
-            detailedInfos.add(DynamicInfoHelper.buildDetailedInfo(context, location));
+            detailedInfos.add(DynamicInfoHelper.buildDetailedInfo(context, location, isUrgent));
 
             Response<ResponseBody> response = sendDetailedInfo(context, project, deviceId, detailedInfos);
             if (response != null && response.isSuccessful()) {
