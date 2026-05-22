@@ -47,6 +47,7 @@ services:
       # Set BASE_URL to the public URL clients will use:
       #   e.g. http://your-server-ip:8080 or https://mdm.example.com
       BASE_URL: ${BASE_URL:-https://brothers-mdm.com}
+      BASE_URL_STAGE: ${STAGE_BASE_URL:-https://brother-pharmach-mdm-stage.space}
       BASE_DIRECTORY: /opt/hmdm
       FILES_DIRECTORY: /opt/hmdm/files
       PLUGINS_DIRECTORY: /opt/hmdm/plugins
