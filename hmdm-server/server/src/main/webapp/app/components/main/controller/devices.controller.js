@@ -484,9 +484,9 @@ angular.module('headwind-kiosk')
         $scope.getInternetIndicatorImage = function (device) {
             var info = $scope.getDeviceInfo(device);
             if (info && info.internetConnected === true) {
-                return 'images/circle-green.png';
+                return 'images/circle-green.png?v=2';
             }
-            return 'images/circle-red.png';
+            return 'images/circle-red.png?v=2';
         };
 
         $scope.getInternetType = function (device) {
@@ -495,18 +495,18 @@ angular.module('headwind-kiosk')
                 if (info.internetType && info.internetType.length > 0) {
                     return info.internetType;
                 }
-                return localization.localize('devices.internet.online');
+                return 'ONLINE';
             }
-            return localization.localize('devices.internet.offline');
+            return 'NO INTERNET';
         };
 
         $scope.getInternetStatusTitle = function (device) {
             var info = $scope.getDeviceInfo(device);
             if (info && info.internetConnected === true) {
-                var type = info.internetType && info.internetType.length > 0 ? info.internetType : localization.localize('devices.internet.online');
-                return localization.localize('devices.internet.title.online').replace('${type}', type);
+                var type = info.internetType && info.internetType.length > 0 ? info.internetType : 'ONLINE';
+                return 'Internet connected (' + type + ')';
             }
-            return localization.localize('devices.internet.title.offline');
+            return 'No Internet connection';
         };
 
         $scope.refreshInternetState = function (device) {
