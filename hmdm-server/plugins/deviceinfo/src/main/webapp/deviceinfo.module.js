@@ -563,11 +563,31 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
         var loading = false;
         var mapInitialized = false;
         var mapService = hmdmMap.get();
+        var mapInstanceRef = null;
+        var userAdjustedMapViewport = false;
+        var mapCenteringInProgress = false;
+
+        var bindMapInteractionTracking = function (mapInstance) {
+            if (!mapInstance) {
+                return;
+            }
+
+            var markUserAdjustedViewport = function () {
+                if (!mapCenteringInProgress) {
+                    userAdjustedMapViewport = true;
+                }
+            };
+
+            // Track explicit user viewport actions and preserve them across auto-refreshes.
+            mapInstance.on('dragstart', markUserAdjustedViewport);
+            mapInstance.on('zoomstart', markUserAdjustedViewport);
+        };
 
         var updateMap = function(items) {
             if (!mapInitialized) {
                 setTimeout(function () {
-                    mapService.initMap($scope, 'locationMap', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+                    mapInstanceRef = mapService.initMap($scope, 'locationMap', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+                    bindMapInteractionTracking(mapInstanceRef);
                     mapInitialized = true;
                     addMarkers(items);
                 }, 500);
@@ -605,7 +625,14 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                     },
                     "Time: " + new Date(latestItem.latestUpdateTime).toLocaleString()
                 );
-                mapService.centerMap(markerLat, markerLon);
+
+                if (!userAdjustedMapViewport) {
+                    mapCenteringInProgress = true;
+                    mapService.centerMap(markerLat, markerLon);
+                    $timeout(function () {
+                        mapCenteringInProgress = false;
+                    }, 0, false);
+                }
             }
         };
 
