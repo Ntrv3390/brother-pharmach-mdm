@@ -11,15 +11,19 @@
 # Environment variables (overridable):
 #   ANDROID_DIR, SERVER_FILES_DIR, DB_USER, DB_NAME, DB_HOST, DB_PORT,
 #   DB_PASSWORD, APK_NAME, PKG_NAME, APK_BASE_URL, SKIP_DB_UPDATE,
-#   DOCKER_CONTAINER, APP_INSTALLER_DIR
+#   DOCKER_CONTAINER, APP_INSTALLER_DIR, SKIP_SERVER_DEPLOY
 # =============================================================================
 set -e
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HMDM_DIR="${HMDM_DIR:-$ROOT_DIR}"
 ANDROID_DIR="${ANDROID_DIR:-$HMDM_DIR/hmdm-android}"
+ANDROID_ENV_FILE="${ANDROID_ENV_FILE:-$HMDM_DIR/.env.android}"
 
 # Load optional env files
+if [ -f "$ANDROID_ENV_FILE" ]; then
+    set -a; . <(tr -d '\r' < "$ANDROID_ENV_FILE"); set +a
+fi
 if [ -f "$HMDM_DIR/.env" ]; then
     set -a; . <(tr -d '\r' < "$HMDM_DIR/.env"); set +a
 fi
@@ -29,8 +33,32 @@ fi
 
 # Defaults
 PKG_NAME="${PKG_NAME:-com.brother.pharmach.mdm.launcher}"
-APK_BASE_URL="${APK_BASE_URL:-${BASE_URL:-https://brothers-mdm.com}/files}"
+ANDROID_BUILD_TYPE_RAW="${ANDROID_BUILD_TYPE:-${BUILD_TYPE:-production}}"
+ANDROID_BUILD_TYPE="$(printf '%s' "$ANDROID_BUILD_TYPE_RAW" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+if [ "$ANDROID_BUILD_TYPE" = "prod" ]; then
+    ANDROID_BUILD_TYPE="production"
+fi
+
+ANDROID_STAGE_BASE_URL="${ANDROID_STAGE_BASE_URL:-https://brother-pharmach-mdm-stage.space}"
+ANDROID_PROD_BASE_URL="${ANDROID_PROD_BASE_URL:-https://brothers-mdm.com}"
+
+case "$ANDROID_BUILD_TYPE" in
+    stage)
+        ANDROID_BASE_URL="${ANDROID_BASE_URL:-$ANDROID_STAGE_BASE_URL}"
+        ;;
+    production)
+        ANDROID_BASE_URL="${ANDROID_BASE_URL:-$ANDROID_PROD_BASE_URL}"
+        ;;
+    *)
+        echo "Error: Invalid BUILD_TYPE/ANDROID_BUILD_TYPE '$ANDROID_BUILD_TYPE_RAW'. Use stage or production."
+        exit 1
+        ;;
+esac
+
+ANDROID_SECONDARY_BASE_URL="${ANDROID_SECONDARY_BASE_URL:-$ANDROID_BASE_URL}"
+APK_BASE_URL="${APK_BASE_URL:-${ANDROID_BASE_URL}/files}"
 SKIP_DB_UPDATE="${SKIP_DB_UPDATE:-0}"
+SKIP_SERVER_DEPLOY="${SKIP_SERVER_DEPLOY:-0}"
 DOCKER_CONTAINER="${DOCKER_CONTAINER:-hmdm-server}"
 DOCKER_DB_CONTAINER="${DOCKER_DB_CONTAINER:-hmdm-postgres}"
 DB_USER="${DB_USER:-hmdm}"
@@ -102,8 +130,11 @@ if [ "${SKIP_BUILD}" != "1" ]; then
         bump_android_version "$VERSION_PROPS_FILE"
     fi
     echo "Building Android Enterprise APK + AAB (Release)..."
+    echo "Android BUILD_TYPE: $ANDROID_BUILD_TYPE"
+    echo "Android BASE_URL: $ANDROID_BASE_URL"
+    echo "Android SECONDARY_BASE_URL: $ANDROID_SECONDARY_BASE_URL"
     cd "$ANDROID_DIR"
-    ./gradlew bundleEnterpriseRelease assembleEnterpriseRelease --no-daemon
+    ./gradlew -PmdmBaseUrl="$ANDROID_BASE_URL" -PmdmSecondaryBaseUrl="$ANDROID_SECONDARY_BASE_URL" bundleEnterpriseRelease assembleEnterpriseRelease --no-daemon
     cd "$ROOT_DIR"
 else
     echo "Skipping build (SKIP_BUILD=1)"
@@ -147,6 +178,17 @@ echo "Updated installer APK in: $APP_INSTALLER_DIR/app-enterprise-release.apk"
 echo "Calculating SHA-256 hash (URL-safe Base64)..."
 APK_HASH=$(python3 -c "import hashlib, base64, sys; print(base64.urlsafe_b64encode(hashlib.sha256(open(sys.argv[1], 'rb').read()).digest()).decode('utf-8'))" "$APK_PATH")
 echo "Hash: $APK_HASH"
+
+if [ "$SKIP_SERVER_DEPLOY" = "1" ]; then
+    echo "SKIP_SERVER_DEPLOY=1 -> skipping server file copy and database update."
+    echo "Done! New APK/AAB built and artifacts refreshed only."
+    echo ""
+    echo "APK:     $APK_NAME"
+    echo "Version: ${ANDROID_VERSION_NAME} (${ANDROID_VERSION_CODE})"
+    echo "Hash:    $APK_HASH"
+    echo "URL:     $APK_BASE_URL/$APK_NAME"
+    exit 0
+fi
 
 # ---------------------------------------------------------------------------
 # Deploy APK to server

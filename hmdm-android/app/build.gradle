@@ -48,6 +48,9 @@ if (!appVersionName) {
     throw new GradleException("VERSION_NAME is missing or empty in version.properties")
 }
 
+def mdmBaseUrl = (project.findProperty("mdmBaseUrl") ?: "https://brothers-mdm.com").toString().trim()
+def mdmSecondaryBaseUrl = (project.findProperty("mdmSecondaryBaseUrl") ?: mdmBaseUrl).toString().trim()
+
 android {
     compileSdkVersion 35
     defaultConfig {
@@ -68,10 +71,10 @@ android {
         multiDexEnabled true
 
         // Default URL of the web panel (scheme + host!)
-        buildConfigField("String", "BASE_URL", "\"http://brothers-mdm.com\"")
+        buildConfigField("String", "BASE_URL", "\"${mdmBaseUrl}\"")
         // URL of the secondary address of your web panel, called when the primary host is not available.
         // Could be equal to the BASE_URL parameter
-        buildConfigField("String", "SECONDARY_BASE_URL", "\"http://brothers-mdm.com\"")
+        buildConfigField("String", "SECONDARY_BASE_URL", "\"${mdmSecondaryBaseUrl}\"")
         // Relative path of the web panel on the server. Keep it empty if installed in the root
         buildConfigField("String", "SERVER_PROJECT", "\"\"")
         // This parameter manages how the device ID should be set up at first start

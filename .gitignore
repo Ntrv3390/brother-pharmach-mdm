@@ -1,0 +1,6 @@
+.env
+*.env
+hmdm-server/.env
+hmdm-server/.env.stage
+hmdm-server/.env.prod
+.env.android
