@@ -6,7 +6,7 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
-import android.os.Looper;
+import android.os.HandlerThread;
 import android.os.PowerManager;
 
 import androidx.annotation.NonNull;
@@ -38,13 +38,17 @@ public class LocationWorker extends Worker {
 
     private static final String WORK_TAG_PERIODIC = "com.brother.pharmach.mdm.launcher.WORK_TAG_LOCATION_PERIODIC";
     private static final String WORK_TAG_ONE_SHOT = "com.brother.pharmach.mdm.launcher.WORK_TAG_LOCATION_ONE_SHOT";
-    private static final long GPS_FIX_WAIT_SECONDS = 20;
-    private static final long NETWORK_FIX_WAIT_SECONDS = 30;
-    private static final long URGENT_MAX_FIX_AGE_MS = TimeUnit.MINUTES.toMillis(2);
+    // GPS reacquisition while moving (e.g. low-power mode exit) can take 30-90 s.
+    // 45 s gives the chip enough time without blocking too long for periodic runs.
+    private static final long GPS_FIX_WAIT_SECONDS = 45;
+    private static final long NETWORK_FIX_WAIT_SECONDS = 45;
+    private static final long URGENT_MAX_FIX_AGE_MS = TimeUnit.MINUTES.toMillis(5);
     private static final long PERIODIC_MAX_FIX_AGE_MS = TimeUnit.MINUTES.toMillis(30);
     private static final float MAX_FIX_ACCURACY_METERS = 2000f;
-    private static final long WAKE_LOCK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(40);
-    private static final long LIVE_UPDATE_FRESHNESS_GRACE_MS = TimeUnit.SECONDS.toMillis(5);
+    // Wake lock must outlast the longest provider wait plus a small buffer.
+    private static final long WAKE_LOCK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(120);
+    // GPS fix timestamps while moving can lag delivery by up to ~10 s; use 15 s grace.
+    private static final long LIVE_UPDATE_FRESHNESS_GRACE_MS = TimeUnit.SECONDS.toMillis(15);
     private static final ExecutorService URGENT_EXECUTOR = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "urgent-gps-queue");
         thread.setDaemon(true);
@@ -163,13 +167,23 @@ public class LocationWorker extends Worker {
                     ? parallelResult.firstFresh
                     : chooseBestLocation(lastKnownFresh, freshGps, freshNetwork);
 
+            // Track whether we ended up using a stale fallback so we can avoid
+            // stamping a fake "now" timestamp on old coordinates (which would
+            // fool the server into thinking a fresh position was received while
+            // the map pin still shows the old stationary location).
+            boolean usedStaleFallback = false;
             if (location == null && forceFreshFix) {
-                // For urgent requests, upload the best available fallback even if stale.
+                // No fresh fix was obtained (e.g. GPS chip reacquiring while moving).
+                // Upload the best stale reading so the server has *something*, but
+                // preserve its original timestamp so the server knows it is stale
+                // and keeps "Waiting for updated GPS data..." visible.
                 location = chooseBestLocation(parallelResult.rawGps, parallelResult.rawNetwork, lastKnownAny);
                 if (location != null) {
+                    usedStaleFallback = true;
                     long ageMs = Math.max(0, now - location.getTime());
                     RemoteLogger.log(context, Const.LOG_WARN,
-                            "LocationWorker: using stale fallback location, age=" + (ageMs / 1000) + "s");
+                            "LocationWorker: using stale fallback location, age=" + (ageMs / 1000) + "s"
+                            + " — coordinates are from before movement started");
                 }
             }
 
@@ -183,7 +197,7 @@ public class LocationWorker extends Worker {
 
             RemoteLogger.log(context, Const.LOG_INFO, "LocationWorker: success using " +
                     location.getProvider() + " (freshness: " +
-                    (System.currentTimeMillis() - location.getTime()) / 1000 + "s)");
+                    (System.currentTimeMillis() - location.getTime()) / 1000 + "s, staleFallback=" + usedStaleFallback + ")");
 
             DatabaseHelper helper = DatabaseHelper.instance(context);
             if (helper == null) {
@@ -192,13 +206,17 @@ public class LocationWorker extends Worker {
 
             LocationTable.Location tableLocation = new LocationTable.Location(location);
 
-            if (forceFreshFix) {
-                // Ensure each urgent refresh gets its own visible timeline entry on server/UI.
+            if (forceFreshFix && !usedStaleFallback) {
+                // Only stamp ts=now for genuinely fresh locations so that the server
+                // timeline correctly distinguishes a new fix from a recycled old one.
+                // A stale fallback keeps its original GPS fix time; the server will
+                // see latestUpdateTime <= baselineTs and keep polling for real data.
                 tableLocation.setTs(System.currentTimeMillis());
             }
 
             if (forceFreshFix && LocationService.sendUrgentLocation(context, tableLocation)) {
-                RemoteLogger.log(context, Const.LOG_INFO, "LocationWorker: urgent location uploaded successfully");
+                RemoteLogger.log(context, Const.LOG_INFO, "LocationWorker: urgent location uploaded successfully"
+                        + (usedStaleFallback ? " (stale fallback — server will keep polling)" : ""));
                 return Result.success();
             }
 
@@ -387,6 +405,12 @@ public class LocationWorker extends Worker {
     }
 
     private static Location tryRequestLiveUpdate(LocationManager locationManager, String provider, long timeoutSeconds) {
+        // Use a dedicated HandlerThread so GPS callbacks are delivered on their own
+        // looper and never blocked by main-thread work or UI rendering.  This is
+        // especially important for urgent refreshes triggered while the user is in
+        // a background app or when the phone is moving and the GPS chip is waking up.
+        HandlerThread handlerThread = new HandlerThread("gps-update-" + provider);
+        handlerThread.start();
         try {
             if (!locationManager.isProviderEnabled(provider)) {
                 return null;
@@ -413,7 +437,7 @@ public class LocationWorker extends Worker {
                 }
             };
 
-            locationManager.requestLocationUpdates(provider, 0L, 0f, listener, Looper.getMainLooper());
+            locationManager.requestLocationUpdates(provider, 0L, 0f, listener, handlerThread.getLooper());
             latch.await(timeoutSeconds, TimeUnit.SECONDS);
             try {
                 locationManager.removeUpdates(listener);
@@ -428,6 +452,12 @@ public class LocationWorker extends Worker {
             }
         } catch (Exception ignored) {
             return null;
+        } finally {
+            // Always shut down the HandlerThread to release resources.
+            try {
+                handlerThread.quitSafely();
+            } catch (Exception ignored) {
+            }
         }
     }
 
