@@ -272,10 +272,21 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
 
         $scope.refreshState = {
             lastRequestedAt: null,
-            waitingForNewData: false
+            waitingForNewData: false,
+            pendingCount: 0,
+            completedCount: 0
         };
 
-        var refreshBaselineTs = 0;
+        var pendingRefreshes = [];
+        var completedRefreshCount = 0;
+        var MAX_REFRESH_WAIT_MS = 120000;
+        var REFRESH_POLL_INTERVAL_MS = 1000;
+
+        var updateRefreshState = function () {
+            $scope.refreshState.waitingForNewData = pendingRefreshes.length > 0;
+            $scope.refreshState.pendingCount = pendingRefreshes.length;
+            $scope.refreshState.completedCount = completedRefreshCount;
+        };
 
         var getLatestGpsRecordTs = function(items) {
             if (!items || !items.length) {
@@ -438,49 +449,82 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
         };
 
         var postRefreshPollingPromise = null;
+        var postRefreshPollingAttempts = 0;
+        var maxPostRefreshPollingAttempts = 180;
 
-        var startPostRefreshPolling = function () {
+        var stopPostRefreshPolling = function () {
             if (postRefreshPollingPromise) {
                 $interval.cancel(postRefreshPollingPromise);
                 postRefreshPollingPromise = null;
             }
+            postRefreshPollingAttempts = 0;
+        };
 
-            var attempts = 0;
-            var maxAttempts = 24;
+        var startPostRefreshPolling = function () {
+            if (postRefreshPollingPromise || !pendingRefreshes.length) {
+                return;
+            }
+
             postRefreshPollingPromise = $interval(function () {
-                attempts += 1;
-                loadData();
-                if (attempts >= maxAttempts) {
-                    $interval.cancel(postRefreshPollingPromise);
-                    postRefreshPollingPromise = null;
-                    if ($scope.refreshState.waitingForNewData) {
-                        $scope.refreshState.waitingForNewData = false;
-                        $scope.errorMessage = localization.localize('error.plugin.deviceinfo.refresh.timeout') || "No updated GPS data received from device within 120 seconds.";
+                postRefreshPollingAttempts += 1;
+
+                var now = Date.now();
+                var timedOutCount = 0;
+                pendingRefreshes = pendingRefreshes.filter(function (requestInfo) {
+                    if ((now - requestInfo.startedAt) > MAX_REFRESH_WAIT_MS) {
+                        timedOutCount += 1;
+                        return false;
                     }
+                    return true;
+                });
+
+                if (timedOutCount > 0) {
+                    $scope.errorMessage = localization.localize('error.plugin.deviceinfo.refresh.timeout') ||
+                        "No updated GPS data received from device within 120 seconds.";
                 }
-            }, 5000);
+
+                updateRefreshState();
+                if (!pendingRefreshes.length) {
+                    stopPostRefreshPolling();
+                    return;
+                }
+
+                loadData();
+
+                if (postRefreshPollingAttempts >= maxPostRefreshPollingAttempts) {
+                    pendingRefreshes = [];
+                    updateRefreshState();
+                    stopPostRefreshPolling();
+                    $scope.errorMessage = localization.localize('error.plugin.deviceinfo.refresh.timeout') ||
+                        "No updated GPS data received from device within 120 seconds.";
+                }
+            }, REFRESH_POLL_INTERVAL_MS);
         };
 
         $scope.refreshLocation = function () {
             clearMessages();
             $scope.refreshState.lastRequestedAt = new Date();
-            refreshBaselineTs = getLatestGpsRecordTs($scope.data);
-            $scope.refreshState.waitingForNewData = true;
+            var refreshBaselineTs = getLatestGpsRecordTs($scope.data);
 
             $http.post('rest/plugins/deviceinfo/deviceinfo/private/refresh/' + $stateParams.deviceNumber)
                 .then(function (response) {
                     if (response.data.status === 'OK') {
+                        var refreshData = response.data.data || {};
+                        pendingRefreshes.push({
+                            requestId: refreshData.requestId || ("local-" + Date.now() + "-" + pendingRefreshes.length),
+                            baselineTs: refreshBaselineTs,
+                            startedAt: Date.now()
+                        });
+                        updateRefreshState();
                         $scope.successMessage = localization.localize('success.plugin.deviceinfo.refresh.started') || "Refresh request sent to device. Updating map...";
-                        $timeout(function () {
-                            loadData();
-                            startPostRefreshPolling();
-                        }, 2000);
+                        loadData();
+                        startPostRefreshPolling();
                     } else {
-                        $scope.refreshState.waitingForNewData = false;
+                        updateRefreshState();
                         $scope.errorMessage = localization.localize('error.plugin.deviceinfo.refresh.failed') || "Failed to send refresh request";
                     }
                 }, function (error) {
-                     $scope.refreshState.waitingForNewData = false;
+                     updateRefreshState();
                      $scope.errorMessage = localization.localize('error.plugin.deviceinfo.refresh.failed') || "Failed to send refresh request: " + error.statusText;
                 });
         };
@@ -586,12 +630,24 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                     $scope.data = response.data.items;
                     $scope.formData.totalItems = response.data.totalItemsCount;
 
-                    if ($scope.refreshState.waitingForNewData) {
+                    if (pendingRefreshes.length > 0) {
                         var latestGpsRecordTs = getLatestGpsRecordTs($scope.data);
-                        if (latestGpsRecordTs > refreshBaselineTs) {
-                            $scope.refreshState.waitingForNewData = false;
+                        var completedInThisCycle = 0;
+                        pendingRefreshes = pendingRefreshes.filter(function (requestInfo) {
+                            if (latestGpsRecordTs > requestInfo.baselineTs) {
+                                completedInThisCycle += 1;
+                                return false;
+                            }
+                            return true;
+                        });
+                        if (completedInThisCycle > 0) {
+                            completedRefreshCount += completedInThisCycle;
                             $scope.successMessage = localization.localize('success.plugin.deviceinfo.refresh.completed') ||
                                 "Latest GPS data received from device.";
+                        }
+                        updateRefreshState();
+                        if (!pendingRefreshes.length) {
+                            stopPostRefreshPolling();
                         }
                     }
 
@@ -847,9 +903,7 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
         }, 60 * 1000);
         $scope.$on('$destroy', function () {
             $interval.cancel(updateInterval);
-            if (postRefreshPollingPromise) {
-                $interval.cancel(postRefreshPollingPromise);
-            }
+            stopPostRefreshPolling();
         });
 
     })

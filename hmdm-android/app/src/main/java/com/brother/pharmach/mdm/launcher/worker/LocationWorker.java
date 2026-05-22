@@ -44,12 +44,12 @@ public class LocationWorker extends Worker {
     private static final long PERIODIC_MAX_FIX_AGE_MS = TimeUnit.MINUTES.toMillis(30);
     private static final float MAX_FIX_ACCURACY_METERS = 2000f;
     private static final long WAKE_LOCK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(40);
-    private static final long URGENT_DEDUP_WINDOW_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long LIVE_UPDATE_FRESHNESS_GRACE_MS = TimeUnit.SECONDS.toMillis(5);
-
-    private static final Object URGENT_LOCK = new Object();
-    private static volatile boolean urgentCaptureInProgress = false;
-    private static volatile long lastUrgentUploadTimeMs = 0L;
+    private static final ExecutorService URGENT_EXECUTOR = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "urgent-gps-queue");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private final Context context;
 
@@ -88,6 +88,18 @@ public class LocationWorker extends Worker {
         return captureAndUpload(context, true);
     }
 
+    public static void enqueueUrgentNow(Context context) {
+        final Context appContext = context.getApplicationContext();
+        URGENT_EXECUTOR.execute(() -> {
+            try {
+                runUrgentNow(appContext);
+            } catch (Exception e) {
+                RemoteLogger.log(appContext, Const.LOG_WARN,
+                        "LocationWorker: queued urgent capture failed: " + e.getMessage());
+            }
+        });
+    }
+
     @NonNull
     @Override
     public Result doWork() {
@@ -97,10 +109,6 @@ public class LocationWorker extends Worker {
 
     @NonNull
     private static Result captureAndUpload(Context context, boolean forceFreshFix) {
-        if (forceFreshFix && !beginUrgentCapture(context)) {
-            return Result.success();
-        }
-
         PowerManager.WakeLock wakeLock = null;
         boolean fineGranted = ContextCompat.checkSelfPermission(context,
                 Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
@@ -184,14 +192,14 @@ public class LocationWorker extends Worker {
 
             LocationTable.Location tableLocation = new LocationTable.Location(location);
 
+            if (forceFreshFix) {
+                // Ensure each urgent refresh gets its own visible timeline entry on server/UI.
+                tableLocation.setTs(System.currentTimeMillis());
+            }
+
             if (forceFreshFix && LocationService.sendUrgentLocation(context, tableLocation)) {
                 RemoteLogger.log(context, Const.LOG_INFO, "LocationWorker: urgent location uploaded successfully");
                 return Result.success();
-            }
-
-            if (forceFreshFix) {
-                // Preserve urgent click semantics if upload is delayed and goes through queue.
-                tableLocation.setTs(System.currentTimeMillis());
             }
 
             LocationTable.insert(helper.getWritableDatabase(), tableLocation);
@@ -208,34 +216,6 @@ public class LocationWorker extends Worker {
             return Result.success();
         } finally {
             releaseWakeLock(wakeLock);
-            if (forceFreshFix) {
-                finishUrgentCapture();
-            }
-        }
-    }
-
-    private static boolean beginUrgentCapture(Context context) {
-        synchronized (URGENT_LOCK) {
-            long now = System.currentTimeMillis();
-            if (urgentCaptureInProgress) {
-                RemoteLogger.log(context, Const.LOG_INFO,
-                        "LocationWorker: urgent capture skipped (already in progress)");
-                return false;
-            }
-            if (now - lastUrgentUploadTimeMs < URGENT_DEDUP_WINDOW_MS) {
-                RemoteLogger.log(context, Const.LOG_INFO,
-                        "LocationWorker: urgent capture skipped (dedup window)");
-                return false;
-            }
-            urgentCaptureInProgress = true;
-            lastUrgentUploadTimeMs = now;
-            return true;
-        }
-    }
-
-    private static void finishUrgentCapture() {
-        synchronized (URGENT_LOCK) {
-            urgentCaptureInProgress = false;
         }
     }
 

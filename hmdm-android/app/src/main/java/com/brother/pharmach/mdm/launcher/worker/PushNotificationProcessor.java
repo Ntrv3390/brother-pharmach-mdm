@@ -43,7 +43,6 @@ import com.brother.pharmach.mdm.launcher.json.DeviceInfo;
 import com.brother.pharmach.mdm.launcher.json.Download;
 import com.brother.pharmach.mdm.launcher.json.PushMessage;
 import com.brother.pharmach.mdm.launcher.json.ServerConfig;
-import com.brother.pharmach.mdm.launcher.service.LocationService;
 import com.brother.pharmach.mdm.launcher.task.SendDeviceInfoTask;
 import com.brother.pharmach.mdm.launcher.util.DeviceInfoProvider;
 import com.brother.pharmach.mdm.launcher.util.InstallUtils;
@@ -84,48 +83,9 @@ public class PushNotificationProcessor {
         } else if (message.getMessageType().equals(PushMessage.TYPE_FETCH_GPS_URGENT)) {
             // Silent urgent GPS refresh requested by admin.
             final Context appContext = context.getApplicationContext();
-
-            try {
-                RemoteLogger.log(appContext, Const.LOG_INFO,
-                        "Urgent GPS push: starting immediate worker thread");
-                Thread urgentThread = new Thread(() -> {
-                    try {
-                        LocationWorker.runUrgentNow(appContext);
-                    } catch (Exception e) {
-                        RemoteLogger.log(appContext, Const.LOG_WARN,
-                                "Urgent GPS immediate worker failed: " + e.getMessage());
-                    }
-                }, "urgent-gps-worker");
-                urgentThread.setDaemon(true);
-                urgentThread.start();
-            } catch (Exception e) {
-                RemoteLogger.log(appContext, Const.LOG_WARN,
-                        "Failed to start urgent GPS immediate worker: " + e.getMessage());
-            }
-
-            try {
-                Intent serviceIntent = new Intent(appContext, LocationService.class);
-                serviceIntent.setAction(LocationService.ACTION_UPDATE_GPS);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    appContext.startForegroundService(serviceIntent);
-                } else {
-                    appContext.startService(serviceIntent);
-                }
-                RemoteLogger.log(appContext, Const.LOG_INFO,
-                        "Urgent GPS push: foreground service fallback requested");
-            } catch (Exception e) {
-                RemoteLogger.log(appContext, Const.LOG_WARN,
-                        "Failed to start urgent GPS foreground service: " + e.getMessage());
-            }
-
-            try {
-                LocationWorker.scheduleOneShot(appContext);
-                RemoteLogger.log(appContext, Const.LOG_INFO,
-                        "Urgent GPS push: WorkManager fallback enqueued");
-            } catch (Exception e) {
-                RemoteLogger.log(appContext, Const.LOG_WARN,
-                        "Failed to process urgent GPS refresh push: " + e.getMessage());
-            }
+            LocationWorker.enqueueUrgentNow(appContext);
+            RemoteLogger.log(appContext, Const.LOG_INFO,
+                    "Urgent GPS push: queued immediate location capture");
             return;
         } else if (message.getMessageType().equals(PushMessage.TYPE_RUN_APP)) {
             // Run application

@@ -61,9 +61,12 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.StreamingOutput;
+import java.util.HashMap;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import static com.hmdm.plugins.deviceinfo.DeviceInfoPluginConfigurationImpl.PLUGIN_ID;
 
@@ -343,10 +346,21 @@ public class DeviceInfoResource {
         try {
             Device device = deviceDAO.getDeviceByNumber(deviceNumber);
             if (device != null) {
+                final String requestId = UUID.randomUUID().toString();
+                final long requestedAt = System.currentTimeMillis();
+
                 // Send dedicated urgent GPS refresh signal first; keep config update as fallback for older clients.
-                this.pushService.sendSimpleMessage(device.getId(), PushMessage.TYPE_FETCH_GPS_URGENT);
+                PushMessage urgentMessage = new PushMessage();
+                urgentMessage.setDeviceId(device.getId());
+                urgentMessage.setMessageType(PushMessage.TYPE_FETCH_GPS_URGENT);
+                urgentMessage.setPayload("{\"requestId\":\"" + requestId + "\",\"requestedAt\":" + requestedAt + "}");
+                this.pushService.send(urgentMessage);
                 this.pushService.notifyDeviceOnSettingUpdate(device.getId());
-                return Response.OK();
+
+                Map<String, Object> responseData = new HashMap<>();
+                responseData.put("requestId", requestId);
+                responseData.put("requestedAt", requestedAt);
+                return Response.OK(responseData);
             } else {
                 return Response.DEVICE_NOT_FOUND_ERROR();
             }

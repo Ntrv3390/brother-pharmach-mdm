@@ -265,6 +265,8 @@
             </button>
             <div class="margin-top-10" ng-if="refreshState.lastRequestedAt">
                 <small class="text-muted">Last refresh request: {{refreshState.lastRequestedAt | date:'dd.MM.yy HH:mm:ss'}}</small>
+                <br/>
+                <small class="text-muted">Pending: {{refreshState.pendingCount}} | Completed: {{refreshState.completedCount}}</small>
                 <br ng-if="refreshState.waitingForNewData"/>
                 <small class="text-warning" ng-if="refreshState.waitingForNewData">Waiting for updated GPS data from device...</small>
             </div>

@@ -44,8 +44,6 @@ import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 import java.io.UnsupportedEncodingException;
 import java.net.URL;
 import java.net.URLEncoder;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import retrofit2.Response;
@@ -142,16 +140,16 @@ public class PushNotificationWorker extends Worker {
 
             if ( response.isSuccessful() ) {
                 if ( Const.STATUS_OK.equals( response.body().getStatus() ) && response.body().getData() != null ) {
-                    Map<String, PushMessage> filteredMessages = new HashMap<String, PushMessage>();
+                    boolean configProcessed = false;
                     for (PushMessage message : response.body().getData()) {
-                        // Filter out multiple configuration update requests
-                        if (!message.getMessageType().equals(PushMessage.TYPE_CONFIG_UPDATED) ||
-                                !filteredMessages.containsKey(PushMessage.TYPE_CONFIG_UPDATED)) {
-                            filteredMessages.put(message.getMessageType(), message);
+                        // Keep all urgent messages; only collapse duplicate config updates.
+                        if (PushMessage.TYPE_CONFIG_UPDATED.equals(message.getMessageType())) {
+                            if (configProcessed) {
+                                continue;
+                            }
+                            configProcessed = true;
                         }
-                    }
-                    for (Map.Entry<String, PushMessage> entry : filteredMessages.entrySet()) {
-                        PushNotificationProcessor.process(entry.getValue(), context);
+                        PushNotificationProcessor.process(message, context);
                     }
                     return Result.success();
                 } else {
@@ -226,15 +224,15 @@ public class PushNotificationWorker extends Worker {
             if (response.isSuccessful() && response.body() != null
                     && Const.STATUS_OK.equals(response.body().getStatus())
                     && response.body().getData() != null) {
-                Map<String, PushMessage> filteredMessages = new HashMap<String, PushMessage>();
+                boolean configProcessed = false;
                 for (PushMessage message : response.body().getData()) {
-                    if (!message.getMessageType().equals(PushMessage.TYPE_CONFIG_UPDATED)
-                            || !filteredMessages.containsKey(PushMessage.TYPE_CONFIG_UPDATED)) {
-                        filteredMessages.put(message.getMessageType(), message);
+                    if (PushMessage.TYPE_CONFIG_UPDATED.equals(message.getMessageType())) {
+                        if (configProcessed) {
+                            continue;
+                        }
+                        configProcessed = true;
                     }
-                }
-                for (Map.Entry<String, PushMessage> entry : filteredMessages.entrySet()) {
-                    PushNotificationProcessor.process(entry.getValue(), context);
+                    PushNotificationProcessor.process(message, context);
                 }
             } else if (response.code() >= 400 && response.code() < 500) {
                 RemoteLogger.log(context, Const.LOG_WARN,
