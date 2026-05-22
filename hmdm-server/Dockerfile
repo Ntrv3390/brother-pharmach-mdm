@@ -88,6 +88,9 @@ COPY hmdm-server/plugins/worktime/postgres/pom.xml  plugins/worktime/postgres/
 COPY hmdm-server/plugins/calllog/pom.xml            plugins/calllog/
 COPY hmdm-server/plugins/calllog/core/pom.xml       plugins/calllog/core/
 COPY hmdm-server/plugins/calllog/postgres/pom.xml   plugins/calllog/postgres/
+COPY hmdm-server/plugins/smslog/pom.xml             plugins/smslog/
+COPY hmdm-server/plugins/smslog/core/pom.xml        plugins/smslog/core/
+COPY hmdm-server/plugins/smslog/postgres/pom.xml    plugins/smslog/postgres/
 COPY hmdm-server/plugins/push/pom.xml               plugins/push/
 COPY hmdm-server/plugins/platform/pom.xml           plugins/platform/
 COPY hmdm-server/swagger/ui/pom.xml                 swagger/ui/

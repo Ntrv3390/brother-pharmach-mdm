@@ -72,11 +72,32 @@ if not exist "%SELECTED_ENV_FILE%" (
 
 set "ACTIVE_BASE_URL="
 set "ACTIVE_CLOUDFLARE_TOKEN="
+set "DEFAULT_STAGE_TOKEN="
+set "DEFAULT_PROD_TOKEN="
 for /f "usebackq tokens=1,* delims==" %%A in (`findstr /B /I "BASE_URL=" "%SELECTED_ENV_FILE%"`) do (
     if /I "%%A"=="BASE_URL" set "ACTIVE_BASE_URL=%%B"
 )
 for /f "usebackq tokens=1,* delims==" %%A in (`findstr /B /I "CLOUDFLARE_TUNNEL_TOKEN=" "%SELECTED_ENV_FILE%"`) do (
     if /I "%%A"=="CLOUDFLARE_TUNNEL_TOKEN" set "ACTIVE_CLOUDFLARE_TOKEN=%%B"
+)
+
+if exist "%DEFAULT_ENV_FILE%" (
+    for /f "usebackq tokens=1,* delims==" %%A in (`findstr /B /I "CLOUDFLARE_STAGE_TUNNEL_TOKEN=" "%DEFAULT_ENV_FILE%"`) do (
+        if /I "%%A"=="CLOUDFLARE_STAGE_TUNNEL_TOKEN" set "DEFAULT_STAGE_TOKEN=%%B"
+    )
+    for /f "usebackq tokens=1,* delims==" %%A in (`findstr /B /I "CLOUDFLARE_TUNNEL_TOKEN=" "%DEFAULT_ENV_FILE%"`) do (
+        if /I "%%A"=="CLOUDFLARE_TUNNEL_TOKEN" set "DEFAULT_PROD_TOKEN=%%B"
+    )
+)
+
+if /I "!BUILD_TYPE!"=="stage" (
+    if not "!DEFAULT_STAGE_TOKEN!"=="" set "ACTIVE_CLOUDFLARE_TOKEN=!DEFAULT_STAGE_TOKEN!"
+)
+if /I "!BUILD_TYPE!"=="production" (
+    if not "!DEFAULT_PROD_TOKEN!"=="" set "ACTIVE_CLOUDFLARE_TOKEN=!DEFAULT_PROD_TOKEN!"
+)
+if /I "!BUILD_TYPE!"=="prod" (
+    if not "!DEFAULT_PROD_TOKEN!"=="" set "ACTIVE_CLOUDFLARE_TOKEN=!DEFAULT_PROD_TOKEN!"
 )
 
 echo.
@@ -87,17 +108,19 @@ if "!ACTIVE_CLOUDFLARE_TOKEN!"=="" (
     echo WARNING: CLOUDFLARE_TUNNEL_TOKEN is empty in selected env file.
 )
 echo.
-echo Rebuilding and restarting only hmdm-server container...
+echo Rebuilding hmdm-server and starting hmdm-cloudflared...
 
-docker compose --env-file "%SELECTED_ENV_FILE%" -f "%COMPOSE_FILE%" up -d --build --no-deps hmdm
+set "CLOUDFLARE_TUNNEL_TOKEN=!ACTIVE_CLOUDFLARE_TOKEN!"
+
+docker compose --env-file "%SELECTED_ENV_FILE%" -f "%COMPOSE_FILE%" --profile tunnel up -d --build --no-deps hmdm cloudflared
 if errorlevel 1 (
-    echo ERROR: Failed to rebuild hmdm-server.
+    echo ERROR: Failed to rebuild hmdm-server and start hmdm-cloudflared.
     goto :fail
 )
 
 echo.
-echo Success: hmdm-server rebuilt using %SELECTED_ENV_FILE%.
-echo Postgres and other services were not rebuilt.
+echo Success: hmdm-server rebuilt and hmdm-cloudflared started using %SELECTED_ENV_FILE%.
+echo Postgres and other unrelated services were not rebuilt.
 echo.
 goto :end
 
