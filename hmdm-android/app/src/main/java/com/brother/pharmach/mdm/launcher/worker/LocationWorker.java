@@ -45,6 +45,7 @@ public class LocationWorker extends Worker {
     private static final float MAX_FIX_ACCURACY_METERS = 2000f;
     private static final long WAKE_LOCK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(40);
     private static final long URGENT_DEDUP_WINDOW_MS = TimeUnit.SECONDS.toMillis(10);
+    private static final long LIVE_UPDATE_FRESHNESS_GRACE_MS = TimeUnit.SECONDS.toMillis(5);
 
     private static final Object URGENT_LOCK = new Object();
     private static volatile boolean urgentCaptureInProgress = false;
@@ -289,7 +290,7 @@ public class LocationWorker extends Worker {
                 gpsFuture = executor.submit(() -> {
                     RemoteLogger.log(context, Const.LOG_INFO,
                             "LocationWorker: GPS request started");
-                    return tryRequestSingleUpdate(locationManager, LocationManager.GPS_PROVIDER, GPS_FIX_WAIT_SECONDS);
+                    return tryRequestLiveUpdate(locationManager, LocationManager.GPS_PROVIDER, GPS_FIX_WAIT_SECONDS);
                 });
             }
 
@@ -297,7 +298,7 @@ public class LocationWorker extends Worker {
                 networkFuture = executor.submit(() -> {
                     RemoteLogger.log(context, Const.LOG_INFO,
                             "LocationWorker: Network request started");
-                    return tryRequestSingleUpdate(locationManager, LocationManager.NETWORK_PROVIDER, NETWORK_FIX_WAIT_SECONDS);
+                    return tryRequestLiveUpdate(locationManager, LocationManager.NETWORK_PROVIDER, NETWORK_FIX_WAIT_SECONDS);
                 });
             }
 
@@ -405,28 +406,46 @@ public class LocationWorker extends Worker {
         return best;
     }
 
-    private static Location tryRequestSingleUpdate(LocationManager locationManager, String provider, long timeoutSeconds) {
+    private static Location tryRequestLiveUpdate(LocationManager locationManager, String provider, long timeoutSeconds) {
         try {
             if (!locationManager.isProviderEnabled(provider)) {
                 return null;
             }
-            final Location[] result = new Location[1];
+            final long requestStartedAt = System.currentTimeMillis();
+            final Object lock = new Object();
+            final Location[] bestObserved = new Location[1];
+            final Location[] bestFresh = new Location[1];
             final CountDownLatch latch = new CountDownLatch(1);
             final LocationListener listener = location -> {
-                result[0] = location;
-                latch.countDown();
+                if (location == null || (location.getLatitude() == 0 && location.getLongitude() == 0)) {
+                    return;
+                }
+
+                synchronized (lock) {
+                    if (bestObserved[0] == null || isBetterLocation(location, bestObserved[0])) {
+                        bestObserved[0] = new Location(location);
+                    }
+                    if (location.getTime() >= requestStartedAt - LIVE_UPDATE_FRESHNESS_GRACE_MS
+                            && (bestFresh[0] == null || isBetterLocation(location, bestFresh[0]))) {
+                        bestFresh[0] = new Location(location);
+                        latch.countDown();
+                    }
+                }
             };
 
-            locationManager.requestSingleUpdate(provider, listener, Looper.getMainLooper());
-            boolean received = latch.await(timeoutSeconds, TimeUnit.SECONDS);
+            locationManager.requestLocationUpdates(provider, 0L, 0f, listener, Looper.getMainLooper());
+            latch.await(timeoutSeconds, TimeUnit.SECONDS);
             try {
                 locationManager.removeUpdates(listener);
             } catch (Exception ignored) {
             }
-            if (!received) {
-                return null;
+
+            synchronized (lock) {
+                if (bestFresh[0] != null) {
+                    return bestFresh[0];
+                }
+                return bestObserved[0];
             }
-            return result[0];
         } catch (Exception ignored) {
             return null;
         }
