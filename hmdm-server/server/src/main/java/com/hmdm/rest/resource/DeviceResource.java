@@ -439,12 +439,50 @@ public class DeviceResource {
                 return Response.DEVICE_NOT_FOUND_ERROR();
             }
 
+            long baselineLastUpdate = device.getLastUpdate() != null ? device.getLastUpdate() : 0L;
+
             this.pushService.notifyDeviceOnDeviceInfoRefresh(id);
-            return Response.OK();
+
+            Device latestDevice = waitForConnectivityUpdate(id, baselineLastUpdate, 12000L, 1000L);
+            if (latestDevice == null) {
+                latestDevice = this.deviceDAO.getDeviceById(id);
+            }
+
+            Map<String, Object> result = new HashMap<>();
+            long latestLastUpdate = latestDevice != null && latestDevice.getLastUpdate() != null ? latestDevice.getLastUpdate() : 0L;
+            result.put("updated", latestLastUpdate > baselineLastUpdate);
+            result.put("device", latestDevice != null ? new DeviceView(latestDevice) : null);
+
+            return Response.OK(result);
         } catch (Exception e) {
             log.error("Failed to request connectivity refresh for device #{}", id, e);
             return Response.INTERNAL_ERROR();
         }
+    }
+
+    private Device waitForConnectivityUpdate(Integer deviceId,
+                                             long baselineLastUpdate,
+                                             long timeoutMs,
+                                             long pollMs) {
+        final long deadline = System.currentTimeMillis() + timeoutMs;
+        Device latest = null;
+
+        while (System.currentTimeMillis() < deadline) {
+            latest = this.deviceDAO.getDeviceById(deviceId);
+            long lastUpdate = latest != null && latest.getLastUpdate() != null ? latest.getLastUpdate() : 0L;
+            if (lastUpdate > baselineLastUpdate) {
+                return latest;
+            }
+
+            try {
+                Thread.sleep(pollMs);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+
+        return latest;
     }
 
     // =================================================================================================================

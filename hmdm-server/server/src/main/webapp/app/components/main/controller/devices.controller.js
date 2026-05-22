@@ -514,56 +514,38 @@ angular.module('headwind-kiosk')
                 return;
             }
 
-            var deviceId = device.id;
-            var baselineLastUpdate = device.lastUpdate || 0;
-            var maxAttempts = 10;
-            var pollDelayMs = 2000;
-
-            var findDeviceById = function (id) {
-                if (!$scope.devices) {
-                    return null;
+            var applyRefreshedDevice = function (targetDevice, refreshedDevice) {
+                if (!targetDevice || !refreshedDevice) {
+                    return;
                 }
-                for (var i = 0; i < $scope.devices.length; i++) {
-                    if ($scope.devices[i].id === id) {
-                        return $scope.devices[i];
-                    }
+
+                var savedConfiguration = targetDevice.configuration;
+                angular.extend(targetDevice, refreshedDevice);
+                if (!targetDevice.configuration && savedConfiguration) {
+                    targetDevice.configuration = savedConfiguration;
                 }
-                return null;
-            };
-
-            var markRefreshFinished = function () {
-                var currentDevice = findDeviceById(deviceId);
-                if (currentDevice) {
-                    currentDevice.internetRefreshInProgress = false;
-                } else {
-                    device.internetRefreshInProgress = false;
+                if (targetDevice.lastUpdate) {
+                    targetDevice.lastUpdateDate = new Date(targetDevice.lastUpdate);
                 }
-            };
-
-            var pollForFreshDeviceInfo = function (attempt) {
-                $scope.search(true, function () {
-                    var currentDevice = findDeviceById(deviceId);
-                    if (currentDevice && currentDevice.lastUpdate && currentDevice.lastUpdate > baselineLastUpdate) {
-                        currentDevice.internetRefreshInProgress = false;
-                        return;
-                    }
-
-                    if (attempt >= maxAttempts) {
-                        markRefreshFinished();
-                        return;
-                    }
-
-                    $timeout(function () {
-                        pollForFreshDeviceInfo(attempt + 1);
-                    }, pollDelayMs);
-                });
             };
 
             device.internetRefreshInProgress = true;
-            deviceService.refreshConnectivityState({id: device.id}, {}, function () {
-                $timeout(function () {
-                    pollForFreshDeviceInfo(1);
-                }, 800);
+            deviceService.refreshConnectivityState({id: device.id}, {}, function (response) {
+                device.internetRefreshInProgress = false;
+
+                var data = response && response.data ? response.data : null;
+                if (data && data.device) {
+                    applyRefreshedDevice(device, data.device);
+                }
+
+                if (!data || data.updated !== true) {
+                    // No fresh sync arrived in refresh timeout window: show effective connectivity state as offline.
+                    if (!device.info) {
+                        device.info = {};
+                    }
+                    device.info.internetConnected = false;
+                    device.info.internetType = 'OFFLINE';
+                }
             }, function (response) {
                 device.internetRefreshInProgress = false;
                 alertService.onRequestFailure(response);
