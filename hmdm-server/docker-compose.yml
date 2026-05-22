@@ -29,6 +29,7 @@ services:
     build:
       context: ..
       dockerfile: hmdm-server/Dockerfile
+      target: server-only
     image: hmdm-server:latest
     container_name: hmdm-server
     restart: unless-stopped

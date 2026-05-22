@@ -216,3 +216,62 @@ USER hmdm
 EXPOSE 8080 31000
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
+
+# =============================================================================
+# Stage 4: Server-only runtime (no Android build dependency)
+# =============================================================================
+FROM tomcat:9.0 AS server-only
+
+LABEL maintainer="Brother Pharmamach DevOps" \
+      description="Brother Pharmamach MDM Server (server-only runtime, no Android build)" \
+      version="1.0.0"
+
+# Install aapt (APK analysis) + postgresql-client (pg_isready) + python3 (hash)
+RUN set -eux; \
+        sed -i 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' /etc/apt/sources.list || true; \
+        find /etc/apt/sources.list.d -type f \( -name '*.list' -o -name '*.sources' \) -exec \
+            sed -i 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' {} + || true; \
+        rm -rf /var/lib/apt/lists/*; \
+        apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::No-Cache=true -o Acquire::https::No-Cache=true update \
+            || (rm -rf /var/lib/apt/lists/* && apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=5 update); \
+        apt-get install -y --no-install-recommends curl aapt postgresql-client python3; \
+        rm -rf /var/lib/apt/lists/*
+
+# Remove default Tomcat webapps
+RUN rm -rf /usr/local/tomcat/webapps/*
+
+# Copy the built WAR and SQL init script (server only)
+COPY --from=server-builder /build/server/target/launcher.war /usr/local/tomcat/webapps/ROOT.war
+COPY --from=server-builder /build/install/sql/hmdm_init.en.sql /opt/hmdm-setup/hmdm_init.en.sql
+
+# Keep APK paths expected by entrypoint without building Android in this pipeline.
+# If files are absent in build context, create empty placeholders.
+COPY app/app-enterprise-release.apk /opt/hmdm-setup/brother-pharmach-mdm.apk
+COPY app/apk-cert.txt /opt/hmdm-setup/apk_hash.txt
+RUN test -s /opt/hmdm-setup/brother-pharmach-mdm.apk || truncate -s 0 /opt/hmdm-setup/brother-pharmach-mdm.apk
+
+# Copy Docker support scripts
+COPY hmdm-server/docker/entrypoint.sh  /docker-entrypoint.sh
+COPY hmdm-server/docker/log4j-hmdm.xml /opt/hmdm-setup/log4j-hmdm.xml
+
+# Create base directories and ensure correct permissions
+RUN mkdir -p /opt/hmdm/files /opt/hmdm/plugins /opt/hmdm/logs \
+             /usr/local/tomcat/conf/Catalina/localhost \
+    && sed -i 's/\r$//' /docker-entrypoint.sh \
+    && chmod +x /docker-entrypoint.sh
+
+# Create a non-root system user for Tomcat
+RUN groupadd --system hmdm && useradd --system --gid hmdm --no-create-home hmdm \
+    && chown -R hmdm:hmdm /opt/hmdm \
+    && chown -R hmdm:hmdm /opt/hmdm-setup \
+    && chown -R hmdm:hmdm /usr/local/tomcat/logs \
+    && chown -R hmdm:hmdm /usr/local/tomcat/work \
+    && chown -R hmdm:hmdm /usr/local/tomcat/temp \
+    && chown -R hmdm:hmdm /usr/local/tomcat/conf \
+    && chown -R hmdm:hmdm /usr/local/tomcat/webapps
+
+USER hmdm
+
+EXPOSE 8080 31000
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
