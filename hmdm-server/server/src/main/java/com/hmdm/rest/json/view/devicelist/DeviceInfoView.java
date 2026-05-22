@@ -134,4 +134,14 @@ public class DeviceInfoView implements Serializable {
     public List<DeviceConfigurationFile> getFiles() {
         return files;
     }
+
+    @ApiModelProperty("A flag indicating if device currently has Internet access")
+    public Boolean getInternetConnected() {
+        return deviceInfo.getInternetConnected();
+    }
+
+    @ApiModelProperty("Current network type, for example WIFI, 4G, 5G")
+    public String getInternetType() {
+        return deviceInfo.getInternetType();
+    }
 }

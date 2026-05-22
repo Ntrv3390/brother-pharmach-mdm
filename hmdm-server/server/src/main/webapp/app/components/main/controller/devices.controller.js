@@ -481,6 +481,51 @@ angular.module('headwind-kiosk')
             return device.info;
         };
 
+        $scope.getInternetIndicatorImage = function (device) {
+            var info = $scope.getDeviceInfo(device);
+            if (info && info.internetConnected === true) {
+                return 'images/circle-green.png';
+            }
+            return 'images/circle-red.png';
+        };
+
+        $scope.getInternetType = function (device) {
+            var info = $scope.getDeviceInfo(device);
+            if (info && info.internetConnected === true) {
+                if (info.internetType && info.internetType.length > 0) {
+                    return info.internetType;
+                }
+                return localization.localize('devices.internet.online');
+            }
+            return localization.localize('devices.internet.offline');
+        };
+
+        $scope.getInternetStatusTitle = function (device) {
+            var info = $scope.getDeviceInfo(device);
+            if (info && info.internetConnected === true) {
+                var type = info.internetType && info.internetType.length > 0 ? info.internetType : localization.localize('devices.internet.online');
+                return localization.localize('devices.internet.title.online').replace('${type}', type);
+            }
+            return localization.localize('devices.internet.title.offline');
+        };
+
+        $scope.refreshInternetState = function (device) {
+            if (!device || device.internetRefreshInProgress) {
+                return;
+            }
+
+            device.internetRefreshInProgress = true;
+            deviceService.refreshConnectivityState({id: device.id}, {}, function () {
+                $timeout(function () {
+                    device.internetRefreshInProgress = false;
+                    $scope.search(true);
+                }, 1500);
+            }, function (response) {
+                device.internetRefreshInProgress = false;
+                alertService.onRequestFailure(response);
+            });
+        };
+
         $scope.getDeviceModel = function (device) {
             var info = $scope.getDeviceInfo(device);
             if (info) {

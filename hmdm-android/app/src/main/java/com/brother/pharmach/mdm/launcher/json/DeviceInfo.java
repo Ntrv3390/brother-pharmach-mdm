@@ -54,6 +54,8 @@ public class DeviceInfo {
     private String imsi2;
     private String cpu;
     private String serial;
+    private Boolean internetConnected;
+    private String internetType;
 
     // These fields are reserved for custom builds of Brother Pharmamach MDM
     private String custom1;
@@ -290,6 +292,22 @@ public class DeviceInfo {
 
     public void setSerial(String serial) {
         this.serial = serial;
+    }
+
+    public Boolean getInternetConnected() {
+        return internetConnected;
+    }
+
+    public void setInternetConnected(Boolean internetConnected) {
+        this.internetConnected = internetConnected;
+    }
+
+    public String getInternetType() {
+        return internetType;
+    }
+
+    public void setInternetType(String internetType) {
+        this.internetType = internetType;
     }
 
     public String getCustom1() {

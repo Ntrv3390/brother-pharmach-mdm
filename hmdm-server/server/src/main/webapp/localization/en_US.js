@@ -95,6 +95,10 @@ document.localization["en_US"] = {
   "devices.file.not.installed": "- ${file}: not installed.",
   "devices.file.lastUpdate.differs":
     "- ${file}: difference in modification time ${diff} min",
+  "devices.internet.online": "ONLINE",
+  "devices.internet.offline": "OFFLINE",
+  "devices.internet.title.online": "Internet connected (${type})",
+  "devices.internet.title.offline": "No Internet connection",
 
   "button.apply": "Apply",
   "button.gps.on": "Enable GPS",

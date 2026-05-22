@@ -20,6 +20,10 @@
 package com.brother.pharmach.mdm.launcher.util;
 
 import android.annotation.SuppressLint;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkInfo;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -199,6 +203,10 @@ public class DeviceInfoProvider {
         deviceInfo.setPhone2(getPhoneNumber(context, 1));
         deviceInfo.setIccid2(getIccid(context, 1));
 
+        boolean internetConnected = isInternetConnected(context);
+        deviceInfo.setInternetConnected(internetConnected);
+        deviceInfo.setInternetType(getInternetType(context, internetConnected));
+
         String launcherPackage = Utils.getDefaultLauncher(context);
         deviceInfo.setLauncherPackage(launcherPackage != null ? launcherPackage : "");
         deviceInfo.setDefaultLauncher(context.getPackageName().equals(launcherPackage));
@@ -335,6 +343,125 @@ public class DeviceInfoProvider {
     }
 
     private static final String PHONE_CACHE_PREFS = "phone_number_cache";
+
+    private static boolean isInternetConnected(Context context) {
+        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) {
+            return false;
+        }
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Network network = cm.getActiveNetwork();
+                if (network == null) {
+                    return false;
+                }
+                NetworkCapabilities capabilities = cm.getNetworkCapabilities(network);
+                return capabilities != null
+                        && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                        && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+            }
+
+            NetworkInfo info = cm.getActiveNetworkInfo();
+            return info != null && info.isConnected();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static String getInternetType(Context context, boolean internetConnected) {
+        if (!internetConnected) {
+            return "OFFLINE";
+        }
+
+        ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) {
+            return "ONLINE";
+        }
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Network network = cm.getActiveNetwork();
+                NetworkCapabilities capabilities = network != null ? cm.getNetworkCapabilities(network) : null;
+                if (capabilities != null) {
+                    if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                        return "WIFI";
+                    }
+                    if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+                        return "ETHERNET";
+                    }
+                    if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+                        return resolveMobileNetworkClass(context);
+                    }
+                    if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH)) {
+                        return "BLUETOOTH";
+                    }
+                    if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
+                        return "VPN";
+                    }
+                }
+                return "ONLINE";
+            }
+
+            NetworkInfo info = cm.getActiveNetworkInfo();
+            if (info == null) {
+                return "ONLINE";
+            }
+            if (info.getType() == ConnectivityManager.TYPE_WIFI) {
+                return "WIFI";
+            }
+            if (info.getType() == ConnectivityManager.TYPE_MOBILE) {
+                return resolveMobileNetworkClass(context);
+            }
+            return "ONLINE";
+        } catch (Exception e) {
+            return "ONLINE";
+        }
+    }
+
+    @SuppressLint({"MissingPermission"})
+    private static String resolveMobileNetworkClass(Context context) {
+        try {
+            TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+            if (tm == null) {
+                return "MOBILE";
+            }
+
+            int networkType;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                networkType = tm.getDataNetworkType();
+            } else {
+                networkType = tm.getNetworkType();
+            }
+
+            switch (networkType) {
+                case TelephonyManager.NETWORK_TYPE_NR:
+                    return "5G";
+                case TelephonyManager.NETWORK_TYPE_LTE:
+                    return "4G";
+                case TelephonyManager.NETWORK_TYPE_HSPAP:
+                case TelephonyManager.NETWORK_TYPE_HSPA:
+                case TelephonyManager.NETWORK_TYPE_HSUPA:
+                case TelephonyManager.NETWORK_TYPE_HSDPA:
+                case TelephonyManager.NETWORK_TYPE_EVDO_0:
+                case TelephonyManager.NETWORK_TYPE_EVDO_A:
+                case TelephonyManager.NETWORK_TYPE_EVDO_B:
+                case TelephonyManager.NETWORK_TYPE_UMTS:
+                    return "3G";
+                case TelephonyManager.NETWORK_TYPE_GPRS:
+                case TelephonyManager.NETWORK_TYPE_EDGE:
+                case TelephonyManager.NETWORK_TYPE_CDMA:
+                case TelephonyManager.NETWORK_TYPE_1xRTT:
+                case TelephonyManager.NETWORK_TYPE_IDEN:
+                case TelephonyManager.NETWORK_TYPE_GSM:
+                    return "2G";
+                default:
+                    return "MOBILE";
+            }
+        } catch (Exception e) {
+            return "MOBILE";
+        }
+    }
 
     @SuppressLint( { "MissingPermission" } )
     public static String getPhoneNumber(Context context, int slot) {

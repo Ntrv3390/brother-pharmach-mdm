@@ -473,6 +473,9 @@
             ng-class="{'glyphicon-sort-by-alphabet': paging.sortAsc, 'glyphicon-sort-by-alphabet-alt': !paging.sortAsc}"
           ></span>
         </th>
+        <th>
+          <span localized>Internet Connection</span>
+        </th>
         <th
           ng-if="settings.columnDisplayedDeviceConfiguration"
           ng-click="sortData('CONFIGURATION')"
@@ -727,6 +730,28 @@
             ng-src="{{getDeviceFilesIndicatorImage(device)}}"
             title="{{getDeviceFilesTitle(device)}}"
           />
+        </td>
+        <td>
+          <div class="internet-status-cell">
+            <img
+              class="device-indicator"
+              ng-src="{{getInternetIndicatorImage(device)}}"
+              title="{{getInternetStatusTitle(device)}}"
+            />
+            <span class="internet-status-type">{{getInternetType(device)}}</span>
+            <button
+              type="button"
+              class="btn btn-link btn-xs internet-refresh-btn"
+              ng-click="refreshInternetState(device)"
+              title="Refresh"
+              ng-disabled="device.internetRefreshInProgress"
+            >
+              <span
+                class="glyphicon glyphicon-refresh"
+                ng-class="{'spin': device.internetRefreshInProgress}"
+              ></span>
+            </button>
+          </div>
         </td>
         <td
           ng-if="settings.columnDisplayedDeviceConfiguration && hasPermission('configurations') && configAvailable(device.configuration)"

@@ -120,6 +120,12 @@ public class DeviceInfo implements Serializable {
     @ApiModelProperty(value = "Custom property #3")
     private String custom3;
 
+    @ApiModelProperty(value = "A flag indicating if device currently has Internet access")
+    private Boolean internetConnected;
+
+    @ApiModelProperty(value = "Current network type, for example WIFI, 4G, 5G")
+    private String internetType;
+
     public DeviceInfo() {
     }
 
@@ -331,6 +337,22 @@ public class DeviceInfo implements Serializable {
         this.custom3 = custom3;
     }
 
+    public Boolean getInternetConnected() {
+        return internetConnected;
+    }
+
+    public void setInternetConnected(Boolean internetConnected) {
+        this.internetConnected = internetConnected;
+    }
+
+    public String getInternetType() {
+        return internetType;
+    }
+
+    public void setInternetType(String internetType) {
+        this.internetType = internetType;
+    }
+
     public List<DeviceConfigurationFile> getFiles() {
         return files;
     }
@@ -368,6 +390,8 @@ public class DeviceInfo implements Serializable {
                 ", custom1='" + custom1 + '\'' +
                 ", custom2='" + custom2 + '\'' +
                 ", custom3='" + custom3 + '\'' +
+                ", internetConnected=" + internetConnected +
+                ", internetType='" + internetType + '\'' +
                 '}';
     }
 }

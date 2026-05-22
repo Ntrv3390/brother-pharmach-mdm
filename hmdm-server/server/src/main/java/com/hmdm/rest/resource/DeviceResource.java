@@ -418,6 +418,37 @@ public class DeviceResource {
 
     // =================================================================================================================
     @ApiOperation(
+            value = "Refresh device connectivity state",
+            notes = "Requests device to sync and upload the latest connectivity state"
+    )
+    @POST
+    @Path("/{id}/connectivity/refresh")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response refreshDeviceConnectivity(@PathParam("id") @ApiParam("Device ID") Integer id) {
+        final boolean canEditDevices = SecurityContext.get().hasPermission("edit_devices");
+
+        if (!canEditDevices) {
+            log.error("Unauthorized attempt to refresh device connectivity",
+                    SecurityException.onCustomerDataAccessViolation(id, "device"));
+            return Response.PERMISSION_DENIED();
+        }
+
+        try {
+            Device device = this.deviceDAO.getDeviceById(id);
+            if (device == null) {
+                return Response.DEVICE_NOT_FOUND_ERROR();
+            }
+
+            this.pushService.notifyDeviceOnSettingUpdate(id);
+            return Response.OK();
+        } catch (Exception e) {
+            log.error("Failed to request connectivity refresh for device #{}", id, e);
+            return Response.INTERNAL_ERROR();
+        }
+    }
+
+    // =================================================================================================================
+    @ApiOperation(
             value = "Save device description",
             notes = "Updates existing device description"
     )

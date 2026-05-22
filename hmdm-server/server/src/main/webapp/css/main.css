@@ -56,6 +56,39 @@
     margin-top: 3px;
 }
 
+.internet-status-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.internet-status-type {
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.internet-refresh-btn {
+    padding: 0;
+}
+
+.internet-refresh-btn .glyphicon {
+    color: #337ab7;
+}
+
+.spin {
+    display: inline-block;
+    animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .alert {
     position: fixed;
     width: 400px;
