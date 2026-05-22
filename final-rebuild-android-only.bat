@@ -1,7 +1,12 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-cd /d "%~dp0"
+pushd "%~dp0" >nul 2>nul
+if errorlevel 1 (
+    echo ERROR: Unable to open script directory: %~dp0
+    echo If you launched from a network or WSL path, copy project to a local Windows drive and retry.
+    goto :end
+)
 
 set "ROOT_DIR=%CD%"
 set "ANDROID_DIR=%ROOT_DIR%\hmdm-android"
@@ -210,6 +215,7 @@ echo Operation did not complete.
 echo.
 
 :end
+popd >nul 2>nul
 echo Press any key to exit...
 pause >nul
 endlocal
