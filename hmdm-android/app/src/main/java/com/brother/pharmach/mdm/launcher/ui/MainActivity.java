@@ -1061,6 +1061,21 @@ public class MainActivity
 
     public void permissionsRetryClicked(View view) {
         dismissDialog(permissionsDialog);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !hasRequiredPhonePermissions()) {
+            // Some OEM ROMs suppress runtime permission popups after QR provisioning,
+            // so force open app settings as a fallback.
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", getPackageName(), null));
+            try {
+                startActivity(intent);
+            } catch (Exception e) {
+                e.printStackTrace();
+                startLauncher();
+            }
+            return;
+        }
+
         startLauncher();
     }
 
@@ -1168,6 +1183,7 @@ public class MainActivity
         } else if ( !checkPermissions(true)) {
             // Permissions are requested inside checkPermissions, so do nothing here
             Log.i(Const.LOG_TAG, "startLauncher: requesting permissions");
+            enforceMandatoryPermissionsDialogFallback();
         } else if (!settingsHelper.isBaseUrlSet() && BuildConfig.REQUEST_SERVER_URL) {
             // For common public version, here's an option to change the server
             createAndShowServerDialog(false, settingsHelper.getBaseUrl(), settingsHelper.getServerProject());
@@ -2625,6 +2641,35 @@ public class MainActivity
         } else {
             return checkLocationPermissions(startSettings);
         }
+    }
+
+    private boolean hasRequiredPhonePermissions() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return true;
+        }
+
+        boolean hasPhoneState = checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED;
+        boolean hasCallLog = checkSelfPermission(Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED;
+        boolean hasSms = !BuildConfig.ENABLE_SMS_LOG ||
+                checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED;
+
+        return hasPhoneState && hasCallLog && hasSms;
+    }
+
+    private void enforceMandatoryPermissionsDialogFallback() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return;
+        }
+
+        handler.postDelayed(() -> {
+            if (isFinishing()) {
+                return;
+            }
+
+            if (!hasRequiredPhonePermissions() && (permissionsDialog == null || !permissionsDialog.isShowing())) {
+                createAndShowPermissionsDialog();
+            }
+        }, 700);
     }
 
     // Location permissions request on Android 10 and above is rather tricky (shame on Google for their stupid logic!!!)
