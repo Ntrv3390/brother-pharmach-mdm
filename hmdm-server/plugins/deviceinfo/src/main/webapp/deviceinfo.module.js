@@ -566,6 +566,52 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
         var mapInstanceRef = null;
         var userAdjustedMapViewport = false;
         var mapCenteringInProgress = false;
+        var mapViewportStorageKey = 'hmdm-plugin-deviceinfo-map-viewport-' + ($stateParams.deviceNumber || 'unknown');
+
+        var saveMapViewport = function () {
+            if (!mapInstanceRef) {
+                return;
+            }
+            try {
+                var center = mapInstanceRef.getCenter();
+                var zoom = mapInstanceRef.getZoom();
+                $window.localStorage.setItem(mapViewportStorageKey, JSON.stringify({
+                    lat: center.lat,
+                    lon: center.lng,
+                    zoom: zoom
+                }));
+            } catch (e) {
+            }
+        };
+
+        var restoreMapViewport = function () {
+            if (!mapInstanceRef) {
+                return false;
+            }
+            try {
+                var rawValue = $window.localStorage.getItem(mapViewportStorageKey);
+                if (!rawValue) {
+                    return false;
+                }
+                var viewport = JSON.parse(rawValue);
+                var lat = parseFloat(viewport.lat);
+                var lon = parseFloat(viewport.lon);
+                var zoom = parseInt(viewport.zoom, 10);
+                if (!isFinite(lat) || !isFinite(lon) || !isFinite(zoom)) {
+                    return false;
+                }
+
+                mapCenteringInProgress = true;
+                mapInstanceRef.setView([lat, lon], zoom);
+                $timeout(function () {
+                    mapCenteringInProgress = false;
+                }, 0, false);
+                userAdjustedMapViewport = true;
+                return true;
+            } catch (e) {
+                return false;
+            }
+        };
 
         var bindMapInteractionTracking = function (mapInstance) {
             if (!mapInstance) {
@@ -581,6 +627,8 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
             // Track explicit user viewport actions and preserve them across auto-refreshes.
             mapInstance.on('dragstart', markUserAdjustedViewport);
             mapInstance.on('zoomstart', markUserAdjustedViewport);
+            mapInstance.on('moveend', saveMapViewport);
+            mapInstance.on('zoomend', saveMapViewport);
         };
 
         var updateMap = function(items) {
@@ -588,6 +636,7 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                 setTimeout(function () {
                     mapInstanceRef = mapService.initMap($scope, 'locationMap', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
                     bindMapInteractionTracking(mapInstanceRef);
+                    restoreMapViewport();
                     mapInitialized = true;
                     addMarkers(items);
                 }, 500);
