@@ -78,6 +78,16 @@ public class PushService {
     }
 
     /**
+     * <p>Sends the message requesting immediate device info upload.</p>
+     *
+     * @param deviceId an ID of device to be notified.
+     */
+    @Transactional
+    public void notifyDeviceOnDeviceInfoRefresh(Integer deviceId) {
+        sendSimpleMessage(deviceId, PushMessage.TYPE_FETCH_DEVICE_INFO_URGENT);
+    }
+
+    /**
      * <p>Sends the simple message of a certain type to specified device.</p>
      *
      * @param deviceId an ID of device to be notified.

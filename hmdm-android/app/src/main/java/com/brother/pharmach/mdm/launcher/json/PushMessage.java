@@ -31,6 +31,7 @@ public class PushMessage {
     public static final String TYPE_CONFIG_UPDATING = "configUpdating";
     public static final String TYPE_CONFIG_UPDATED = "configUpdated";
     public static final String TYPE_FETCH_GPS_URGENT = "fetchGpsUrgent";
+    public static final String TYPE_FETCH_DEVICE_INFO_URGENT = "fetchDeviceInfoUrgent";
     public static final String TYPE_RUN_APP = "runApp";
     public static final String TYPE_BROADCAST = "broadcast";
     public static final String TYPE_UNINSTALL_APP = "uninstallApp";

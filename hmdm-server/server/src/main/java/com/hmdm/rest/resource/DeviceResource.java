@@ -439,7 +439,7 @@ public class DeviceResource {
                 return Response.DEVICE_NOT_FOUND_ERROR();
             }
 
-            this.pushService.notifyDeviceOnSettingUpdate(id);
+            this.pushService.notifyDeviceOnDeviceInfoRefresh(id);
             return Response.OK();
         } catch (Exception e) {
             log.error("Failed to request connectivity refresh for device #{}", id, e);

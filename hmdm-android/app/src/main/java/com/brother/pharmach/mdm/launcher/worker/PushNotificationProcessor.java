@@ -39,10 +39,13 @@ import com.brother.pharmach.mdm.launcher.db.DownloadTable;
 import com.brother.pharmach.mdm.launcher.helper.ConfigUpdater;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.json.Application;
+import com.brother.pharmach.mdm.launcher.json.DeviceInfo;
 import com.brother.pharmach.mdm.launcher.json.Download;
 import com.brother.pharmach.mdm.launcher.json.PushMessage;
 import com.brother.pharmach.mdm.launcher.json.ServerConfig;
 import com.brother.pharmach.mdm.launcher.service.LocationService;
+import com.brother.pharmach.mdm.launcher.task.SendDeviceInfoTask;
+import com.brother.pharmach.mdm.launcher.util.DeviceInfoProvider;
 import com.brother.pharmach.mdm.launcher.util.InstallUtils;
 import com.brother.pharmach.mdm.launcher.util.LegacyUtils;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
@@ -65,6 +68,18 @@ public class PushNotificationProcessor {
             // Update local configuration
             ConfigUpdater.notifyConfigUpdate(context);
             // The configUpdated should be broadcasted after the configuration update is completed
+            return;
+        } else if (message.getMessageType().equals(PushMessage.TYPE_FETCH_DEVICE_INFO_URGENT)) {
+            // Upload current device info immediately so admin-side refresh can show latest online/offline state.
+            AsyncTask.execute(() -> {
+                try {
+                    DeviceInfo deviceInfo = DeviceInfoProvider.getDeviceInfo(context, true, true);
+                    new SendDeviceInfoTask(context).execute(deviceInfo);
+                } catch (Exception e) {
+                    RemoteLogger.log(context, Const.LOG_WARN,
+                            "Urgent device info refresh failed: " + e.getMessage());
+                }
+            });
             return;
         } else if (message.getMessageType().equals(PushMessage.TYPE_FETCH_GPS_URGENT)) {
             // Silent urgent GPS refresh requested by admin.
