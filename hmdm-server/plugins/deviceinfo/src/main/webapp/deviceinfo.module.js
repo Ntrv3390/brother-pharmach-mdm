@@ -428,9 +428,26 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
             $scope.errorMessage = undefined;
         };
 
+        var hasValidCoordinates = function (lat, lon) {
+            return isFinite(parseFloat(lat)) && isFinite(parseFloat(lon));
+        };
+
         $scope.refreshState = {
             lastRequestedAt: null,
-            waitingForNewData: false
+            waitingForNewData: false,
+            pendingCount: 0,
+            completedCount: 0
+        };
+
+        var pendingRefreshes = [];
+        var completedRefreshCount = 0;
+        var MAX_REFRESH_WAIT_MS = 120000;
+        var REFRESH_POLL_INTERVAL_MS = 1000;
+
+        var updateRefreshState = function () {
+            $scope.refreshState.waitingForNewData = pendingRefreshes.length > 0;
+            $scope.refreshState.pendingCount = pendingRefreshes.length;
+            $scope.refreshState.completedCount = completedRefreshCount;
         };
 
         var refreshBaselineTs = 0;
@@ -508,7 +525,7 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
         $scope.refreshLocation = function () {
             clearMessages();
             $scope.refreshState.lastRequestedAt = new Date();
-            var refreshBaselineTs = getLatestGpsRecordTs($scope.data);
+            refreshBaselineTs = getLatestGpsRecordTs($scope.data);
 
             $http.post('rest/plugins/deviceinfo/deviceinfo/private/refresh/' + $stateParams.deviceNumber)
                 .then(function (response) {
@@ -876,6 +893,10 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
             $scope.formData = defaultFormData;
             $window.localStorage.setItem(storageFormDataVersionAttrName, formDataStorageVersion);
         }
+
+        // Always start the page in "Any" interval to avoid stale browser state hiding old records.
+        $scope.formData.fixedInterval = -1;
+        $scope.formData.useFixedInterval = false;
 
         var defaultFieldsSelection = {
             "deviceBatteryCharging": true,
