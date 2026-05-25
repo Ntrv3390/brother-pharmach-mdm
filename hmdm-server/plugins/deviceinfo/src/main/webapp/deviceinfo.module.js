@@ -560,6 +560,12 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                 delete request.timeTo;
                 delete request.dateFrom;
                 delete request.dateTo;
+            } else if (request.fixedInterval === -1) {
+                // "Any" interval should not apply date boundaries.
+                delete request.timeFrom;
+                delete request.timeTo;
+                delete request.dateFrom;
+                delete request.dateTo;
             } else {
                 var from = new Date(request.dateFrom.getTime());
                 from.setHours(request.timeFrom.getHours());

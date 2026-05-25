@@ -74,7 +74,7 @@
                 </div>
             </div>
 
-            <div class="col-sm-3" ng-if="!formData.useFixedInterval">
+            <div class="col-sm-3" ng-if="!formData.useFixedInterval && formData.fixedInterval > 0">
                 <div class='min-padding date-picker date-picker-input'>
                     <input class='form-control' datepicker-popup='{{dateFormat}}'
                            localized-placeholder="search.placeholder.from"
@@ -89,7 +89,7 @@
                 </div>
             </div>
 
-            <div class="col-sm-3" ng-if="!formData.useFixedInterval">
+            <div class="col-sm-3" ng-if="!formData.useFixedInterval && formData.fixedInterval > 0">
                 <div class='min-padding date-picker date-picker-input'>
                     <input class='form-control' datepicker-popup='{{dateFormat}}' localized-placeholder="search.placeholder.to"
                            ng-model='formData.dateTo' is-open='openDatePickers.dateTo' show-button-bar='false'
@@ -108,7 +108,7 @@
             </div>
         </div>
 
-        <div class="row" ng-if="!formData.useFixedInterval">
+        <div class="row" ng-if="!formData.useFixedInterval && formData.fixedInterval > 0">
             <div class="col-sm-offset-4 col-sm-3">
                 <div class='min-padding time-picker'>
                     <timepicker ng-model='formData.timeFrom' show-meridian='false' show-seconds="true"
