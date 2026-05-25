@@ -79,6 +79,10 @@ public class DeviceView {
         }
 
         if (info != null) {
+            if ("red".equalsIgnoreCase(device.getStatusCode())) {
+                info.setInternetConnected(false);
+                info.setInternetType("OFFLINE");
+            }
             this.deviceInfo = new DeviceInfoView(info);
         } else {
             this.deviceInfo = null;

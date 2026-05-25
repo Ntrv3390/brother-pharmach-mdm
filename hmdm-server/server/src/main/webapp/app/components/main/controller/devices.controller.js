@@ -481,9 +481,30 @@ angular.module('headwind-kiosk')
             return device.info;
         };
 
-        $scope.getInternetIndicatorImage = function (device) {
+        var isEffectivelyOnline = function (device) {
+            if (!device) {
+                return false;
+            }
+
+            // Keep Internet status aligned with device freshness to avoid showing stale network types.
+            if (device.statusCode) {
+                return device.statusCode !== 'red';
+            }
+
+            if (!device.lastUpdate) {
+                return false;
+            }
+
+            return (Date.now() - device.lastUpdate) < (2 * 60 * 60 * 1000);
+        };
+
+        var hasEffectiveInternetConnection = function (device) {
             var info = $scope.getDeviceInfo(device);
-            if (info && info.internetConnected === true) {
+            return isEffectivelyOnline(device) && info && info.internetConnected === true;
+        };
+
+        $scope.getInternetIndicatorImage = function (device) {
+            if (hasEffectiveInternetConnection(device)) {
                 return 'images/circle-green.png?v=2';
             }
             return 'images/circle-red.png?v=2';
@@ -491,7 +512,7 @@ angular.module('headwind-kiosk')
 
         $scope.getInternetType = function (device) {
             var info = $scope.getDeviceInfo(device);
-            if (info && info.internetConnected === true) {
+            if (hasEffectiveInternetConnection(device)) {
                 if (info.internetType && info.internetType.length > 0) {
                     return info.internetType;
                 }
@@ -502,7 +523,7 @@ angular.module('headwind-kiosk')
 
         $scope.getInternetStatusTitle = function (device) {
             var info = $scope.getDeviceInfo(device);
-            if (info && info.internetConnected === true) {
+            if (hasEffectiveInternetConnection(device)) {
                 var type = info.internetType && info.internetType.length > 0 ? info.internetType : 'ONLINE';
                 return 'Internet connected (' + type + ')';
             }
