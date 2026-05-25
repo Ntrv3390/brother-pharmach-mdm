@@ -263,6 +263,14 @@
              <button class="btn btn-info" ng-click="refreshLocation()">
                 <span class="glyphicon glyphicon-refresh"></span> Location
             </button>
+            <a class="btn btn-default"
+               ng-if="hasMapCoordinates()"
+               ng-href="{{getGoogleMapsUrl()}}"
+               target="_blank"
+               rel="noopener noreferrer"
+               style="margin-left: 10px;">
+                <span class="glyphicon glyphicon-map-marker"></span> Open Google Maps
+            </a>
             <div class="margin-top-10" ng-if="refreshState.lastRequestedAt">
                 <small class="text-muted">Last refresh request: {{refreshState.lastRequestedAt | date:'dd.MM.yy HH:mm:ss'}}</small>
                 <br/>

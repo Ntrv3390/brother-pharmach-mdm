@@ -270,6 +270,10 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
             $scope.errorMessage = undefined;
         };
 
+        var hasValidCoordinates = function (lat, lon) {
+            return isFinite(parseFloat(lat)) && isFinite(parseFloat(lon));
+        };
+
         $scope.refreshState = {
             lastRequestedAt: null,
             waitingForNewData: false,
@@ -633,13 +637,24 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
 
         var updateMap = function(items) {
             if (!mapInitialized) {
-                setTimeout(function () {
-                    mapInstanceRef = mapService.initMap($scope, 'locationMap', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
-                    bindMapInteractionTracking(mapInstanceRef);
-                    restoreMapViewport();
-                    mapInitialized = true;
-                    addMarkers(items);
-                }, 500);
+                mapInitialized = true;
+                $timeout(function () {
+                    try {
+                        mapInstanceRef = mapService.initMap($scope, 'locationMap', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+                        bindMapInteractionTracking(mapInstanceRef);
+                        restoreMapViewport();
+                        addMarkers(items);
+
+                        if (mapInstanceRef && mapInstanceRef.invalidateSize) {
+                            $timeout(function () {
+                                mapInstanceRef.invalidateSize();
+                            }, 0, false);
+                        }
+                    } catch (e) {
+                        mapInitialized = false;
+                        $scope.errorMessage = localization.localize('error.request.failure') || 'Failed to initialize map';
+                    }
+                }, 500, false);
             } else {
                 addMarkers(items);
             }
@@ -663,6 +678,8 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
             if (latestItem) {
                 var markerLat = parseFloat(latestItem.gpsLat);
                 var markerLon = parseFloat(latestItem.gpsLon);
+                $scope.mapLat = markerLat;
+                $scope.mapLon = markerLon;
                 mapService.addMarker(
                     latestItem.id,
                     markerLat,
@@ -682,7 +699,21 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                         mapCenteringInProgress = false;
                     }, 0, false);
                 }
+            } else {
+                $scope.mapLat = null;
+                $scope.mapLon = null;
             }
+        };
+
+        $scope.hasMapCoordinates = function () {
+            return hasValidCoordinates($scope.mapLat, $scope.mapLon);
+        };
+
+        $scope.getGoogleMapsUrl = function () {
+            if (!$scope.hasMapCoordinates()) {
+                return null;
+            }
+            return 'https://www.google.com/maps?q=' + $scope.mapLat + ',' + $scope.mapLon;
         };
 
         var loadData = function () {
@@ -728,6 +759,8 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                     }
 
                     if ($scope.data && $scope.data.length > 0) {
+                        $scope.mapLat = null;
+                        $scope.mapLon = null;
                         for (var i = 0; i < $scope.data.length; i++) {
                             var _lat = parseFloat($scope.data[i] && $scope.data[i].gpsLat);
                             var _lon = parseFloat($scope.data[i] && $scope.data[i].gpsLon);
@@ -738,6 +771,9 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                             }
                         }
                         updateMap($scope.data);
+                    } else {
+                        $scope.mapLat = null;
+                        $scope.mapLon = null;
                     }
                 } else {
                     $scope.errorMessage = localization.localizeServerResponse(response);
@@ -771,12 +807,13 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
 
         var defaultFormData = {
             deviceNumber: $stateParams.deviceNumber,
-            useFixedInterval: true,
-            fixedInterval: 24 * 3600,
+            useFixedInterval: false,
+            fixedInterval: -1,
             dateFrom: new Date(),
             dateTo: new Date(),
             timeFrom: new Date(),
             timeTo: new Date(),
+            intervalSelectionTouched: false,
             pageSize: 50,
             pageNum: 1
         };
@@ -788,6 +825,18 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                 var formData = JSON.parse(storedFormData);
                 formData.deviceNumber = $stateParams.deviceNumber;
                 formData.fixedInterval = parseInt(formData.fixedInterval);
+                if (!isFinite(formData.fixedInterval)) {
+                    formData.fixedInterval = -1;
+                }
+                // Migrate old saved filters: if user has never explicitly changed interval selection,
+                // default to showing complete history instead of a narrow fixed interval.
+                if (!formData.hasOwnProperty('intervalSelectionTouched')) {
+                    formData.fixedInterval = -1;
+                    formData.useFixedInterval = false;
+                    formData.intervalSelectionTouched = false;
+                } else {
+                    formData.useFixedInterval = formData.fixedInterval > 0;
+                }
                 if (formData.dateFrom) {
                     formData.dateFrom = new Date(formData.dateFrom);
                 } else {
@@ -886,6 +935,7 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
 
         $scope.fixedIntervalSelected = function () {
             $scope.formData.useFixedInterval = $scope.formData.fixedInterval > 0;
+            $scope.formData.intervalSelectionTouched = true;
             if ($scope.formData.useFixedInterval) {
                 $scope.formData.dateFrom = new Date();
                 $scope.formData.dateTo = new Date();
