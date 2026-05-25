@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -59,6 +60,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.StreamingOutput;
 import java.util.HashMap;
@@ -112,6 +114,9 @@ public class DeviceInfoResource {
 
     private PushService pushService;
 
+    @Context
+    private HttpServletResponse httpServletResponse;
+
     /**
      * <p>A constructor required by swagger.</p>
      */
@@ -138,6 +143,14 @@ public class DeviceInfoResource {
         this.pushService = pushService;
     }
 
+    private void applyNoCacheHeaders() {
+        if (this.httpServletResponse != null) {
+            this.httpServletResponse.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0, private");
+            this.httpServletResponse.setHeader("Pragma", "no-cache");
+            this.httpServletResponse.setDateHeader("Expires", 0);
+        }
+    }
+
     // =================================================================================================================
     @ApiOperation(
             value = "Save device info",
@@ -150,6 +163,8 @@ public class DeviceInfoResource {
     @Path("/public/{deviceNumber}")
     public Response saveDeviceInfo(@PathParam("deviceNumber") String deviceNumber, List<DeviceDynamicInfo> data) {
         try {
+            applyNoCacheHeaders();
+
             // Find device and set the device ID for records
             Device dbDevice = this.unsecureDAO.getDeviceByNumber(deviceNumber);
             if (dbDevice == null) {
@@ -210,6 +225,8 @@ public class DeviceInfoResource {
     @Path("/private/{deviceNumber}")
     public Response getDeviceDetailedInfo(@PathParam("deviceNumber") String deviceNumber) {
         try {
+            applyNoCacheHeaders();
+
             Device dbDevice = this.deviceDAO.getDeviceByNumber(deviceNumber);
             if (dbDevice == null) {
                 logger.error("Device {} was not found", deviceNumber);
@@ -238,6 +255,8 @@ public class DeviceInfoResource {
     @Path("/private/search/device")
     public Response lookupDevices(@QueryParam("filter") String filter, @QueryParam("limit") int limit) {
         try {
+            applyNoCacheHeaders();
+
             final List<DeviceLookupItem> devices = this.deviceDAO.findDevices(filter, limit);
             return Response.OK(devices);
         } catch (Exception e) {
@@ -264,6 +283,8 @@ public class DeviceInfoResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Response getPhotos(DynamicInfoFilter filter) {
         try {
+            applyNoCacheHeaders();
+
             final String deviceNumber = filter.getDeviceNumber();
 
             Device dbDevice = this.deviceDAO.getDeviceByNumber(deviceNumber);
@@ -326,7 +347,11 @@ public class DeviceInfoResource {
                 } catch ( Exception e ) {
                     logger.error("Unexpected error when exporting the device dynamic info to CSV format", e);
                 }
-            } ).header( "Content-Disposition", contentDisposition ).build();
+            } )
+                    .header("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0, private")
+                    .header("Pragma", "no-cache")
+                    .header("Expires", "0")
+                    .header( "Content-Disposition", contentDisposition ).build();
         } catch (Exception e) {
             logger.error("Unexpected error while exporting the device dynamic info records to CSV file", e);
             return javax.ws.rs.core.Response.serverError().build();
@@ -344,6 +369,8 @@ public class DeviceInfoResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Response refreshDevice(@PathParam("deviceNumber") String deviceNumber) {
         try {
+            applyNoCacheHeaders();
+
             Device device = deviceDAO.getDeviceByNumber(deviceNumber);
             if (device != null) {
                 final String requestId = UUID.randomUUID().toString();

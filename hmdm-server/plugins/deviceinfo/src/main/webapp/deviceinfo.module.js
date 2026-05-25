@@ -819,6 +819,8 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
         };
 
         var storageFormDataAttrName = 'hmdm-plugin-deviceinfo-formData';
+        var storageFormDataVersionAttrName = 'hmdm-plugin-deviceinfo-formData-version';
+        var formDataStorageVersion = '2';
         var storedFormData = $window.localStorage.getItem(storageFormDataAttrName);
         if (storedFormData) {
             try {
@@ -828,13 +830,19 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                 if (!isFinite(formData.fixedInterval)) {
                     formData.fixedInterval = -1;
                 }
-                // Migrate old saved filters: if user has never explicitly changed interval selection,
-                // default to showing complete history instead of a narrow fixed interval.
-                if (!formData.hasOwnProperty('intervalSelectionTouched')) {
+                var storedVersion = $window.localStorage.getItem(storageFormDataVersionAttrName);
+                // One-time hard migration to avoid stale browser filters hiding historical records.
+                // If the schema version is old/missing, reset interval to "Any" regardless of legacy values.
+                if (storedVersion !== formDataStorageVersion) {
                     formData.fixedInterval = -1;
                     formData.useFixedInterval = false;
                     formData.intervalSelectionTouched = false;
+                    $window.localStorage.setItem(storageFormDataVersionAttrName, formDataStorageVersion);
                 } else {
+                    // Backward compatibility for values saved by old builds.
+                    if (!formData.hasOwnProperty('intervalSelectionTouched')) {
+                        formData.intervalSelectionTouched = false;
+                    }
                     formData.useFixedInterval = formData.fixedInterval > 0;
                 }
                 if (formData.dateFrom) {
@@ -866,6 +874,7 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
             }
         } else {
             $scope.formData = defaultFormData;
+            $window.localStorage.setItem(storageFormDataVersionAttrName, formDataStorageVersion);
         }
 
         var defaultFieldsSelection = {
