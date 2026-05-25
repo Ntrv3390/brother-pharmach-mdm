@@ -527,7 +527,12 @@ angular.module('headwind-kiosk',
                         }
 
                         try {
-                            $ocLazyLoad.load(plugin.javascriptModuleFile);
+                            var pluginModuleFile = plugin.javascriptModuleFile;
+                            if (pluginModuleFile) {
+                                var separator = pluginModuleFile.indexOf('?') >= 0 ? '&' : '?';
+                                pluginModuleFile = pluginModuleFile + separator + 'v=' + Date.now();
+                            }
+                            $ocLazyLoad.load(pluginModuleFile);
                         } catch (e) {
                             console.error('Failed to load plugin module', e);
                         }
