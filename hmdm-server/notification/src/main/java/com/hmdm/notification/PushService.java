@@ -88,6 +88,22 @@ public class PushService {
     }
 
     /**
+     * <p>Sends the message requesting immediate device info upload to multiple devices at once.
+     * Returns immediately without waiting for responses.</p>
+     *
+     * @param deviceIds list of device IDs to be notified.
+     */
+    @Transactional
+    public void notifyDevicesOnDeviceInfoRefresh(List<Integer> deviceIds) {
+        if (deviceIds == null || deviceIds.isEmpty()) {
+            return;
+        }
+        for (Integer deviceId : deviceIds) {
+            sendSimpleMessage(deviceId, PushMessage.TYPE_FETCH_DEVICE_INFO_URGENT);
+        }
+    }
+
+    /**
      * <p>Sends the simple message of a certain type to specified device.</p>
      *
      * @param deviceId an ID of device to be notified.

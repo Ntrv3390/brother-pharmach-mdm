@@ -23,6 +23,7 @@ package com.hmdm.rest.resource;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -417,6 +418,33 @@ public class DeviceResource {
     }
 
     // =================================================================================================================
+    @ApiOperation(
+            value = "Bulk refresh connectivity state",
+            notes = "Sends a push to each supplied device requesting an immediate device info upload. " +
+                    "Returns immediately without waiting — clients should re-fetch the device list after ~10 s."
+    )
+    @POST
+    @Path("/connectivity/refresh-bulk")
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response refreshDeviceConnectivityBulk(List<Integer> deviceIds) {
+        final boolean canEditDevices = SecurityContext.get().hasPermission("edit_devices");
+        if (!canEditDevices) {
+            log.error("Unauthorized attempt to bulk-refresh device connectivity");
+            return Response.PERMISSION_DENIED();
+        }
+        if (deviceIds == null || deviceIds.isEmpty()) {
+            return Response.OK(Collections.singletonMap("queued", 0));
+        }
+        try {
+            this.pushService.notifyDevicesOnDeviceInfoRefresh(deviceIds);
+            return Response.OK(Collections.singletonMap("queued", deviceIds.size()));
+        } catch (Exception e) {
+            log.error("Failed to bulk-refresh connectivity for {} devices", deviceIds.size(), e);
+            return Response.INTERNAL_ERROR();
+        }
+    }
+
     @ApiOperation(
             value = "Refresh device connectivity state",
             notes = "Requests device to sync and upload the latest connectivity state"

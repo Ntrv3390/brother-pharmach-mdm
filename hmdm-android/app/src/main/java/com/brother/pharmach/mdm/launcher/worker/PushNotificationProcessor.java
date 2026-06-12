@@ -43,8 +43,12 @@ import com.brother.pharmach.mdm.launcher.json.DeviceInfo;
 import com.brother.pharmach.mdm.launcher.json.Download;
 import com.brother.pharmach.mdm.launcher.json.PushMessage;
 import com.brother.pharmach.mdm.launcher.json.ServerConfig;
-import com.brother.pharmach.mdm.launcher.task.SendDeviceInfoTask;
+import com.brother.pharmach.mdm.launcher.server.ServerService;
+import com.brother.pharmach.mdm.launcher.server.ServerServiceKeeper;
 import com.brother.pharmach.mdm.launcher.util.DeviceInfoProvider;
+
+import okhttp3.ResponseBody;
+import retrofit2.Response;
 import com.brother.pharmach.mdm.launcher.util.InstallUtils;
 import com.brother.pharmach.mdm.launcher.util.LegacyUtils;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
@@ -70,10 +74,30 @@ public class PushNotificationProcessor {
             return;
         } else if (message.getMessageType().equals(PushMessage.TYPE_FETCH_DEVICE_INFO_URGENT)) {
             // Upload current device info immediately so admin-side refresh can show latest online/offline state.
+            // Do the HTTP work directly in the background lambda — nesting a second AsyncTask from
+            // a background thread has undefined behaviour and adds unnecessary scheduling overhead.
             AsyncTask.execute(() -> {
                 try {
                     DeviceInfo deviceInfo = DeviceInfoProvider.getDeviceInfo(context, true, true);
-                    new SendDeviceInfoTask(context).execute(deviceInfo);
+                    SettingsHelper sh = SettingsHelper.getInstance(context);
+                    ServerService primary = ServerServiceKeeper.getServerServiceInstance(context);
+                    ServerService secondary = ServerServiceKeeper.getSecondaryServerServiceInstance(context);
+                    Response<ResponseBody> resp = null;
+                    try {
+                        resp = primary.sendDevice(sh.getServerProject(), deviceInfo).execute();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    if (resp == null || !resp.isSuccessful()) {
+                        try {
+                            resp = secondary.sendDevice(sh.getServerProject(), deviceInfo).execute();
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    if (resp != null && resp.isSuccessful()) {
+                        sh.setExternalIp(resp.headers().get(Const.HEADER_IP_ADDRESS));
+                    }
                 } catch (Exception e) {
                     RemoteLogger.log(context, Const.LOG_WARN,
                             "Urgent device info refresh failed: " + e.getMessage());

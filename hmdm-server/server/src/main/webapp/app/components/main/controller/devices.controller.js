@@ -266,6 +266,16 @@ angular.module('headwind-kiosk')
 
         $scope.showSpinner = false;
         var searchIsRunning = false;
+        // Tracks which device IDs have a connectivity refresh in-flight.
+        // Keyed by device.id so the flag survives $scope.devices being replaced by auto-refresh.
+        var refreshingIds = {};
+        // Ensures the on-login bulk push is sent only once per controller lifetime.
+        var initialLoadDone = false;
+
+        $scope.isInternetRefreshing = function (device) {
+            return device && !!refreshingIds[device.id];
+        };
+
         $scope.search = function (spinnerHidden, callback) {
             if (searchIsRunning) {
                 console.log("Skipping device search since a previous search is pending", new Error());
@@ -388,6 +398,17 @@ angular.module('headwind-kiosk')
                     }
 
                     $scope.paging.totalItems = response.data.devices.totalItemsCount;
+
+                    if (!initialLoadDone) {
+                        initialLoadDone = true;
+                        var deviceIds = $scope.devices.map(function (d) { return d.id; });
+                        if (deviceIds.length > 0) {
+                            // Fire-and-forget: push all devices to report fresh connectivity now.
+                            deviceService.refreshConnectivityStateBulk({}, deviceIds);
+                            // Re-fetch the list after devices have had time to respond.
+                            $timeout(function () { $scope.search(true); }, 10000);
+                        }
+                    }
 
                     if (callback) {
                         callback();
@@ -531,15 +552,16 @@ angular.module('headwind-kiosk')
         };
 
         $scope.refreshInternetState = function (device) {
-            if (!device || device.internetRefreshInProgress) {
+            if (!device || refreshingIds[device.id]) {
                 return;
             }
+
+            var deviceId = device.id;
 
             var applyRefreshedDevice = function (targetDevice, refreshedDevice) {
                 if (!targetDevice || !refreshedDevice) {
                     return;
                 }
-
                 var savedConfiguration = targetDevice.configuration;
                 angular.extend(targetDevice, refreshedDevice);
                 if (!targetDevice.configuration && savedConfiguration) {
@@ -550,25 +572,34 @@ angular.module('headwind-kiosk')
                 }
             };
 
-            device.internetRefreshInProgress = true;
-            deviceService.refreshConnectivityState({id: device.id}, {}, function (response) {
-                device.internetRefreshInProgress = false;
+            // Always look up the device in the current list by ID so that a
+            // 60-second auto-refresh replacing $scope.devices doesn't orphan the result.
+            var findCurrentDevice = function () {
+                if (!$scope.devices) { return null; }
+                for (var i = 0; i < $scope.devices.length; i++) {
+                    if ($scope.devices[i].id === deviceId) { return $scope.devices[i]; }
+                }
+                return null;
+            };
+
+            refreshingIds[deviceId] = true;
+            deviceService.refreshConnectivityState({id: deviceId}, {}, function (response) {
+                delete refreshingIds[deviceId];
+
+                var currentDevice = findCurrentDevice();
+                if (!currentDevice) { return; }
 
                 var data = response && response.data ? response.data : null;
                 if (data && data.device) {
-                    applyRefreshedDevice(device, data.device);
+                    // Apply whatever the server has — either a fresh push response or the
+                    // latest DB snapshot.  isEffectivelyOnline() already hides stale data.
+                    applyRefreshedDevice(currentDevice, data.device);
                 }
-
-                if (!data || data.updated !== true) {
-                    // No fresh sync arrived in refresh timeout window: show effective connectivity state as offline.
-                    if (!device.info) {
-                        device.info = {};
-                    }
-                    device.info.internetConnected = false;
-                    device.info.internetType = 'OFFLINE';
-                }
+                // Do NOT stamp OFFLINE on timeout: a slow push delivery is not proof that
+                // the device has no internet.  The DB snapshot applied above is the best
+                // available truth.
             }, function (response) {
-                device.internetRefreshInProgress = false;
+                delete refreshingIds[deviceId];
                 alertService.onRequestFailure(response);
             });
         };

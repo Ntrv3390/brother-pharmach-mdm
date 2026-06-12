@@ -9,6 +9,7 @@ angular.module('headwind-kiosk')
             removeDeviceBulk: {url: 'rest/private/devices/deleteBulk', method: 'POST'},
             updateDeviceGroupBulk: {url: 'rest/private/devices/groupBulk', method: 'POST'},
             refreshConnectivityState: {url: 'rest/private/devices/:id/connectivity/refresh', method: 'POST'},
+            refreshConnectivityStateBulk: {url: 'rest/private/devices/connectivity/refresh-bulk', method: 'POST'},
             getDeviceApplicationSettings: {url: 'rest/private/devices/:id/applicationSettings', method: 'GET'},
             saveDeviceApplicationSettings: {url: 'rest/private/devices/:id/applicationSettings', method: 'POST'},
             notifyDeviceOnAppSettingsUpdate: {url: 'rest/private/devices/:id/applicationSettings/notify', method: 'POST'}

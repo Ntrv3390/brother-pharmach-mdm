@@ -744,11 +744,11 @@
               class="btn btn-link btn-xs internet-refresh-btn"
               ng-click="refreshInternetState(device)"
               title="Refresh"
-              ng-disabled="device.internetRefreshInProgress"
+              ng-disabled="isInternetRefreshing(device)"
             >
               <span
                 class="glyphicon glyphicon-refresh"
-                ng-class="{'spin': device.internetRefreshInProgress}"
+                ng-class="{'spin': isInternetRefreshing(device)}"
               ></span>
             </button>
           </div>
