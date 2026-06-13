@@ -187,6 +187,13 @@
         </preConditions>
 
         <sql>
+            DELETE FROM plugin_calllog_data
+            WHERE id NOT IN (
+                SELECT MIN(id)
+                FROM plugin_calllog_data
+                GROUP BY deviceid, calltimestamp, calltype, COALESCE(phonenumber, '')
+            );
+
             CREATE UNIQUE INDEX uq_calllog_dedup
                 ON plugin_calllog_data
                 (deviceid, calltimestamp, calltype, COALESCE(phonenumber, ''));
@@ -209,6 +216,32 @@
             SELECT ur.id, p.id
             FROM userroles ur, permissions p
             WHERE ur.name = 'Super-Admin'
+              AND p.name = 'plugin_calllog_access';
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
+    <!-- Grant permission to Admin role                           -->
+    <!-- ========================================================= -->
+    <changeSet id="calllog-grant-permission-admin" author="calllog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="userrolepermissions"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM userrolepermissions urp
+                JOIN userroles ur ON ur.id = urp.roleid
+                JOIN permissions p ON p.id = urp.permissionid
+                WHERE ur.name = 'Admin' AND p.name = 'plugin_calllog_access'
+            </sqlCheck>
+        </preConditions>
+
+        <sql>
+            INSERT INTO userrolepermissions (roleid, permissionid)
+            SELECT ur.id, p.id
+            FROM userroles ur, permissions p
+            WHERE ur.name = 'Admin'
               AND p.name = 'plugin_calllog_access';
         </sql>
 

@@ -173,6 +173,8 @@
 
     <!-- ========================================================= -->
     <!-- UNIQUE constraint to prevent duplicate uploads (SL-1)   -->
+    <!-- Deduplicate existing rows first, then create index.     -->
+    <!-- Uses COALESCE so NULL phonenumber rows are also deduped.-->
     <!-- ========================================================= -->
     <changeSet id="smslog-add-unique-dedup" author="smslog-plugin">
 
@@ -184,8 +186,15 @@
         </preConditions>
 
         <sql>
+            DELETE FROM plugin_smslog_data
+            WHERE id NOT IN (
+                SELECT MIN(id)
+                FROM plugin_smslog_data
+                GROUP BY deviceid, smstimestamp, COALESCE(phonenumber, '')
+            );
+
             CREATE UNIQUE INDEX IF NOT EXISTS uq_smslog_device_ts_phone
-                ON plugin_smslog_data (deviceid, smstimestamp, phonenumber);
+                ON plugin_smslog_data (deviceid, smstimestamp, COALESCE(phonenumber, ''));
         </sql>
 
     </changeSet>
@@ -269,6 +278,32 @@
             SELECT ur.id, p.id
             FROM userroles ur, permissions p
             WHERE ur.name = 'Super-Admin'
+              AND p.name = 'plugin_smslog_access';
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
+    <!-- Grant permission to Admin role                           -->
+    <!-- ========================================================= -->
+    <changeSet id="smslog-grant-permission-admin" author="smslog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="userrolepermissions"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM userrolepermissions urp
+                JOIN userroles ur ON ur.id = urp.roleid
+                JOIN permissions p ON p.id = urp.permissionid
+                WHERE ur.name = 'Admin' AND p.name = 'plugin_smslog_access'
+            </sqlCheck>
+        </preConditions>
+
+        <sql>
+            INSERT INTO userrolepermissions (roleid, permissionid)
+            SELECT ur.id, p.id
+            FROM userroles ur, permissions p
+            WHERE ur.name = 'Admin'
               AND p.name = 'plugin_smslog_access';
         </sql>
 

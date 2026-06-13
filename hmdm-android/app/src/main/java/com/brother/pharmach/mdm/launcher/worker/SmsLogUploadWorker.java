@@ -75,39 +75,6 @@ public class SmsLogUploadWorker extends Worker {
     private static final int UPLOAD_BATCH_SIZE = 100;
     private static final String PREF_LAST_SMS_TIMESTAMP = "last_sms_log_timestamp";
         private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-        // Not a static field: SimpleDateFormat is not thread-safe.
-        // Instantiated per doWork() call with explicit UTC timezone.
-        private static final String[] SMS_PROJECTION_WITH_SUB_ID = {
-            Telephony.Sms.ADDRESS,
-            Telephony.Sms.BODY,
-            Telephony.Sms.TYPE,
-            Telephony.Sms.DATE,
-            Telephony.Sms.PERSON,
-            "sub_id"
-        };
-        private static final String[] SMS_PROJECTION_WITH_SUBSCRIPTION_ID = {
-            Telephony.Sms.ADDRESS,
-            Telephony.Sms.BODY,
-            Telephony.Sms.TYPE,
-            Telephony.Sms.DATE,
-            Telephony.Sms.PERSON,
-            "subscription_id"
-        };
-        private static final String[] SMS_PROJECTION_WITH_SIM_ID = {
-            Telephony.Sms.ADDRESS,
-            Telephony.Sms.BODY,
-            Telephony.Sms.TYPE,
-            Telephony.Sms.DATE,
-            Telephony.Sms.PERSON,
-            "sim_id"
-        };
-        private static final String[] SMS_PROJECTION_BASIC = {
-            Telephony.Sms.ADDRESS,
-            Telephony.Sms.BODY,
-            Telephony.Sms.TYPE,
-            Telephony.Sms.DATE,
-            Telephony.Sms.PERSON
-        };
 
     public SmsLogUploadWorker(@NonNull Context context, @NonNull WorkerParameters workerParams) {
         super(context, workerParams);
@@ -237,16 +204,27 @@ public class SmsLogUploadWorker extends Worker {
 
         Cursor cursor = null;
         try {
-            cursor = querySmsCursor(context, selection, selectionArgs, sortOrder);
+            // Use null projection so we get ALL columns the SMS provider exposes,
+            // including whatever vendor-specific SIM column the device uses.
+            cursor = context.getContentResolver().query(
+                    Telephony.Sms.CONTENT_URI,
+                    null,
+                    selection,
+                    selectionArgs,
+                    sortOrder);
 
             if (cursor != null && cursor.moveToFirst()) {
-                int addressIdx = cursor.getColumnIndex(Telephony.Sms.ADDRESS);
-                int bodyIdx = cursor.getColumnIndex(Telephony.Sms.BODY);
-                int typeIdx = cursor.getColumnIndex(Telephony.Sms.TYPE);
-                int dateIdx = cursor.getColumnIndex(Telephony.Sms.DATE);
-                int subIdIdx = cursor.getColumnIndex("sub_id");
+                int addressIdx       = cursor.getColumnIndex(Telephony.Sms.ADDRESS);
+                int bodyIdx          = cursor.getColumnIndex(Telephony.Sms.BODY);
+                int typeIdx          = cursor.getColumnIndex(Telephony.Sms.TYPE);
+                int dateIdx          = cursor.getColumnIndex(Telephony.Sms.DATE);
+                // Subscription-ID columns (map to slot via SubscriptionManager)
+                int subIdIdx         = cursor.getColumnIndex("sub_id");
                 int subscriptionIdIdx = cursor.getColumnIndex("subscription_id");
-                int simIdIdx = cursor.getColumnIndex("sim_id");
+                int simIdIdx         = cursor.getColumnIndex("sim_id");
+                // Direct slot-index columns (0-based) used by some OEMs
+                int slotIdIdx        = cursor.getColumnIndex("slot_id");
+                int simSlotIdx       = cursor.getColumnIndex("sim_slot");
 
                 do {
                     int androidType = typeIdx != -1 ? cursor.getInt(typeIdx) : -1;
@@ -266,7 +244,8 @@ public class SmsLogUploadWorker extends Worker {
                     record.setMessageType(messageType);
                     record.setSmsTimestamp(timestamp);
                     record.setSmsDate(dateFormat.format(new Date(timestamp)));
-                    record.setSimSlot(resolveSimSlot(context, cursor, subIdIdx, subscriptionIdIdx, simIdIdx));
+                    record.setSimSlot(resolveSimSlot(context, cursor,
+                            subIdIdx, subscriptionIdIdx, simIdIdx, slotIdIdx, simSlotIdx));
 
                     records.add(record);
 
@@ -350,54 +329,6 @@ public class SmsLogUploadWorker extends Worker {
         return Result.success();
     }
 
-    private Cursor querySmsCursor(Context context, String selection, String[] selectionArgs, String sortOrder) {
-        Cursor cursor = tryQuerySmsCursor(context, SMS_PROJECTION_WITH_SUB_ID, selection, selectionArgs, sortOrder, "sub_id");
-        if (cursor != null) {
-            return cursor;
-        }
-
-        cursor = tryQuerySmsCursor(context, SMS_PROJECTION_WITH_SUBSCRIPTION_ID, selection, selectionArgs, sortOrder, "subscription_id");
-        if (cursor != null) {
-            return cursor;
-        }
-
-        cursor = tryQuerySmsCursor(context, SMS_PROJECTION_WITH_SIM_ID, selection, selectionArgs, sortOrder, "sim_id");
-        if (cursor != null) {
-            return cursor;
-        }
-
-        Log.w(TAG, "All SIM-aware SMS projections failed, retrying with basic projection");
-        RemoteLogger.log(context, Const.LOG_WARN,
-            "SmsLogUploadWorker: all SIM-aware projections failed — SIM slot data will be missing for this device");
-        return context.getContentResolver().query(
-                Telephony.Sms.CONTENT_URI,
-                SMS_PROJECTION_BASIC,
-                selection,
-                selectionArgs,
-                sortOrder);
-    }
-
-    private Cursor tryQuerySmsCursor(
-            Context context,
-            String[] projection,
-            String selection,
-            String[] selectionArgs,
-            String sortOrder,
-            String projectionName
-    ) {
-        try {
-            return context.getContentResolver().query(
-                    Telephony.Sms.CONTENT_URI,
-                    projection,
-                    selection,
-                    selectionArgs,
-                    sortOrder);
-        } catch (Exception e) {
-            Log.w(TAG, "SMS projection with " + projectionName + " failed", e);
-            return null;
-        }
-    }
-
     private Response<ResponseBody> uploadToAvailableServer(
             ServerService primary,
             ServerService secondary,
@@ -420,7 +351,11 @@ public class SmsLogUploadWorker extends Worker {
         return response;
     }
 
-    private Integer resolveSimSlot(Context context, Cursor cursor, int subIdIdx, int subscriptionIdIdx, int simIdIdx) {
+    private Integer resolveSimSlot(Context context, Cursor cursor,
+            int subIdIdx, int subscriptionIdIdx, int simIdIdx,
+            int slotIdIdx, int simSlotIdx) {
+
+        // --- Step 1: subscription-ID columns → map via SubscriptionManager ---
         Integer raw = null;
         if (subIdIdx != -1 && !cursor.isNull(subIdIdx)) {
             raw = cursor.getInt(subIdIdx);
@@ -430,24 +365,26 @@ public class SmsLogUploadWorker extends Worker {
             raw = cursor.getInt(simIdIdx);
         }
 
-        if (raw == null || raw < 0) {
-            return null;
+        if (raw != null && raw >= 0) {
+            Integer mapped = mapSubscriptionIdToSimSlot(context, raw);
+            if (mapped != null) {
+                return mapped;
+            }
+            // Fallback convention when SubscriptionManager is unavailable
+            if (raw == 0) return 1;
+            if (raw == 1 || raw == 2) return raw;
         }
 
-        Integer mapped = mapSubscriptionIdToSimSlot(context, raw);
-        if (mapped != null) {
-            return mapped;
+        // --- Step 2: direct slot-index columns (0-based) used by some OEMs ---
+        if (slotIdIdx != -1 && !cursor.isNull(slotIdIdx)) {
+            int slotId = cursor.getInt(slotIdIdx);
+            if (slotId >= 0) return slotId + 1;
+        }
+        if (simSlotIdx != -1 && !cursor.isNull(simSlotIdx)) {
+            int simSlot = cursor.getInt(simSlotIdx);
+            if (simSlot >= 0) return simSlot + 1;
         }
 
-        // Common vendor conventions when no subscription mapping is available
-        if (raw == 0) {
-            return 1;
-        }
-        if (raw == 1 || raw == 2) {
-            return raw;
-        }
-
-        // For unsupported/raw subscription IDs, return null instead of a misleading value.
         return null;
     }
 
@@ -462,7 +399,10 @@ public class SmsLogUploadWorker extends Worker {
                 return null;
             }
 
-            SubscriptionManager subscriptionManager = context.getSystemService(SubscriptionManager.class);
+            // Use string-based lookup — more reliable in Worker/background context
+            // than the API-23 class-based getSystemService(SubscriptionManager.class).
+            SubscriptionManager subscriptionManager =
+                    (SubscriptionManager) context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
             if (subscriptionManager == null) {
                 return null;
             }
