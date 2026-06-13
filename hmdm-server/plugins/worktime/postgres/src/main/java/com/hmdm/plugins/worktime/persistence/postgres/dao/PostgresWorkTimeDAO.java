@@ -55,11 +55,43 @@ public class PostgresWorkTimeDAO implements WorkTimeDAO {
     }
 
     @Override
+    public List<WorkTimeDeviceOverride> findOverlappingExceptions(int customerId, int deviceId,
+                                                                   java.sql.Timestamp startDateTime,
+                                                                   java.sql.Timestamp endDateTime) {
+        return mapper.findOverlappingExceptions(customerId, deviceId, startDateTime, endDateTime);
+    }
+
+    @Override
     @Transactional
     public void saveDeviceOverride(WorkTimeDeviceOverride policy) {
         if (!policy.isEnabled() && policy.getStartDateTime() != null && policy.getEndDateTime() != null) {
             policy.setStartBoundaryPushSent(Boolean.FALSE);
             policy.setEndBoundaryPushSent(Boolean.FALSE);
+
+            // Merge any overlapping exceptions into this one
+            List<WorkTimeDeviceOverride> overlapping = mapper.findOverlappingExceptions(
+                    policy.getCustomerId(), policy.getDeviceId(),
+                    policy.getStartDateTime(), policy.getEndDateTime());
+
+            java.sql.Timestamp mergedStart = policy.getStartDateTime();
+            java.sql.Timestamp mergedEnd = policy.getEndDateTime();
+            int currentId = (policy.getId() != null && policy.getId() > 0) ? policy.getId() : -1;
+
+            for (WorkTimeDeviceOverride existing : overlapping) {
+                if (existing.getId() == currentId) {
+                    continue;
+                }
+                if (existing.getStartDateTime().before(mergedStart)) {
+                    mergedStart = existing.getStartDateTime();
+                }
+                if (existing.getEndDateTime().after(mergedEnd)) {
+                    mergedEnd = existing.getEndDateTime();
+                }
+                mapper.deleteDeviceOverrideById(policy.getCustomerId(), existing.getId());
+            }
+
+            policy.setStartDateTime(mergedStart);
+            policy.setEndDateTime(mergedEnd);
         } else {
             policy.setStartBoundaryPushSent(Boolean.TRUE);
             policy.setEndBoundaryPushSent(Boolean.TRUE);

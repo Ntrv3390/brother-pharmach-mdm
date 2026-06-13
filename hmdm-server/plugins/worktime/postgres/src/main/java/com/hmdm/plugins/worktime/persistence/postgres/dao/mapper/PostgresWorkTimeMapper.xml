@@ -143,6 +143,19 @@
         LIMIT 1
     </select>
 
+    <select id="findOverlappingExceptions" resultMap="deviceOverrideResult">
+        SELECT uo.*, devices.number as device_name
+        FROM worktime_device_override uo
+        LEFT JOIN devices ON devices.id = uo.device_id
+        WHERE uo.customer_id = #{customerId}
+          AND uo.device_id = #{deviceId}
+          AND uo.enabled = FALSE
+          AND uo.start_datetime IS NOT NULL
+          AND uo.end_datetime IS NOT NULL
+          AND uo.start_datetime &lt; #{endDateTime}
+          AND uo.end_datetime &gt; #{startDateTime}
+    </select>
+
     <insert id="insertDeviceOverride" parameterType="com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         INSERT INTO worktime_device_override (
             device_id,

@@ -22,6 +22,10 @@ public interface WorkTimeDAO {
 
     WorkTimeDeviceOverride getDeviceOverrideById(int customerId, int id);
 
+    List<WorkTimeDeviceOverride> findOverlappingExceptions(int customerId, int deviceId,
+                                                           java.sql.Timestamp startDateTime,
+                                                           java.sql.Timestamp endDateTime);
+
     void saveDeviceOverride(WorkTimeDeviceOverride policy);
 
     void deleteDeviceOverride(int customerId, int deviceId);

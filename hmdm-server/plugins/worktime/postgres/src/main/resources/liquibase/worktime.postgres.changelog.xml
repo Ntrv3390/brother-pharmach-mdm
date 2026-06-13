@@ -643,6 +643,7 @@
 
     <!-- ========================================================= -->
     <!-- Unique index to prevent duplicate exception entries (WT-3) -->
+    <!-- Superseded by overlap-merge logic — see drop changeSet below -->
     <!-- ========================================================= -->
     <changeSet id="worktime-device-override-unique-exception-2026-06-12" author="worktime-plugin">
         <preConditions onFail="MARK_RAN">
@@ -657,6 +658,21 @@
             CREATE UNIQUE INDEX uq_worktime_device_override_exception
                 ON worktime_device_override (customer_id, device_id, start_datetime)
                 WHERE start_datetime IS NOT NULL;
+        </sql>
+    </changeSet>
+
+    <!-- Drop the unique exception index so overlapping intervals can be merged server-side -->
+    <changeSet id="worktime-drop-unique-exception-constraint-2026-06-13" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_device_override"/>
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM pg_indexes
+                WHERE tablename = 'worktime_device_override'
+                  AND indexname = 'uq_worktime_device_override_exception'
+            </sqlCheck>
+        </preConditions>
+        <sql>
+            DROP INDEX uq_worktime_device_override_exception;
         </sql>
     </changeSet>
 

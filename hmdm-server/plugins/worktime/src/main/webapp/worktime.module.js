@@ -449,12 +449,41 @@ angular
         };
       }
 
+      function tryParseDate(value) {
+        if (value == null) return null;
+        var d = new Date(value);
+        return isNaN(d.getTime()) ? null : d;
+      }
+
       function decorateException(exception) {
+        // Prefer raw epoch-ms / ISO timestamps (from server or payload) for accurate
+        // UTC-based active/expiry checks.  The server sends dateFrom/timeFrom in
+        // WORKTIME_ZONE which may differ from the browser's local timezone, so
+        // rebuilding dates from those strings alone would shift times by the zone
+        // offset and cause active exceptions to disappear.
+        var startDate = tryParseDate(exception.startDateTime);
+        var endDate   = tryParseDate(exception.endDateTime);
+
+        if (startDate && endDate) {
+          var now = new Date();
+          // Overwrite display fields using browser-local time so the UI shows what
+          // the admin actually typed, regardless of server timezone.
+          exception.dateFrom = startDate;
+          exception.dateTo   = endDate;
+          exception.timeFrom = ("0" + startDate.getHours()).slice(-2) + ":" +
+                               ("0" + startDate.getMinutes()).slice(-2);
+          exception.timeTo   = ("0" + endDate.getHours()).slice(-2) + ":" +
+                               ("0" + endDate.getMinutes()).slice(-2);
+          exception.active   = now >= startDate && now <= endDate;
+          exception.upcoming = now < startDate;
+          return exception;
+        }
+
+        // Fallback: reconstruct from dateFrom/dateTo/timeFrom/timeTo strings
         var range = getExceptionRange(exception);
         if (!range) {
           return exception;
         }
-
         var now = new Date();
         exception.dateFrom = range.from;
         exception.dateTo = range.to;
@@ -525,8 +554,15 @@ angular
             return decorateException(exception);
           })
           .filter(function (exception) {
-            var range = getExceptionRange(exception);
-            return !range || now <= range.to;
+            // After decorateException, exception.dateTo is a UTC-accurate Date when
+            // startDateTime/endDateTime epoch-ms were available; use it directly.
+            var effectiveEnd = tryParseDate(exception.endDateTime) || exception.dateTo;
+            if (!effectiveEnd) {
+              var range = getExceptionRange(exception);
+              if (!range) return true;
+              effectiveEnd = range.to;
+            }
+            return now <= effectiveEnd;
           })
           .sort(sortExceptions);
       }

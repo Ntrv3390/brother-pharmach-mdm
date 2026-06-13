@@ -24,6 +24,11 @@ public interface PostgresWorkTimeMapper {
 
     WorkTimeDeviceOverride getDeviceOverrideById(@Param("customerId") int customerId, @Param("id") int id);
 
+    List<WorkTimeDeviceOverride> findOverlappingExceptions(@Param("customerId") int customerId,
+                                                           @Param("deviceId") int deviceId,
+                                                           @Param("startDateTime") java.sql.Timestamp startDateTime,
+                                                           @Param("endDateTime") java.sql.Timestamp endDateTime);
+
     void insertDeviceOverride(WorkTimeDeviceOverride override);
 
     void updateDeviceOverride(WorkTimeDeviceOverride override);
