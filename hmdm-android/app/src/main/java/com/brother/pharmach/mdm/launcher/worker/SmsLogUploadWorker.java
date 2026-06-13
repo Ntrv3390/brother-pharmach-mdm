@@ -183,8 +183,11 @@ public class SmsLogUploadWorker extends Worker {
         SharedPreferences prefs = context.getSharedPreferences("SmsLogPrefs", Context.MODE_PRIVATE);
         long lastTimestamp = prefs.getLong(PREF_LAST_SMS_TIMESTAMP, 0);
         long now = System.currentTimeMillis();
-        if (lastTimestamp > now + TimeUnit.MINUTES.toMillis(5)) {
-            // Device clock rolled back — reset so we don't miss SMS records permanently.
+        if (lastTimestamp > now + TimeUnit.DAYS.toMillis(1)) {
+            // Guard against a corrupted/impossible future timestamp (> 1 day ahead).
+            // 5-minute guards are too aggressive: post-OTA reboot NTP lag can easily
+            // put the saved timestamp a few minutes into the "future", which would reset
+            // it to 0 and force a full re-scan of all SMS — causing OOM on large inboxes.
             RemoteLogger.log(context, Const.LOG_WARN,
                 "SmsLogUploadWorker: last timestamp is in future (" + lastTimestamp + "), resetting to 0");
             lastTimestamp = 0;
@@ -254,9 +257,11 @@ public class SmsLogUploadWorker extends Worker {
                     }
                 } while (cursor.moveToNext());
             }
-        } catch (Exception e) {
-            Log.e(TAG, "Error reading sms log", e);
-            RemoteLogger.log(context, Const.LOG_WARN, "SmsLogUploadWorker: SMS scan failed: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+        } catch (Throwable t) {
+            // Catch Throwable (not just Exception) so OutOfMemoryError from a very large
+            // SMS inbox with null projection does not escape and crash the launcher process.
+            Log.e(TAG, "Error reading sms log", t);
+            RemoteLogger.log(context, Const.LOG_WARN, "SmsLogUploadWorker: SMS scan failed: " + t.getClass().getSimpleName() + " - " + t.getMessage());
             return Result.failure();
         } finally {
             if (cursor != null) {
