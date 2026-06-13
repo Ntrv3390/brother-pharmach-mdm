@@ -148,12 +148,12 @@ public class WorkTimeResource {
                                                   DateTimeFormatter timeFmt) {
         Map<String, Object> ex = new HashMap<>();
         ex.put("id", override.getId());
-        ex.put("dateFrom", override.getStartDateTime().toLocalDateTime().toLocalDate().format(dateFmt));
-        ex.put("dateTo", override.getEndDateTime().toLocalDateTime().toLocalDate().format(dateFmt));
-        ex.put("timeFrom", override.getStartDateTime().toLocalDateTime().toLocalTime().format(timeFmt));
-        ex.put("timeTo", override.getEndDateTime().toLocalDateTime().toLocalTime().format(timeFmt));
-        ex.put("active", !now.isBefore(override.getStartDateTime().toLocalDateTime())
-                && !now.isAfter(override.getEndDateTime().toLocalDateTime()));
+        ex.put("dateFrom", override.getStartDateTime().toInstant().atZone(WORKTIME_ZONE).toLocalDateTime().toLocalDate().format(dateFmt));
+        ex.put("dateTo", override.getEndDateTime().toInstant().atZone(WORKTIME_ZONE).toLocalDateTime().toLocalDate().format(dateFmt));
+        ex.put("timeFrom", override.getStartDateTime().toInstant().atZone(WORKTIME_ZONE).toLocalDateTime().toLocalTime().format(timeFmt));
+        ex.put("timeTo", override.getEndDateTime().toInstant().atZone(WORKTIME_ZONE).toLocalDateTime().toLocalTime().format(timeFmt));
+        ex.put("active", !now.isBefore(override.getStartDateTime().toInstant().atZone(WORKTIME_ZONE).toLocalDateTime())
+                && !now.isAfter(override.getEndDateTime().toInstant().atZone(WORKTIME_ZONE).toLocalDateTime()));
         ex.put("startDateTime", override.getStartDateTime());
         ex.put("endDateTime", override.getEndDateTime());
         return ex;
@@ -341,7 +341,7 @@ public class WorkTimeResource {
                     continue;
                 }
 
-                LocalDateTime end = override.getEndDateTime().toLocalDateTime();
+                LocalDateTime end = override.getEndDateTime().toInstant().atZone(WORKTIME_ZONE).toLocalDateTime();
                 if (now.isAfter(end)) {
                     workTimeDAO.deleteDeviceOverrideById(customerId, override.getId());
                     continue;
