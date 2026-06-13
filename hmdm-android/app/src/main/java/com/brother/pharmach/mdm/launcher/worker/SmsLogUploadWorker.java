@@ -362,12 +362,16 @@ public class SmsLogUploadWorker extends Worker {
 
         // --- Step 1: subscription-ID columns → map via SubscriptionManager ---
         Integer raw = null;
+        String rawStr = null;
         if (subIdIdx != -1 && !cursor.isNull(subIdIdx)) {
-            raw = cursor.getInt(subIdIdx);
+            rawStr = cursor.getString(subIdIdx);
+            raw = parseInteger(rawStr);
         } else if (subscriptionIdIdx != -1 && !cursor.isNull(subscriptionIdIdx)) {
-            raw = cursor.getInt(subscriptionIdIdx);
+            rawStr = cursor.getString(subscriptionIdIdx);
+            raw = parseInteger(rawStr);
         } else if (simIdIdx != -1 && !cursor.isNull(simIdIdx)) {
-            raw = cursor.getInt(simIdIdx);
+            rawStr = cursor.getString(simIdIdx);
+            raw = parseInteger(rawStr);
         }
 
         if (raw != null && raw >= 0) {
@@ -378,18 +382,52 @@ public class SmsLogUploadWorker extends Worker {
             // Fallback convention when SubscriptionManager is unavailable
             if (raw == 0) return 1;
             if (raw == 1 || raw == 2) return raw;
+        } else if (rawStr != null) {
+            Integer mappedFromLabel = inferSlotFromLabel(rawStr);
+            if (mappedFromLabel != null) {
+                return mappedFromLabel;
+            }
         }
 
         // --- Step 2: direct slot-index columns (0-based) used by some OEMs ---
         if (slotIdIdx != -1 && !cursor.isNull(slotIdIdx)) {
-            int slotId = cursor.getInt(slotIdIdx);
-            if (slotId >= 0) return slotId + 1;
+            String slotIdStr = cursor.getString(slotIdIdx);
+            Integer slotId = parseInteger(slotIdStr);
+            if (slotId != null && slotId >= 0) return slotId + 1;
+            Integer fromLabel = inferSlotFromLabel(slotIdStr);
+            if (fromLabel != null) return fromLabel;
         }
         if (simSlotIdx != -1 && !cursor.isNull(simSlotIdx)) {
-            int simSlot = cursor.getInt(simSlotIdx);
-            if (simSlot >= 0) return simSlot + 1;
+            String simSlotStr = cursor.getString(simSlotIdx);
+            Integer simSlot = parseInteger(simSlotStr);
+            if (simSlot != null && simSlot >= 0) return simSlot + 1;
+            Integer fromLabel = inferSlotFromLabel(simSlotStr);
+            if (fromLabel != null) return fromLabel;
         }
 
+        return null;
+    }
+
+    private Integer parseInteger(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private Integer inferSlotFromLabel(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String normalized = value.toLowerCase(Locale.US);
+        if (normalized.contains("sim1") || normalized.contains("sim 1") || normalized.contains("slot1") || normalized.contains("slot 1")) {
+            return 1;
+        }
+        if (normalized.contains("sim2") || normalized.contains("sim 2") || normalized.contains("slot2") || normalized.contains("slot 2")) {
+            return 2;
+        }
         return null;
     }
 
