@@ -397,7 +397,7 @@ angular
         var offsetMinutes = Math.abs(tzOffset % 60);
         var offsetSign = tzOffset > 0 ? "-" : "+";
         var offsetString = offsetSign + ("0" + offsetHours).slice(-2) + ":" + ("0" + offsetMinutes).slice(-2);
-        return datePart + "T" + timePart + ":00" + offsetString;
+        return datePart + "T" + timePart + ":00.000" + offsetString;
       }
 
       function getExceptionRange(exception) {
