@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"POST\\\\|PUT\\\\|Path.*info\" /home/Mohammed/hmdm/hmdm-server/server/src/main/java/com/hmdm/rest/resource/SyncResource.java | head -20)",
+      "Read(//home/Mohammed/hmdm/hmdm-server/server/src/main/java/com/hmdm/rest/resource/**)"
+    ]
+  }
+}

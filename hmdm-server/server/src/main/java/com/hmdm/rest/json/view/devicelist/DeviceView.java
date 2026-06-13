@@ -79,7 +79,14 @@ public class DeviceView {
         }
 
         if (info != null) {
-            if ("red".equalsIgnoreCase(device.getStatusCode())) {
+            // Treat internet status as stale if device hasn't reported in 10 minutes.
+            // A disconnected device stops sending updates, so silence = no internet.
+            // 10 min covers ~2x the typical sync interval; adjust if your interval is longer.
+            final long INTERNET_STALE_MS = 10 * 60 * 1000L;
+            boolean internetDataStale = device.getLastUpdate() != null &&
+                (System.currentTimeMillis() - device.getLastUpdate()) > INTERNET_STALE_MS;
+
+            if ("red".equalsIgnoreCase(device.getStatusCode()) || internetDataStale) {
                 info.setInternetConnected(false);
                 info.setInternetType("OFFLINE");
             }
