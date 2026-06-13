@@ -313,28 +313,33 @@ public class WorkTimeManager {
             return false;
         }
 
+        long now = System.currentTimeMillis();
+        boolean isActive = false;
+
         List<EffectiveWorkTimePolicy.ExceptionWindow> windows = policy.getExceptionWindows();
         if (windows != null && !windows.isEmpty()) {
-            long now = System.currentTimeMillis();
             for (EffectiveWorkTimePolicy.ExceptionWindow window : windows) {
                 if (window == null || window.getStartDateTime() == null || window.getEndDateTime() == null) {
                     continue;
                 }
                 if (now >= window.getStartDateTime() && now <= window.getEndDateTime()) {
-                    return true;
+                    isActive = true;
+                    break;
                 }
             }
-            return false;
         }
 
-        Long exceptionStart = policy.getExceptionStartDateTime();
-        Long exceptionEnd = policy.getExceptionEndDateTime();
-        if (exceptionStart == null || exceptionEnd == null) {
-            return false;
+        if (!isActive) {
+            Long exceptionStart = policy.getExceptionStartDateTime();
+            Long exceptionEnd = policy.getExceptionEndDateTime();
+            if (exceptionStart != null && exceptionEnd != null) {
+                if (now >= exceptionStart && now <= exceptionEnd) {
+                    isActive = true;
+                }
+            }
         }
 
-        long now = System.currentTimeMillis();
-        return now >= exceptionStart && now <= exceptionEnd;
+        return isActive;
     }
 
     private int getServerDayMask(Calendar calendar) {
