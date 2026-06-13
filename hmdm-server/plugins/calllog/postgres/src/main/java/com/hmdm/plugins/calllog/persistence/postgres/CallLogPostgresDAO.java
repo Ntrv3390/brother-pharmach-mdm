@@ -102,11 +102,6 @@ public class CallLogPostgresDAO implements CallLogDAO {
 
     @Override
     public void saveSettings(CallLogSettings settings) {
-        CallLogSettings existing = mapper.getSettings(settings.getCustomerId());
-        if (existing == null) {
-            mapper.insertSettings(settings);
-        } else {
-            mapper.updateSettings(settings);
-        }
+        mapper.upsertSettings(settings);
     }
 }

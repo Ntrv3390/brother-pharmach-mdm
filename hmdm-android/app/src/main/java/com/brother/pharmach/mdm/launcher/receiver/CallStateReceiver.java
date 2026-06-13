@@ -22,9 +22,13 @@ package com.brother.pharmach.mdm.launcher.receiver;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
+import androidx.work.Constraints;
+import androidx.work.ExistingWorkPolicy;
+import androidx.work.NetworkType;
 import androidx.work.OneTimeWorkRequest;
 import androidx.work.WorkManager;
 
@@ -34,7 +38,10 @@ import java.util.concurrent.TimeUnit;
 
 public class CallStateReceiver extends BroadcastReceiver {
     private static final String TAG = "CallStateReceiver";
-    private static int lastState = TelephonyManager.CALL_STATE_IDLE;
+    private static final String PREFS_NAME = "CallStatePrefs";
+    private static final String PREF_LAST_STATE = "last_call_state";
+    // Unique work name — prevents duplicate jobs when calls happen back-to-back
+    private static final String WORK_UNIQUE_NAME = "call_log_upload";
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -46,27 +53,42 @@ public class CallStateReceiver extends BroadcastReceiver {
             } else if (TelephonyManager.EXTRA_STATE_RINGING.equals(stateStr)) {
                 state = TelephonyManager.CALL_STATE_RINGING;
             }
-
             onCallStateChanged(context, state);
         }
     }
 
     private void onCallStateChanged(Context context, int state) {
+        int lastState = readLastState(context);
         Log.d(TAG, "Phone state changed: " + lastState + " -> " + state);
         if ((lastState == TelephonyManager.CALL_STATE_OFFHOOK || lastState == TelephonyManager.CALL_STATE_RINGING)
                 && state == TelephonyManager.CALL_STATE_IDLE) {
-            // Call ended or missed call
             Log.i(TAG, "Call end/miss detected, scheduling call log upload");
             scheduleUpload(context);
         }
-        lastState = state;
+        saveLastState(context, state);
+    }
+
+    private int readLastState(Context context) {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getInt(PREF_LAST_STATE, TelephonyManager.CALL_STATE_IDLE);
+    }
+
+    private void saveLastState(Context context, int state) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().putInt(PREF_LAST_STATE, state).apply();
     }
 
     private void scheduleUpload(Context context) {
-        // Schedule worker with a 5-second delay to ensure logs are written
+        Constraints constraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build();
         OneTimeWorkRequest uploadWork = new OneTimeWorkRequest.Builder(CallLogUploadWorker.class)
-            .setInitialDelay(5, TimeUnit.SECONDS)
-            .build();
-        WorkManager.getInstance(context).enqueue(uploadWork);
+                .setInitialDelay(5, TimeUnit.SECONDS)
+                .setConstraints(constraints)
+                .build();
+        // KEEP: if a previous call already queued an upload, don't replace — let the in-flight job finish.
+        // Both calls' records share the same watermark scan so a single run captures all new calls.
+        WorkManager.getInstance(context)
+                .enqueueUniqueWork(WORK_UNIQUE_NAME, ExistingWorkPolicy.KEEP, uploadWork);
     }
 }

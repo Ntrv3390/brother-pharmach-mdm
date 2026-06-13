@@ -152,6 +152,50 @@
 
 
     <!-- ========================================================= -->
+    <!-- pg_trgm GIN indexes for fast LIKE search on phone/name  -->
+    <!-- ========================================================= -->
+    <changeSet id="calllog-add-trgm-indexes" author="calllog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="plugin_calllog_data"/>
+        </preConditions>
+
+        <sql>
+            CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+            CREATE INDEX IF NOT EXISTS idx_calllog_phonenumber_trgm
+                ON plugin_calllog_data USING GIN (phonenumber gin_trgm_ops);
+
+            CREATE INDEX IF NOT EXISTS idx_calllog_contactname_trgm
+                ON plugin_calllog_data USING GIN (contactname gin_trgm_ops);
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
+    <!-- UNIQUE functional index to prevent duplicate uploads     -->
+    <!-- COALESCE handles NULL phonenumber (NULL != NULL in PG)   -->
+    <!-- ========================================================= -->
+    <changeSet id="calllog-add-dedup-unique-index" author="calllog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="plugin_calllog_data"/>
+            <not>
+                <indexExists indexName="uq_calllog_dedup"/>
+            </not>
+        </preConditions>
+
+        <sql>
+            CREATE UNIQUE INDEX uq_calllog_dedup
+                ON plugin_calllog_data
+                (deviceid, calltimestamp, calltype, COALESCE(phonenumber, ''));
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
     <!-- Grant permission to Super-Admin                          -->
     <!-- ========================================================= -->
     <changeSet id="calllog-grant-permission-superadmin" author="calllog-plugin">

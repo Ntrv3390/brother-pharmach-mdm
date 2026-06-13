@@ -48,6 +48,7 @@ angular.module('plugin-smslog', ['ngResource', 'ui.bootstrap', 'ui.router', 'ngT
                 $scope.saving = false;
                 if (response.status === 'OK') {
                     alertService.showAlertMessage(localization.localize('success.settings.saved'));
+                    $scope.init();
                 } else {
                     alertService.showAlertMessage(localization.localize('error.request.failure'));
                 }
@@ -184,6 +185,7 @@ angular.module('headwind-kiosk')
                 pluginSmsLogService.deleteSmsLogs({ deviceId: device.id }, function (response) {
                     if (response.status === 'OK') {
                         alertService.showAlertMessage(localization.localize('success.deleted'));
+                        $scope.pagination.page = 0;
                         $scope.loadSmsLogs();
                     } else {
                         alertService.showAlertMessage(localization.localize('error.request.failure'));

@@ -34,9 +34,9 @@ public interface WorkTimeDAO {
 
     void markExceptionEndPushSent(int customerId, int deviceId);
 
-    void markExceptionStartPushSentById(int id);
+    void markExceptionStartPushSentById(int id, int customerId);
 
-    void markExceptionEndPushSentById(int id);
+    void markExceptionEndPushSentById(int id, int customerId);
 
     // Get all device overrides across all customers (for cleanup task)
     List<WorkTimeDeviceOverride> getAllDeviceOverrides();

@@ -9,10 +9,13 @@ import android.content.IntentFilter;
 import android.location.LocationManager;
 import android.media.AudioManager;
 import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
 import android.net.TrafficStats;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.os.BatteryManager;
 import android.telephony.CellInfo;
 import android.telephony.CellInfoGsm;
@@ -56,7 +59,7 @@ public final class DynamicInfoHelper {
             LocationTable.Location location,
             boolean isUrgent) {
         DetailedInfo detailedInfo = new DetailedInfo();
-        detailedInfo.setTs(isUrgent ? System.currentTimeMillis() : location.getTs());
+        detailedInfo.setTs(location.getTs());
 
         DetailedInfo.Gps gps = new DetailedInfo.Gps();
         gps.setState(location.getTs() > System.currentTimeMillis() - 60_000L ? Const.GPS_STATE_ACTIVE : Const.GPS_STATE_LOST);
@@ -197,47 +200,64 @@ public final class DynamicInfoHelper {
                 return;
             }
 
-            WifiInfo wifiInfo = wifiManager.getConnectionInfo();
-            if (wifiInfo != null) {
-                int rssi = wifiInfo.getRssi();
-                if (rssi > -127) {
-                    wifi.setRssi(rssi);
+            // Use ConnectivityManager to verify actual WiFi connectivity (not just radio enabled).
+            // NET_CAPABILITY_VALIDATED confirms the OS tested the link and it has internet.
+            boolean wifiConnected = isWifiConnected(context);
+            wifi.setState(wifiConnected ? Const.WIFI_STATE_CONNECTED : Const.WIFI_STATE_DISCONNECTED);
+
+            if (wifiConnected) {
+                WifiInfo wifiInfo = wifiManager.getConnectionInfo();
+                if (wifiInfo != null) {
+                    int rssi = wifiInfo.getRssi();
+                    if (rssi > -127) {
+                        wifi.setRssi(rssi);
+                    }
+
+                    String ssid = wifiInfo.getSSID();
+                    if (ssid != null && !"<unknown ssid>".equalsIgnoreCase(ssid)) {
+                        wifi.setSsid(ssid.replace("\"", ""));
+                    }
+
+                    wifi.setSecurity(getWifiSecurity(wifiManager, wifiInfo));
+                    wifi.setIp(Formatter.formatIpAddress(wifiInfo.getIpAddress()));
                 }
 
-                String ssid = wifiInfo.getSSID();
-                if (ssid != null && !"<unknown ssid>".equalsIgnoreCase(ssid)) {
-                    wifi.setSsid(ssid.replace("\"", ""));
-                }
-
-                wifi.setSecurity(getWifiSecurity(wifiManager, wifiInfo));
-            }
-
-            wifi.setState(device.getWifi() != null && device.getWifi()
-                    ? Const.WIFI_STATE_CONNECTED
-                    : Const.WIFI_STATE_DISCONNECTED);
-
-            if (Const.WIFI_STATE_CONNECTED.equals(wifi.getState())) {
-                wifi.setIp(Formatter.formatIpAddress(wifiInfo.getIpAddress()));
-                
                 long currentTotalTx = TrafficStats.getTotalTxBytes();
                 long currentTotalRx = TrafficStats.getTotalRxBytes();
                 long lastTotalTx = prefs.getLong(LAST_TOTAL_TX, 0);
                 long lastTotalRx = prefs.getLong(LAST_TOTAL_RX, 0);
-                
-                // Approximate WiFi as Total - Mobile
+
                 long currentMobileTx = TrafficStats.getMobileTxBytes();
                 long currentMobileRx = TrafficStats.getMobileRxBytes();
-                
+
                 long wifiTx = currentTotalTx - currentMobileTx;
                 long wifiRx = currentTotalRx - currentMobileRx;
-                
+
                 wifi.setTx(wifiTx >= lastTotalTx ? wifiTx - lastTotalTx : wifiTx);
                 wifi.setRx(wifiRx >= lastTotalRx ? wifiRx - lastTotalRx : wifiRx);
-                
+
                 prefs.edit().putLong(LAST_TOTAL_TX, wifiTx).putLong(LAST_TOTAL_RX, wifiRx).apply();
             }
         } catch (Exception ignored) {
             wifi.setState(Const.WIFI_STATE_FAILED);
+        }
+    }
+
+    private static boolean isWifiConnected(Context context) {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Network activeNet = cm.getActiveNetwork();
+                NetworkCapabilities caps = activeNet != null ? cm.getNetworkCapabilities(activeNet) : null;
+                return caps != null
+                        && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                        && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+            }
+            NetworkInfo wifiNet = cm.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+            return wifiNet != null && wifiNet.isConnected();
+        } catch (Exception ignored) {
+            return false;
         }
     }
 

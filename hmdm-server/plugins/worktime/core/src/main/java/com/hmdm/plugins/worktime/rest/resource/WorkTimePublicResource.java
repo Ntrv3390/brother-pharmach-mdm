@@ -12,6 +12,8 @@ import io.swagger.annotations.ApiParam;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.hmdm.plugins.worktime.WorkTimeZone;
+
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.ws.rs.*;
@@ -32,7 +34,7 @@ import java.time.ZoneId;
 public class WorkTimePublicResource {
 
     private static final Logger log = LoggerFactory.getLogger(WorkTimePublicResource.class);
-    private static final ZoneId WORKTIME_ZONE = ZoneId.of("Asia/Kolkata");
+    private static final ZoneId WORKTIME_ZONE = WorkTimeZone.ZONE;
     
     private final WorkTimeService workTimeService;
     private final UnsecureDAO unsecureDAO;

@@ -60,6 +60,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.ResponseBody;
@@ -74,7 +75,8 @@ public class SmsLogUploadWorker extends Worker {
     private static final int UPLOAD_BATCH_SIZE = 100;
     private static final String PREF_LAST_SMS_TIMESTAMP = "last_sms_log_timestamp";
         private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-        private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
+        // Not a static field: SimpleDateFormat is not thread-safe.
+        // Instantiated per doWork() call with explicit UTC timezone.
         private static final String[] SMS_PROJECTION_WITH_SUB_ID = {
             Telephony.Sms.ADDRESS,
             Telephony.Sms.BODY,
@@ -149,8 +151,8 @@ public class SmsLogUploadWorker extends Worker {
 
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
             Log.w(TAG, "Missing READ_SMS permission");
-            RemoteLogger.log(context, Const.LOG_WARN, "SmsLogUploadWorker: READ_SMS is not granted, skipping upload");
-            return Result.success();
+            RemoteLogger.log(context, Const.LOG_WARN, "SmsLogUploadWorker: READ_SMS is not granted — SMS collection stopped");
+            return Result.failure();
         }
 
         SettingsHelper settingsHelper = SettingsHelper.getInstance(context);
@@ -214,13 +216,16 @@ public class SmsLogUploadWorker extends Worker {
         SharedPreferences prefs = context.getSharedPreferences("SmsLogPrefs", Context.MODE_PRIVATE);
         long lastTimestamp = prefs.getLong(PREF_LAST_SMS_TIMESTAMP, 0);
         long now = System.currentTimeMillis();
-        if (lastTimestamp > now + TimeUnit.DAYS.toMillis(1)) {
-            // Guard against corrupted/future timestamp which would make all scans permanently empty.
+        if (lastTimestamp > now + TimeUnit.MINUTES.toMillis(5)) {
+            // Device clock rolled back — reset so we don't miss SMS records permanently.
             RemoteLogger.log(context, Const.LOG_WARN,
                 "SmsLogUploadWorker: last timestamp is in future (" + lastTimestamp + "), resetting to 0");
             lastTimestamp = 0;
-            prefs.edit().putLong(PREF_LAST_SMS_TIMESTAMP, 0).apply();
+            prefs.edit().putLong(PREF_LAST_SMS_TIMESTAMP, 0).commit();
         }
+
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
+        dateFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
 
         List<SmsLogRecord> records = new ArrayList<>();
         Map<String, String> contactNameCache = new HashMap<>();
@@ -260,7 +265,7 @@ public class SmsLogUploadWorker extends Worker {
                     record.setMessage(messageBody);
                     record.setMessageType(messageType);
                     record.setSmsTimestamp(timestamp);
-                    record.setSmsDate(DATE_FORMAT.format(new Date(timestamp)));
+                    record.setSmsDate(dateFormat.format(new Date(timestamp)));
                     record.setSimSlot(resolveSimSlot(context, cursor, subIdIdx, subscriptionIdIdx, simIdIdx));
 
                     records.add(record);
@@ -313,6 +318,10 @@ public class SmsLogUploadWorker extends Worker {
                     Log.w(TAG, "SMS log upload failed for batch [" + start + "," + end + "), HTTP status=" + code);
                     RemoteLogger.log(context, Const.LOG_WARN,
                             "SmsLogUploadWorker: upload failed for batch [" + start + "," + end + "), status=" + code);
+                    // Persist progress so next retry only re-uploads the remaining batches.
+                    if (uploadedMaxTimestamp > lastTimestamp) {
+                        prefs.edit().putLong(PREF_LAST_SMS_TIMESTAMP, uploadedMaxTimestamp).commit();
+                    }
                     return Result.retry();
                 }
 
@@ -322,15 +331,19 @@ public class SmsLogUploadWorker extends Worker {
                         uploadedMaxTimestamp = record.getSmsTimestamp();
                     }
                 }
+                // Persist after each successful batch so a crash before the next batch
+                // doesn't cause a full re-upload (server uses ON CONFLICT DO NOTHING).
+                prefs.edit().putLong(PREF_LAST_SMS_TIMESTAMP, uploadedMaxTimestamp).commit();
             } catch (IOException e) {
                 Log.e(TAG, "SMS log upload failed for batch [" + start + "," + end + ")", e);
                 RemoteLogger.log(context, Const.LOG_WARN,
                         "SmsLogUploadWorker: network error while uploading batch [" + start + "," + end + "): " + e.getMessage());
+                if (uploadedMaxTimestamp > lastTimestamp) {
+                    prefs.edit().putLong(PREF_LAST_SMS_TIMESTAMP, uploadedMaxTimestamp).commit();
+                }
                 return Result.retry();
             }
         }
-
-        prefs.edit().putLong(PREF_LAST_SMS_TIMESTAMP, uploadedMaxTimestamp).apply();
         Log.i(TAG, "Uploaded " + uploadedCount + " sms log records successfully in batches");
         RemoteLogger.log(context, Const.LOG_INFO,
                 "SmsLogUploadWorker: uploaded " + uploadedCount + " SMS records, new timestamp=" + uploadedMaxTimestamp);
@@ -354,6 +367,8 @@ public class SmsLogUploadWorker extends Worker {
         }
 
         Log.w(TAG, "All SIM-aware SMS projections failed, retrying with basic projection");
+        RemoteLogger.log(context, Const.LOG_WARN,
+            "SmsLogUploadWorker: all SIM-aware projections failed — SIM slot data will be missing for this device");
         return context.getContentResolver().query(
                 Telephony.Sms.CONTENT_URI,
                 SMS_PROJECTION_BASIC,

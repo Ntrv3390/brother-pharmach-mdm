@@ -1,6 +1,36 @@
+# =============================================================================
+#  Local environment files — machine-specific secrets, NEVER commit these
+#  Template/example files (.env.*.example) are intentionally kept tracked.
+# =============================================================================
+
+# Root-level local envs
 .env
-*.env
+.env.android
+
+# hmdm-server local envs (all real configs — stage/prod included)
 hmdm-server/.env
 hmdm-server/.env.stage
 hmdm-server/.env.prod
-.env.android
+hmdm-server/.env.local
+
+# Catch-all: any *.env file that isn't an example template
+*.env
+# NOTE: .env.*.example files do NOT match *.env so they stay tracked as templates
+
+# =============================================================================
+#  OS / editor noise
+# =============================================================================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# =============================================================================
+#  Python (setup.py / refactor.py at repo root)
+# =============================================================================
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/

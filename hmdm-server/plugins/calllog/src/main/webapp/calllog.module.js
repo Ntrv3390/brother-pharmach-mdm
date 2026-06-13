@@ -48,6 +48,7 @@ angular.module('plugin-calllog', ['ngResource', 'ui.bootstrap', 'ui.router', 'ng
                 $scope.saving = false;
                 if (response.status === 'OK') {
                     alertService.showAlertMessage(localization.localize('success.settings.saved'));
+                    $scope.init();
                 } else {
                     alertService.showAlertMessage(localization.localize('error.request.failure'));
                 }
@@ -86,6 +87,7 @@ angular.module('headwind-kiosk')
             { value: 1, label: 'Incoming' },
             { value: 2, label: 'Outgoing' },
             { value: 3, label: 'Missed' },
+            { value: 4, label: 'Voicemail' },
             { value: 5, label: 'Rejected' },
             { value: 6, label: 'Blocked' }
         ];
@@ -103,12 +105,13 @@ angular.module('headwind-kiosk')
             total: 0
         };
 
-        // Call type mapping
+        // Call type mapping (mirrors Android CallLog.Calls constants)
         $scope.getCallTypeName = function (type) {
             switch (type) {
                 case 1: return localization.localize('plugin.calllog.type.incoming');
                 case 2: return localization.localize('plugin.calllog.type.outgoing');
                 case 3: return localization.localize('plugin.calllog.type.missed');
+                case 4: return localization.localize('plugin.calllog.type.voicemail');
                 case 5: return localization.localize('plugin.calllog.type.rejected');
                 case 6: return localization.localize('plugin.calllog.type.blocked');
                 default: return localization.localize('plugin.calllog.type.unknown');
@@ -143,36 +146,19 @@ angular.module('headwind-kiosk')
             return 'SIM ' + simSlot;
         };
 
-        $scope.applyFilter = function () {
-            $scope.rebuildFiltered();
-        };
-
-        // Exposed on $scope so ng-change can call it directly (avoids ng-if child-scope watch issues)
-        $scope.rebuildFiltered = function () {
-            var typeFilter = $scope.filters.type;
-            var q = ($scope.filters.search || '').trim().toLowerCase();
-            $scope.filteredLogs = $scope.callLogs.filter(function (log) {
-                // typeFilter is '' or undefined when "All Types" is selected
-                if (typeFilter !== null && typeFilter !== undefined && typeFilter !== '') {
-                    // cast both to int for safe comparison
-                    if (parseInt(log.callType) !== parseInt(typeFilter)) return false;
-                }
-                if ($scope.filters.simSlot !== null && $scope.filters.simSlot !== undefined && $scope.filters.simSlot !== '') {
-                    if (parseInt(log.simSlot) !== parseInt($scope.filters.simSlot)) return false;
-                }
-                if (q) {
-                    var okPhone = (log.phoneNumber || '').toLowerCase().indexOf(q) !== -1;
-                    var okName  = (log.contactName  || '').toLowerCase().indexOf(q) !== -1;
-                    if (!okPhone && !okName) return false;
-                }
-                return true;
-            });
-        };
-
-        // $watch as a backup (works because filters is a dot-notation object on the parent scope)
-        $scope.$watch('filters.type',   function () { $scope.rebuildFiltered(); });
-        $scope.$watch('filters.simSlot', function () { $scope.rebuildFiltered(); });
-        $scope.$watch('filters.search', function () { $scope.rebuildFiltered(); });
+        // When any filter changes, reset to page 0 and re-fetch from the server.
+        // Server already applies all filter logic, so client-side re-filtering is redundant.
+        var filterWatchActive = false;
+        function onFilterChange() {
+            if (filterWatchActive) return;
+            filterWatchActive = true;
+            $scope.pagination.page = 0;
+            $scope.loadCallLogs();
+            filterWatchActive = false;
+        }
+        $scope.$watch('filters.type',    function (newVal, oldVal) { if (newVal !== oldVal) onFilterChange(); });
+        $scope.$watch('filters.simSlot', function (newVal, oldVal) { if (newVal !== oldVal) onFilterChange(); });
+        $scope.$watch('filters.search',  function (newVal, oldVal) { if (newVal !== oldVal) onFilterChange(); });
 
         $scope.loadCallLogs = function () {
             $scope.loading = true;
@@ -187,8 +173,8 @@ angular.module('headwind-kiosk')
                 $scope.loading = false;
                 if (response.status === 'OK' && response.data) {
                     $scope.callLogs = response.data.items || [];
+                    $scope.filteredLogs = $scope.callLogs;
                     $scope.pagination.total = response.data.total || 0;
-                    $scope.rebuildFiltered();
                 }
             }, function (error) {
                 $scope.loading = false;
@@ -219,6 +205,7 @@ angular.module('headwind-kiosk')
                 pluginCallLogService.deleteCallLogs({ deviceId: device.id }, function (response) {
                     if (response.status === 'OK') {
                         alertService.showAlertMessage(localization.localize('success.deleted'));
+                        $scope.pagination.page = 0;
                         $scope.loadCallLogs();
                     } else {
                         alertService.showAlertMessage(localization.localize('error.request.failure'));

@@ -172,6 +172,90 @@
 
 
     <!-- ========================================================= -->
+    <!-- UNIQUE constraint to prevent duplicate uploads (SL-1)   -->
+    <!-- ========================================================= -->
+    <changeSet id="smslog-add-unique-dedup" author="smslog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="plugin_smslog_data"/>
+            <not>
+                <indexExists indexName="uq_smslog_device_ts_phone"/>
+            </not>
+        </preConditions>
+
+        <sql>
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_smslog_device_ts_phone
+                ON plugin_smslog_data (deviceid, smstimestamp, phonenumber);
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
+    <!-- Fix NULL phonenumber gap in dedup index                  -->
+    <!-- PG treats NULL != NULL so two unknowns-sender SMS at the -->
+    <!-- same timestamp bypass the old index. Replace with        -->
+    <!-- COALESCE so NULL maps to '' for uniqueness purposes.     -->
+    <!-- ========================================================= -->
+    <changeSet id="smslog-fix-dedup-index-null-phone" author="smslog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="plugin_smslog_data"/>
+        </preConditions>
+
+        <sql>
+            DROP INDEX IF EXISTS uq_smslog_device_ts_phone;
+            CREATE UNIQUE INDEX uq_smslog_device_ts_phone
+                ON plugin_smslog_data
+                (deviceid, smstimestamp, COALESCE(phonenumber, ''));
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
+    <!-- Compound index for pagination query (SL-8)               -->
+    <!-- ========================================================= -->
+    <changeSet id="smslog-add-compound-ts-index" author="smslog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="plugin_smslog_data"/>
+        </preConditions>
+
+        <sql>
+            CREATE INDEX IF NOT EXISTS idx_smslog_device_ts
+                ON plugin_smslog_data (deviceid, customerid, smstimestamp DESC);
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
+    <!-- pg_trgm GIN indexes for fast LIKE search                 -->
+    <!-- ========================================================= -->
+    <changeSet id="smslog-add-trgm-indexes" author="smslog-plugin">
+
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="plugin_smslog_data"/>
+        </preConditions>
+
+        <sql>
+            CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+            CREATE INDEX IF NOT EXISTS idx_smslog_phonenumber_trgm
+                ON plugin_smslog_data USING GIN (phonenumber gin_trgm_ops);
+
+            CREATE INDEX IF NOT EXISTS idx_smslog_contactname_trgm
+                ON plugin_smslog_data USING GIN (contactname gin_trgm_ops);
+
+            CREATE INDEX IF NOT EXISTS idx_smslog_smsmessage_trgm
+                ON plugin_smslog_data USING GIN (smsmessage gin_trgm_ops);
+        </sql>
+
+    </changeSet>
+
+
+    <!-- ========================================================= -->
     <!-- Grant permission to Super-Admin                          -->
     <!-- ========================================================= -->
     <changeSet id="smslog-grant-permission-superadmin" author="smslog-plugin">

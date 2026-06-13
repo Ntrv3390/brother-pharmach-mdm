@@ -11,7 +11,9 @@ server/webtarget/node
 
 # bower modules
 **/bower_components
-
+.env
+.env.prod
+.env.stage
 # grunt bower task lib folder
 server/webtarget/lib
 

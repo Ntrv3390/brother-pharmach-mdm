@@ -61,6 +61,16 @@ public class CallLogPluginConfigurationImpl implements PluginConfiguration {
 
     @Override
     public Optional<List<Class<? extends PluginTaskModule>>> getTaskModules(ServletContext context) {
-        return Optional.empty();
+        try {
+            final String configClass = context.getInitParameter("plugin.calllog.persistence.config.class");
+            if (configClass != null && !configClass.trim().isEmpty()) {
+                CallLogPersistenceConfiguration config =
+                        (CallLogPersistenceConfiguration) Class.forName(configClass).newInstance();
+                return config.getTaskModules(context);
+            }
+        } catch (Exception e) {
+            // Fall through — no task modules if persistence config is unavailable
+        }
+        return Optional.of(new ArrayList<>());
     }
 }

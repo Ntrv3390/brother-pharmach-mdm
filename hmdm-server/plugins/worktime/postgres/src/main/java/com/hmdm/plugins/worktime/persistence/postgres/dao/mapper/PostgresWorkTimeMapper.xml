@@ -60,6 +60,14 @@
             now(),
             now()
         )
+        ON CONFLICT (customer_id, device_id) DO UPDATE SET
+            start_time               = EXCLUDED.start_time,
+            end_time                 = EXCLUDED.end_time,
+            days_of_week             = EXCLUDED.days_of_week,
+            allowed_apps_during_work = EXCLUDED.allowed_apps_during_work,
+            allowed_apps_outside_work = EXCLUDED.allowed_apps_outside_work,
+            enabled                  = EXCLUDED.enabled,
+            updated_at               = now()
     </insert>
 
     <update id="updateDevicePolicy" parameterType="com.hmdm.plugins.worktime.model.WorkTimeDevicePolicy">
@@ -203,7 +211,7 @@
         SET
             start_boundary_push_sent = TRUE,
             updated_at = now()
-        WHERE id = #{id}
+        WHERE id = #{id} AND customer_id = #{customerId}
     </update>
 
     <update id="markExceptionEndPushSent">
@@ -219,7 +227,7 @@
         SET
             end_boundary_push_sent = TRUE,
             updated_at = now()
-        WHERE id = #{id}
+        WHERE id = #{id} AND customer_id = #{customerId}
     </update>
 
     <delete id="deleteDeviceOverride">
@@ -232,10 +240,15 @@
         WHERE customer_id = #{customerId} AND id = #{id}
     </delete>
 
+    <!-- Only returns exceptions that are active, upcoming, or very recently expired (boundary push window). -->
     <select id="getAllDeviceOverrides" resultMap="deviceOverrideResult">
         SELECT uo.*, devices.number as device_name
         FROM worktime_device_override uo
         LEFT JOIN devices ON devices.id = uo.device_id
+        WHERE uo.enabled = FALSE
+          AND uo.start_datetime IS NOT NULL
+          AND uo.end_datetime IS NOT NULL
+          AND uo.end_datetime > (CURRENT_TIMESTAMP - INTERVAL '1 hour')
         ORDER BY uo.customer_id, uo.priority DESC NULLS LAST, uo.id
     </select>
 

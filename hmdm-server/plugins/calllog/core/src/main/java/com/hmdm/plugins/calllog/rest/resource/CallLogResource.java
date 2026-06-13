@@ -51,11 +51,11 @@ public class CallLogResource {
     }
 
     private boolean checkPermission() {
-        User current = SecurityContext.get().getCurrentUser().orElse(null);
-        if (current == null) {
+        if (SecurityContext.get().getCurrentUser().orElse(null) == null) {
             return false;
         }
-        return true;
+        return SecurityContext.get().isSuperAdmin()
+                || SecurityContext.get().hasPermission("plugin_calllog_access");
     }
 
     /**
@@ -93,6 +93,7 @@ public class CallLogResource {
             return Response.PERMISSION_DENIED();
         }
 
+        if (pageSize > 500) pageSize = 500;
         int offset = page * pageSize;
         List<CallLogRecord> logs;
         int total;

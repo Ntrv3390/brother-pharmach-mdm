@@ -23,7 +23,7 @@ import androidx.work.WorkerParameters;
 import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.db.DatabaseHelper;
 import com.brother.pharmach.mdm.launcher.db.LocationTable;
-import com.brother.pharmach.mdm.launcher.service.LocationService;
+import com.brother.pharmach.mdm.launcher.util.LocationUploader;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
 import java.util.concurrent.CountDownLatch;
@@ -75,10 +75,11 @@ public class LocationWorker extends Worker {
     }
 
     public static void scheduleOneShot(Context context) {
+        // Not expedited: avoids foreground-service notification on Android ≤ 11.
+        // Truly urgent captures use enqueueUrgentNow() which runs directly in a thread.
         OneTimeWorkRequest request = new OneTimeWorkRequest.Builder(LocationWorker.class)
                 .addTag(Const.WORK_TAG_COMMON)
                 .addTag(WORK_TAG_ONE_SHOT)
-                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build();
         WorkManager.getInstance(context.getApplicationContext()).enqueueUniqueWork(
                 WORK_TAG_ONE_SHOT,
@@ -214,7 +215,7 @@ public class LocationWorker extends Worker {
                 tableLocation.setTs(System.currentTimeMillis());
             }
 
-            if (forceFreshFix && LocationService.sendUrgentLocation(context, tableLocation)) {
+            if (forceFreshFix && LocationUploader.sendUrgentLocation(context, tableLocation)) {
                 RemoteLogger.log(context, Const.LOG_INFO, "LocationWorker: urgent location uploaded successfully"
                         + (usedStaleFallback ? " (stale fallback — server will keep polling)" : ""));
                 return Result.success();
@@ -223,7 +224,7 @@ public class LocationWorker extends Worker {
             LocationTable.insert(helper.getWritableDatabase(), tableLocation);
             RemoteLogger.log(context, Const.LOG_INFO,
                     "LocationWorker: queued location for regular upload path");
-            LocationService.sendLocations(context);
+            LocationUploader.sendLocations(context);
             return Result.success();
         } catch (SecurityException e) {
             RemoteLogger.log(context, Const.LOG_WARN,

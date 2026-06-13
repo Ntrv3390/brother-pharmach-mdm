@@ -235,13 +235,13 @@ angular
       }
 
       function buildAppsString(selectedApps) {
+        if (selectedApps["*"]) {
+          return "*";
+        }
+
         var selected = Object.keys(selectedApps).filter(function (pkg) {
           return pkg !== "*" && selectedApps[pkg];
         });
-
-        if (selectedApps["*"] && selected.length === 0) {
-          return "*";
-        }
 
         return selected.join(",");
       }
@@ -653,6 +653,8 @@ angular
       };
 
       $scope.togglePolicyDay = function (dayMask) {
+        if (!$scope.editingPolicy) { return; }
+        if ($scope.editingPolicy.daysOfWeek == null) { $scope.editingPolicy.daysOfWeek = 0; }
         if (($scope.editingPolicy.daysOfWeek & dayMask) === dayMask) {
           $scope.editingPolicy.daysOfWeek &= ~dayMask;
         } else {
@@ -1173,6 +1175,7 @@ angular
       };
 
       refreshPromise = $interval(function () {
+        if (modalInstance) { return; } // don't clobber modal scope during auto-refresh
         $scope.refresh(true);
       }, 15000);
 

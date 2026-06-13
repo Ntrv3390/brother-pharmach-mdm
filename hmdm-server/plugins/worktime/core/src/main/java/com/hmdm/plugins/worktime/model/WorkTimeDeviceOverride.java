@@ -5,6 +5,8 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 
+import com.hmdm.plugins.worktime.WorkTimeZone;
+
 import java.io.Serializable;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -168,8 +170,10 @@ public class WorkTimeDeviceOverride implements Serializable {
             return Timestamp.from(OffsetDateTime.parse(value).toInstant());
         } catch (Exception ignored) {
             try {
+                // Frontend sends ISO local datetime without offset — interpret in WorkTimeZone
+                // so stored start/end match what the admin typed in the UI.
                 LocalDateTime ldt = LocalDateTime.parse(value, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-                return Timestamp.valueOf(ldt.atZone(ZoneId.systemDefault()).toLocalDateTime());
+                return Timestamp.from(ldt.atZone(WorkTimeZone.ZONE).toInstant());
             } catch (Exception ignoredAgain) {
                 return null;
             }

@@ -8,3 +8,12 @@
 .externalNativeBuild
 example/
 app/release
+
+# Local environment / signing config — never push
+.env
+.env.android
+*.env
+local.properties
+keystore.properties
+*.jks
+*.keystore

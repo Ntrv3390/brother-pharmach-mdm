@@ -29,6 +29,7 @@ public interface CallLogMapper {
         "(#{item.deviceId}, #{item.phoneNumber}, #{item.contactName}, #{item.callType}, ",
                 "#{item.duration}, #{item.simSlot}, #{item.callTimestamp}, #{item.callDate}, #{item.createTime}, #{item.customerId})",
         "</foreach>",
+        "ON CONFLICT DO NOTHING",
         "</script>"
     })
     void insertCallLogRecordsBatch(List<CallLogRecord> records);
@@ -38,7 +39,8 @@ public interface CallLogMapper {
             "createtime AS createTime, customerid AS customerId " +
             "FROM plugin_calllog_data " +
             "WHERE deviceid = #{deviceId} AND customerid = #{customerId} " +
-            "ORDER BY calltimestamp DESC")
+            "ORDER BY calltimestamp DESC " +
+            "LIMIT 10000")
     List<CallLogRecord> getCallLogsByDevice(@Param("deviceId") int deviceId, @Param("customerId") int customerId);
 
     @Select("SELECT id, deviceid AS deviceId, phonenumber AS phoneNumber, contactname AS contactName, " +
@@ -97,11 +99,8 @@ public interface CallLogMapper {
     CallLogSettings getSettings(@Param("customerId") int customerId);
 
     @Insert("INSERT INTO plugin_calllog_settings (customerid, enabled, retentiondays) " +
-            "VALUES (#{customerId}, #{enabled}, #{retentionDays})")
-    void insertSettings(CallLogSettings settings);
-
-    @Update("UPDATE plugin_calllog_settings " +
-            "SET enabled = #{enabled}, retentiondays = #{retentionDays} " +
-            "WHERE customerid = #{customerId}")
-    void updateSettings(CallLogSettings settings);
+            "VALUES (#{customerId}, #{enabled}, #{retentionDays}) " +
+            "ON CONFLICT (customerid) DO UPDATE " +
+            "SET enabled = EXCLUDED.enabled, retentiondays = EXCLUDED.retentiondays")
+    void upsertSettings(CallLogSettings settings);
 }

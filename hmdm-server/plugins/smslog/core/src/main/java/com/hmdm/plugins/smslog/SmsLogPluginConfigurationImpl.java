@@ -61,6 +61,16 @@ public class SmsLogPluginConfigurationImpl implements PluginConfiguration {
 
     @Override
     public Optional<List<Class<? extends PluginTaskModule>>> getTaskModules(ServletContext context) {
-        return Optional.empty();
+        try {
+            final String configClass = context.getInitParameter("plugin.smslog.persistence.config.class");
+            if (configClass != null && !configClass.trim().isEmpty()) {
+                SmsLogPersistenceConfiguration config =
+                        (SmsLogPersistenceConfiguration) Class.forName(configClass).newInstance();
+                return config.getTaskModules(context);
+            }
+        } catch (Exception e) {
+            // Fall through — no task modules if persistence config is unavailable
+        }
+        return Optional.of(new ArrayList<>());
     }
 }

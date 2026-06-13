@@ -5,6 +5,7 @@ import com.hmdm.persistence.UnsecureDAO;
 import com.hmdm.persistence.domain.Device;
 import com.hmdm.rest.json.SyncResponseInt;
 import com.hmdm.rest.json.SyncResponseHook;
+import com.hmdm.plugins.worktime.WorkTimeZone;
 import com.hmdm.plugins.worktime.service.EffectiveWorkTimePolicy;
 import com.hmdm.plugins.worktime.service.WorkTimeService;
 import org.slf4j.Logger;
@@ -32,7 +33,7 @@ public class WorkTimeSyncResponseHook implements SyncResponseHook {
 
     private static final Logger log = LoggerFactory.getLogger(WorkTimeSyncResponseHook.class);
     private static final String WORKTIME_CUSTOM_FIELD = "custom1"; // Using custom1 field for worktime data
-    private static final ZoneId WORKTIME_ZONE = ZoneId.of("Asia/Kolkata");
+    private static final ZoneId WORKTIME_ZONE = WorkTimeZone.ZONE;
 
     private final UnsecureDAO unsecureDAO;
     private final WorkTimeService workTimeService;
@@ -78,7 +79,13 @@ public class WorkTimeSyncResponseHook implements SyncResponseHook {
                 log.debug("Injected worktime policy for device {}: enabled={}, customerId={}",
                         deviceId, policy.isEnforcementEnabled(), customerId);
             } catch (NoSuchMethodException e) {
-                log.warn("SyncResponse does not have setCustom1 method, cannot inject worktime policy");
+                log.warn("SyncResponse does not have setCustom1 method — worktime policy not injected for device {}", deviceId);
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                Throwable cause = e.getCause();
+                log.error("setCustom1 threw an exception for device {}: {}", deviceId,
+                        cause != null ? cause.getMessage() : e.getMessage(), cause != null ? cause : e);
+            } catch (IllegalAccessException e) {
+                log.error("setCustom1 is not accessible for device {}: {}", deviceId, e.getMessage());
             }
 
             return original;

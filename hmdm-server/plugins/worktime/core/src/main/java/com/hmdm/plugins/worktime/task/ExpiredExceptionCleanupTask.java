@@ -1,5 +1,6 @@
 package com.hmdm.plugins.worktime.task;
 
+import com.hmdm.plugins.worktime.WorkTimeZone;
 import com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride;
 import com.hmdm.plugins.worktime.persistence.WorkTimeDAO;
 import com.hmdm.notification.PushService;
@@ -21,7 +22,7 @@ import java.util.List;
 public class ExpiredExceptionCleanupTask {
 
     private static final Logger log = LoggerFactory.getLogger(ExpiredExceptionCleanupTask.class);
-    private static final ZoneId WORKTIME_ZONE = ZoneId.of("Asia/Kolkata");
+    private static final ZoneId WORKTIME_ZONE = WorkTimeZone.ZONE;
     
     private final WorkTimeDAO workTimeDAO;
     private final PushService pushService;
@@ -54,7 +55,7 @@ public class ExpiredExceptionCleanupTask {
 
                 if (shouldSendStartBoundaryPush(override, now)) {
                     sendConfigUpdated(override.getDeviceId());
-                    workTimeDAO.markExceptionStartPushSentById(override.getId());
+                    workTimeDAO.markExceptionStartPushSentById(override.getId(), override.getCustomerId());
                     startBoundaryPushCount++;
                     log.info("Sent persisted start boundary push for device {} in customer {}",
                             override.getDeviceId(), override.getCustomerId());
@@ -62,7 +63,7 @@ public class ExpiredExceptionCleanupTask {
 
                 if (shouldSendEndBoundaryPush(override, now)) {
                     sendConfigUpdated(override.getDeviceId());
-                    workTimeDAO.markExceptionEndPushSentById(override.getId());
+                    workTimeDAO.markExceptionEndPushSentById(override.getId(), override.getCustomerId());
                     endBoundaryPushCount++;
                     log.info("Sent persisted end boundary push for device {} in customer {}",
                             override.getDeviceId(), override.getCustomerId());
@@ -103,10 +104,10 @@ public class ExpiredExceptionCleanupTask {
         if (Boolean.TRUE.equals(override.getStartBoundaryPushSent())) {
             return false;
         }
-
+        // Send start push once we're at or past start time, even if the exception already expired.
+        // The push triggers a policy fetch, so the device gets whatever is current (normal policy if expired).
         LocalDateTime start = override.getStartDateTime().toLocalDateTime();
-        LocalDateTime end = override.getEndDateTime().toLocalDateTime();
-        return (!now.isBefore(start)) && (!now.isAfter(end));
+        return !now.isBefore(start);
     }
 
     private boolean shouldSendEndBoundaryPush(WorkTimeDeviceOverride override, LocalDateTime now) {

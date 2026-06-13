@@ -31,13 +31,7 @@ public class PostgresWorkTimeDAO implements WorkTimeDAO {
     @Override
     @Transactional
     public void saveDevicePolicy(WorkTimeDevicePolicy policy) {
-        WorkTimeDevicePolicy existing = mapper.getDevicePolicy(policy.getCustomerId(), policy.getDeviceId());
-
-        if (existing == null) {
-            mapper.insertDevicePolicy(policy);
-        } else {
-            mapper.updateDevicePolicy(policy);
-        }
+        mapper.insertDevicePolicy(policy); // ON CONFLICT DO UPDATE handles upsert atomically
     }
 
     @Override
@@ -116,14 +110,14 @@ public class PostgresWorkTimeDAO implements WorkTimeDAO {
 
     @Override
     @Transactional
-    public void markExceptionStartPushSentById(int id) {
-        mapper.markExceptionStartPushSentById(id);
+    public void markExceptionStartPushSentById(int id, int customerId) {
+        mapper.markExceptionStartPushSentById(id, customerId);
     }
 
     @Override
     @Transactional
-    public void markExceptionEndPushSentById(int id) {
-        mapper.markExceptionEndPushSentById(id);
+    public void markExceptionEndPushSentById(int id, int customerId) {
+        mapper.markExceptionEndPushSentById(id, customerId);
     }
 
     @Override

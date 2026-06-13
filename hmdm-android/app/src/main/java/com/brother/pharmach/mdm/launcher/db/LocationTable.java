@@ -31,12 +31,12 @@ public class LocationTable {
     private static final String CREATE_TABLE =
             "CREATE TABLE locations (" +
                     "_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
-                    "ts INTEGER, " +
+                    "ts INTEGER UNIQUE, " +
                     "lat REAL, " +
                     "lon REAL " +
                     ")";
     private static final String SELECT_LAST_LOCATION =
-            "SELECT * FROM locations ORDER BY ts LIMIT ?";
+            "SELECT * FROM locations ORDER BY ts DESC LIMIT ?";
     private static final String INSERT_LOCATIONS =
             "INSERT OR IGNORE INTO locations(ts, lat, lon) " +
             "VALUES (?, ?, ?)";

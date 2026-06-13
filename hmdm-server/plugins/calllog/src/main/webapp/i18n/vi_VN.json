@@ -21,6 +21,7 @@
   "plugin.calllog.type.incoming": "Incoming",
   "plugin.calllog.type.outgoing": "Outgoing",
   "plugin.calllog.type.missed": "Missed",
+  "plugin.calllog.type.voicemail": "Voicemail",
   "plugin.calllog.type.rejected": "Rejected",
   "plugin.calllog.type.blocked": "Blocked",
   "plugin.calllog.type.unknown": "Unknown",

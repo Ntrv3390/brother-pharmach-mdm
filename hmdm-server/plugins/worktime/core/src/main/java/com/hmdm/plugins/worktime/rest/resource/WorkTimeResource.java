@@ -6,6 +6,7 @@ import javax.ws.rs.core.MediaType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import com.hmdm.plugins.worktime.WorkTimeZone;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -37,8 +38,14 @@ import org.slf4j.LoggerFactory;
 public class WorkTimeResource {
 
     private static final Logger log = LoggerFactory.getLogger(WorkTimeResource.class);
-    private static final ZoneId WORKTIME_ZONE = ZoneId.of("Asia/Kolkata");
+    private static final ZoneId WORKTIME_ZONE = WorkTimeZone.ZONE;
     private static final ScheduledExecutorService PUSH_RETRY_EXECUTOR = Executors.newSingleThreadScheduledExecutor();
+
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            PUSH_RETRY_EXECUTOR.shutdown();
+        }, "worktime-push-executor-shutdown"));
+    }
 
     private final WorkTimeDAO workTimeDAO;
     private final UserDAO userDAO;
@@ -269,6 +276,12 @@ public class WorkTimeResource {
         }
         if (policy.getDaysOfWeek() != null && (policy.getDaysOfWeek() < 0 || policy.getDaysOfWeek() > 127)) {
             return Response.ERROR("Invalid daysOfWeek bitmask");
+        }
+        if (policy.getAllowedAppsDuringWork() != null && policy.getAllowedAppsDuringWork().length() > 4096) {
+            return Response.ERROR("allowedAppsDuringWork exceeds maximum length of 4096");
+        }
+        if (policy.getAllowedAppsOutsideWork() != null && policy.getAllowedAppsOutsideWork().length() > 4096) {
+            return Response.ERROR("allowedAppsOutsideWork exceeds maximum length of 4096");
         }
 
         int customerId = getCustomerId();

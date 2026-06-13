@@ -117,6 +117,7 @@ import com.brother.pharmach.mdm.launcher.util.InstallUtils;
 import com.brother.pharmach.mdm.launcher.util.PreferenceLogger;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 import com.brother.pharmach.mdm.launcher.util.SystemUtils;
+import com.brother.pharmach.mdm.launcher.util.LocationUploader;
 import com.brother.pharmach.mdm.launcher.util.Utils;
 import com.brother.pharmach.mdm.launcher.worker.SmsLogUploadWorker;
 import com.brother.pharmach.mdm.launcher.worker.SendDeviceInfoWorker;
@@ -385,7 +386,7 @@ public class MainActivity
                  return;
             }
 
-            // Log new connection type
+            // Log new connection type and flush queued locations on reconnect
             if (intent.getAction().equals(ConnectivityManager.CONNECTIVITY_ACTION)) {
                 ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
                 NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
@@ -393,6 +394,8 @@ public class MainActivity
                     if (lastNetworkType != activeNetwork.getType()) {
                         lastNetworkType = activeNetwork.getType();
                         RemoteLogger.log(MainActivity.this, Const.LOG_DEBUG, "Network type changed: " + activeNetwork.getTypeName());
+                        // Flush any locations queued while offline instead of waiting for next WorkManager cycle
+                        new Thread(() -> LocationUploader.sendLocations(context)).start();
                     }
                 } else {
                     if (lastNetworkType != -1) {

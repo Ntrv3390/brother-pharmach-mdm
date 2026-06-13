@@ -1,5 +1,6 @@
 package com.hmdm.plugins.worktime.service;
 
+import com.hmdm.plugins.worktime.WorkTimeZone;
 import com.hmdm.plugins.worktime.model.WorkTimeDevicePolicy;
 import com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride;
 import com.hmdm.plugins.worktime.persistence.WorkTimeDAO;
@@ -19,7 +20,7 @@ import java.util.Set;
 
 public class WorkTimeService {
 
-    private static final ZoneId WORKTIME_ZONE = ZoneId.of("Asia/Kolkata");
+    private static final ZoneId WORKTIME_ZONE = WorkTimeZone.ZONE;
 
     private final WorkTimeDAO dao;
     private final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
@@ -200,7 +201,7 @@ public class WorkTimeService {
                 if (!time.isBefore(start)) {
                     checkDay = now.getDayOfWeek();
                 } else {
-                    checkDay = now.minusDays(1).getDayOfWeek();
+                    checkDay = now.toLocalDate().minusDays(1).getDayOfWeek();
                 }
             }
 
@@ -255,7 +256,7 @@ public class WorkTimeService {
                 if (!time.isBefore(start)) {
                     checkDay = now.getDayOfWeek();
                 } else {
-                    checkDay = now.minusDays(1).getDayOfWeek();
+                    checkDay = now.toLocalDate().minusDays(1).getDayOfWeek();
                 }
             }
 

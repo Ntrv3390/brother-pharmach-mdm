@@ -60,7 +60,7 @@ public class SmsLogPostgresDAO implements SmsLogDAO {
         params.put("customerId", customerId);
         params.put("messageType", messageType);
         params.put("simSlot", simSlot);
-        params.put("search", (search != null && !search.trim().isEmpty()) ? search.trim() : null);
+        params.put("search", escapeLike(search));
         params.put("limit", limit);
         params.put("offset", offset);
         return mapper.getSmsLogsByDevicePagedFiltered(params);
@@ -78,8 +78,18 @@ public class SmsLogPostgresDAO implements SmsLogDAO {
         params.put("customerId", customerId);
         params.put("messageType", messageType);
         params.put("simSlot", simSlot);
-        params.put("search", (search != null && !search.trim().isEmpty()) ? search.trim() : null);
+        params.put("search", escapeLike(search));
         return mapper.getSmsLogsCountByDeviceFiltered(params);
+    }
+
+    private static String escapeLike(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return null;
+        }
+        return raw.trim()
+                .replace("\\", "\\\\")
+                .replace("%",  "\\%")
+                .replace("_",  "\\_");
     }
 
     @Override
@@ -102,11 +112,6 @@ public class SmsLogPostgresDAO implements SmsLogDAO {
 
     @Override
     public void saveSettings(SmsLogSettings settings) {
-        SmsLogSettings existing = mapper.getSettings(settings.getCustomerId());
-        if (existing == null) {
-            mapper.insertSettings(settings);
-        } else {
-            mapper.updateSettings(settings);
-        }
+        mapper.upsertSettings(settings);
     }
 }

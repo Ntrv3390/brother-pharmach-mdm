@@ -17,6 +17,8 @@ import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import java.util.List;
 
+import static javax.ws.rs.core.Response.Status.SERVICE_UNAVAILABLE;
+
 /**
  * REST API for Call Log plugin (Android devices)
  */
@@ -52,7 +54,8 @@ public class CallLogPublicResource {
             Device device = unsecureDAO.getDeviceByNumber(deviceNumber);
             if (device == null) {
                 log.warn("Call log submission failed: device not found: {}", deviceNumber);
-                return Response.ERROR("error.device.not.found");
+                // 503 so Android treats as upload failure and retries; data not lost
+                throw new WebApplicationException(SERVICE_UNAVAILABLE.getStatusCode());
             }
 
             // Check if plugin is enabled for this customer
@@ -65,6 +68,11 @@ public class CallLogPublicResource {
             if (logs == null || logs.isEmpty()) {
                 log.debug("No call logs received from device {}", deviceNumber);
                 return Response.OK();
+            }
+
+            if (logs.size() > 1000) {
+                log.warn("Batch too large ({}) from device {} — rejecting", logs.size(), deviceNumber);
+                throw new WebApplicationException(SERVICE_UNAVAILABLE.getStatusCode());
             }
 
             // Set device ID and customer ID for all records
@@ -82,9 +90,12 @@ public class CallLogPublicResource {
 
             return Response.OK();
 
+        } catch (WebApplicationException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error processing call logs from device {}", deviceNumber, e);
-            return Response.ERROR("error.internal");
+            // 503 so Android retries; records remain in the watermark window
+            throw new WebApplicationException(SERVICE_UNAVAILABLE.getStatusCode());
         }
     }
 

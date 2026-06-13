@@ -640,4 +640,24 @@
         </preConditions>
         <dropTable tableName="worktime_global_policy"/>
     </changeSet>
+
+    <!-- ========================================================= -->
+    <!-- Unique index to prevent duplicate exception entries (WT-3) -->
+    <!-- ========================================================= -->
+    <changeSet id="worktime-device-override-unique-exception-2026-06-12" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_device_override"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM pg_indexes
+                WHERE tablename = 'worktime_device_override'
+                  AND indexname = 'uq_worktime_device_override_exception'
+            </sqlCheck>
+        </preConditions>
+        <sql>
+            CREATE UNIQUE INDEX uq_worktime_device_override_exception
+                ON worktime_device_override (customer_id, device_id, start_datetime)
+                WHERE start_datetime IS NOT NULL;
+        </sql>
+    </changeSet>
+
 </databaseChangeLog>

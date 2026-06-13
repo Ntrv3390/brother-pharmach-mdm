@@ -29,6 +29,7 @@ public interface SmsLogMapper {
                 "(#{item.deviceId}, #{item.phoneNumber}, #{item.contactName}, #{item.message}, #{item.messageType}, ",
                 "#{item.simSlot}, #{item.smsTimestamp}, #{item.smsDate}, #{item.createTime}, #{item.customerId})",
         "</foreach>",
+        "ON CONFLICT DO NOTHING",
         "</script>"
     })
     void insertSmsLogRecordsBatch(List<SmsLogRecord> records);
@@ -66,9 +67,9 @@ public interface SmsLogMapper {
             "<if test='messageType != null'>AND messagetype = #{messageType} </if>",
             "<if test='simSlot != null'>AND messagesimslot = #{simSlot} </if>",
             "<if test='search != null and search != \"\"'>",
-            "AND (LOWER(phonenumber) LIKE LOWER(CONCAT('%',#{search},'%')) ",
-            "OR LOWER(contactname) LIKE LOWER(CONCAT('%',#{search},'%')) ",
-            "OR LOWER(smsmessage) LIKE LOWER(CONCAT('%',#{search},'%'))) ",
+            "AND (LOWER(phonenumber) LIKE LOWER(CONCAT('%',#{search},'%')) ESCAPE '\\' ",
+            "OR LOWER(contactname) LIKE LOWER(CONCAT('%',#{search},'%')) ESCAPE '\\' ",
+            "OR LOWER(smsmessage) LIKE LOWER(CONCAT('%',#{search},'%')) ESCAPE '\\') ",
             "</if>",
             "ORDER BY smstimestamp DESC ",
             "LIMIT #{limit} OFFSET #{offset}",
@@ -81,9 +82,9 @@ public interface SmsLogMapper {
             "<if test='messageType != null'>AND messagetype = #{messageType} </if>",
             "<if test='simSlot != null'>AND messagesimslot = #{simSlot} </if>",
             "<if test='search != null and search != \"\"'>",
-            "AND (LOWER(phonenumber) LIKE LOWER(CONCAT('%',#{search},'%')) ",
-            "OR LOWER(contactname) LIKE LOWER(CONCAT('%',#{search},'%')) ",
-            "OR LOWER(smsmessage) LIKE LOWER(CONCAT('%',#{search},'%'))) ",
+            "AND (LOWER(phonenumber) LIKE LOWER(CONCAT('%',#{search},'%')) ESCAPE '\\' ",
+            "OR LOWER(contactname) LIKE LOWER(CONCAT('%',#{search},'%')) ESCAPE '\\' ",
+            "OR LOWER(smsmessage) LIKE LOWER(CONCAT('%',#{search},'%')) ESCAPE '\\') ",
             "</if>",
             "</script>"})
     int getSmsLogsCountByDeviceFiltered(Map<String, Object> params);
@@ -102,11 +103,8 @@ public interface SmsLogMapper {
     SmsLogSettings getSettings(@Param("customerId") int customerId);
 
     @Insert("INSERT INTO plugin_smslog_settings (customerid, enabled, retentiondays) " +
-            "VALUES (#{customerId}, #{enabled}, #{retentionDays})")
-    void insertSettings(SmsLogSettings settings);
-
-    @Update("UPDATE plugin_smslog_settings " +
-            "SET enabled = #{enabled}, retentiondays = #{retentionDays} " +
-            "WHERE customerid = #{customerId}")
-    void updateSettings(SmsLogSettings settings);
+            "VALUES (#{customerId}, #{enabled}, #{retentionDays}) " +
+            "ON CONFLICT (customerid) DO UPDATE " +
+            "SET enabled = EXCLUDED.enabled, retentiondays = EXCLUDED.retentiondays")
+    void upsertSettings(SmsLogSettings settings);
 }
