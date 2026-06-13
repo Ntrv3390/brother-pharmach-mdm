@@ -393,8 +393,9 @@ angular
           return null;
         }
         var tzOffset = new Date().getTimezoneOffset();
-        var offsetHours = Math.abs(Math.floor(tzOffset / 60));
-        var offsetMinutes = Math.abs(tzOffset % 60);
+        var absOffset = Math.abs(tzOffset);
+        var offsetHours = Math.floor(absOffset / 60);
+        var offsetMinutes = absOffset % 60;
         var offsetSign = tzOffset > 0 ? "-" : "+";
         var offsetString = offsetSign + ("0" + offsetHours).slice(-2) + ":" + ("0" + offsetMinutes).slice(-2);
         return datePart + "T" + timePart + ":00.000" + offsetString;
