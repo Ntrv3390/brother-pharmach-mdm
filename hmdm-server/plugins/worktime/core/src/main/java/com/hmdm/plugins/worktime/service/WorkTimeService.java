@@ -75,12 +75,12 @@ public class WorkTimeService {
                                                                                LocalDateTime now) {
         List<Interval> intervals = new ArrayList<>();
         for (WorkTimeDeviceOverride override : overrides) {
-            if (override == null || override.isEnabled() || override.getStartDateTime() == null || override.getEndDateTime() == null) {
+            if (override == null || !override.isEnabled() || override.getStartDateTime() == null || override.getEndDateTime() == null) {
                 continue;
             }
 
-            LocalDateTime start = override.getStartDateTime().toLocalDateTime();
-            LocalDateTime end = override.getEndDateTime().toLocalDateTime();
+            LocalDateTime start = override.getStartDateTime().toInstant().atZone(WORKTIME_ZONE).toLocalDateTime();
+            LocalDateTime end = override.getEndDateTime().toInstant().atZone(WORKTIME_ZONE).toLocalDateTime();
             if (end.isBefore(now)) {
                 continue;
             }
