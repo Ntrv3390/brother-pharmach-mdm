@@ -392,7 +392,12 @@ angular
         if (!datePart || !timePart) {
           return null;
         }
-        return datePart + "T" + timePart + ":00";
+        var tzOffset = new Date().getTimezoneOffset();
+        var offsetHours = Math.abs(Math.floor(tzOffset / 60));
+        var offsetMinutes = Math.abs(tzOffset % 60);
+        var offsetSign = tzOffset > 0 ? "-" : "+";
+        var offsetString = offsetSign + ("0" + offsetHours).slice(-2) + ":" + ("0" + offsetMinutes).slice(-2);
+        return datePart + "T" + timePart + ":00" + offsetString;
       }
 
       function getExceptionRange(exception) {
