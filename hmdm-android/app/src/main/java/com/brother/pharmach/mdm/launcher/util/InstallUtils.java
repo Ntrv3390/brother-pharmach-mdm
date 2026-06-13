@@ -179,8 +179,12 @@ public class InstallUtils {
 
     private static boolean areVersionsEqual(String v1, int c1, String v2, Integer c2) {
         if (c2 != null && c2 != 0) {
-            // If version code is present, let's compare version codes instead of names
-            return c1 == c2;
+            // Exact code match — definitely the same version.
+            if (c1 == c2) return true;
+            // Codes differ. The server config may carry a stale code (e.g. the APK was
+            // rebuilt without bumping the configured code in the console), so if the
+            // version NAME is also identical we treat them as equal to avoid an endless
+            // reinstall loop.
         }
 
         // Missing target version in config: keep current app version and skip reinstall.
