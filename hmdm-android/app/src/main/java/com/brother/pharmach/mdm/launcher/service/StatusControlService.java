@@ -241,7 +241,7 @@ public class StatusControlService extends Service {
             }
         }
 
-        if (config.getMobileData() != null) {
+        if (config.getMobileData() != null && !Utils.isSimAbsent(this)) {
             ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
             if (cm != null) {
                 try {

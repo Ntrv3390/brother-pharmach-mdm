@@ -45,6 +45,7 @@ import android.net.ProxyInfo;
 import android.os.Build;
 import android.os.UserManager;
 import android.provider.Settings;
+import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.WindowManager;
 
@@ -471,6 +472,15 @@ public class Utils {
             return true;
         }
 
+    }
+
+    public static boolean isSimAbsent(Context context) {
+        try {
+            TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+            return tm != null && tm.getSimState() == TelephonyManager.SIM_STATE_ABSENT;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public static boolean isPackageInstalled(Context context, String targetPackage){

@@ -1782,24 +1782,16 @@ public class MainActivity
             }
         }
 
-        if (config.getMobileData() != null) {
+        if (config.getMobileData() != null && !Utils.isSimAbsent(this)) {
             ConnectivityManager cm = (ConnectivityManager)getSystemService(Context.CONNECTIVITY_SERVICE);
             if (cm != null && !dialogWillShow) {
                 try {
                     boolean enabled = Utils.isMobileDataEnabled(this);
-                    //final Intent mobileDataSettingsIntent = new Intent();
-                    // One more hack: open the data transport activity
-                    // https://stackoverflow.com/questions/31700842/which-intent-should-open-data-usage-screen-from-settings
-                    //mobileDataSettingsIntent.setComponent(new ComponentName("com.android.settings",
-                    //        "com.android.settings.Settings$DataUsageSummaryActivity"));
-                    //Intent mobileDataSettingsIntent = new Intent(Intent.ACTION_MAIN);
-                    //mobileDataSettingsIntent.setClassName("com.android.phone", "com.android.phone.NetworkSetting");
-                    Intent mobileDataSettingsIntent = new Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS);
                     // Mobile data are turned on/off in the status bar! No settings (as the user can go back in settings and do something nasty)
                     if (config.getMobileData() && !enabled) {
-                        postDelayedSystemSettingDialog(getString(R.string.message_turn_on_mobile_data), /*mobileDataSettingsIntent*/null);
+                        postDelayedMobileDataDialog(true);
                     } else if (!config.getMobileData() && enabled) {
-                        postDelayedSystemSettingDialog(getString(R.string.message_turn_off_mobile_data), /*mobileDataSettingsIntent*/null);
+                        postDelayedMobileDataDialog(false);
                     }
                 } catch (Exception e) {
                     // Some problem accessible private API
@@ -2079,10 +2071,10 @@ public class MainActivity
                         new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS), REQUEST_CODE_GPS_STATE_CHANGE);
                 break;
             case Const.MOBILE_DATA_ON_REQUIRED:
-                createAndShowSystemSettingDialog(getString(R.string.message_turn_on_mobile_data), null, 0);
+                createAndShowSystemSettingDialog(getString(R.string.message_turn_on_mobile_data), null, 0, true);
                 break;
             case Const.MOBILE_DATA_OFF_REQUIRED:
-                createAndShowSystemSettingDialog(getString(R.string.message_turn_off_mobile_data), null, 0);
+                createAndShowSystemSettingDialog(getString(R.string.message_turn_off_mobile_data), null, 0, false);
                 break;
         }
     }
@@ -2978,6 +2970,18 @@ public class MainActivity
         }
     }
 
+    private void postDelayedMobileDataDialog(final boolean dataOnRequired) {
+        final String message = getString(dataOnRequired
+                ? R.string.message_turn_on_mobile_data
+                : R.string.message_turn_off_mobile_data);
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                createAndShowSystemSettingDialog(message, null, null, dataOnRequired);
+            }
+        }, 5000);
+    }
+
     private void postDelayedSystemSettingDialog(final String message, final Intent settingsIntent) {
         postDelayedSystemSettingDialog(message, settingsIntent, null);
     }
@@ -3005,6 +3009,11 @@ public class MainActivity
     }
 
     private void createAndShowSystemSettingDialog(final String message, final Intent settingsIntent, final Integer requestCode) {
+        createAndShowSystemSettingDialog(message, settingsIntent, requestCode, null);
+    }
+
+    // requiredMobileDataState: true = mobile data must be ON, false = must be OFF, null = no check
+    private void createAndShowSystemSettingDialog(final String message, final Intent settingsIntent, final Integer requestCode, final Boolean requiredMobileDataState) {
         dismissDialog(systemSettingsDialog);
         systemSettingsDialog = new Dialog( this );
         dialogSystemSettingsBinding = DataBindingUtil.inflate(
@@ -3023,6 +3032,16 @@ public class MainActivity
         systemSettingsDialog.findViewById(R.id.continueButton).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (requiredMobileDataState != null) {
+                    boolean currentlyEnabled = Utils.isMobileDataEnabled(MainActivity.this);
+                    if (requiredMobileDataState && !currentlyEnabled) {
+                        Toast.makeText(MainActivity.this, getString(R.string.message_turn_on_mobile_data), Toast.LENGTH_SHORT).show();
+                        return;
+                    } else if (!requiredMobileDataState && currentlyEnabled) {
+                        Toast.makeText(MainActivity.this, getString(R.string.message_turn_off_mobile_data), Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                }
                 dismissDialog(systemSettingsDialog);
                 if (settingsIntent == null) {
                     return;
