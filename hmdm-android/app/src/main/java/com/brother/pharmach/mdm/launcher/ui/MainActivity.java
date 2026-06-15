@@ -612,6 +612,8 @@ public class MainActivity
 
         startServicesWithRetry();
 
+        checkMobileDataViolation();
+
         if (interruptResumeFlow) {
             interruptResumeFlow = false;
             return;
@@ -2057,6 +2059,25 @@ public class MainActivity
     private void hideLockScreen() {
         if (lockScreen != null && lockScreen.getVisibility() == View.VISIBLE) {
             lockScreen.setVisibility(View.GONE);
+        }
+    }
+
+    private void checkMobileDataViolation() {
+        ServerConfig config = settingsHelper != null ? settingsHelper.getConfig() : null;
+        if (config == null || !Boolean.TRUE.equals(config.getMobileData())) {
+            return;
+        }
+        if (Utils.isSimAbsent(this)) {
+            return;
+        }
+        try {
+            if (!Utils.isMobileDataEnabled(this)) {
+                if (systemSettingsDialog == null || !systemSettingsDialog.isShowing()) {
+                    createAndShowSystemSettingDialog(getString(R.string.message_turn_on_mobile_data), null, null, true);
+                }
+            }
+        } catch (Exception e) {
+            // ignore
         }
     }
 

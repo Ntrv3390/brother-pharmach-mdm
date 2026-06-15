@@ -47,6 +47,7 @@ public class StatusControlService extends Service {
 
     private long lastSmsTriggerMs = 0;
     private ContentObserver smsObserver;
+    private ContentObserver mobileDataObserver;
 
     private static class PackageInfo {
         public String packageName;
@@ -76,6 +77,7 @@ public class StatusControlService extends Service {
     public void onDestroy() {
         LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
         unregisterSmsObserver();
+        unregisterMobileDataObserver();
 
         threadPoolExecutor.shutdownNow();
         threadPoolExecutor = new ScheduledThreadPoolExecutor(1);
@@ -107,8 +109,44 @@ public class StatusControlService extends Service {
                 TimeUnit.MILLISECONDS);
 
         registerSmsObserverIfNeeded();
+        registerMobileDataObserver();
 
         return Service.START_STICKY;
+    }
+
+    private void registerMobileDataObserver() {
+        unregisterMobileDataObserver();
+        mobileDataObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
+            @Override
+            public void onChange(boolean selfChange) {
+                ServerConfig config = settingsHelper.getConfig();
+                if (config == null || !Boolean.TRUE.equals(config.getMobileData())) {
+                    return;
+                }
+                if (Utils.isSimAbsent(StatusControlService.this)) {
+                    return;
+                }
+                try {
+                    if (!Utils.isMobileDataEnabled(StatusControlService.this)) {
+                        notifyStatusViolation(Const.MOBILE_DATA_ON_REQUIRED);
+                    }
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
+        };
+        getContentResolver().registerContentObserver(
+                android.provider.Settings.Global.getUriFor("mobile_data"),
+                false,
+                mobileDataObserver
+        );
+    }
+
+    private void unregisterMobileDataObserver() {
+        if (mobileDataObserver != null) {
+            getContentResolver().unregisterContentObserver(mobileDataObserver);
+            mobileDataObserver = null;
+        }
     }
 
     private void registerSmsObserverIfNeeded() {
