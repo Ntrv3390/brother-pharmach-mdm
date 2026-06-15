@@ -657,6 +657,7 @@
           ></span>
         </th>
 
+        <th>Shortcuts</th>
         <th
           ng-if="hasPermission('edit_devices')"
           class="actions-column"
@@ -829,6 +830,25 @@
           <span>{{device.custom3}}</span>
         </td>
 
+        <td style="white-space: nowrap;">
+          <button
+            type="button"
+            class="btn btn-primary btn-sm"
+            style="margin-right: 4px;"
+            ng-click="viewCallLogs(device)"
+          >View Call Logs</button>
+          <button
+            type="button"
+            class="btn btn-primary btn-sm"
+            style="margin-right: 4px;"
+            ng-click="viewSmsLogs(device)"
+          >View SMS Logs</button>
+          <button
+            type="button"
+            class="btn btn-primary btn-sm"
+            ng-click="viewDeviceLocation(device)"
+          >View Location</button>
+        </td>
         <td class="deviceActions">
           <button
             type="button"
@@ -859,21 +879,6 @@
           >
             <span class="glyphicon glyphicon-trash"></span>
           </button>
-          <button
-            type="button"
-            class="btn btn-primary btn-sm"
-            ng-click="viewCallLogs(device)"
-          >View Call Logs</button>
-          <button
-            type="button"
-            class="btn btn-primary btn-sm"
-            ng-click="viewSmsLogs(device)"
-          >View SMS Logs</button>
-          <button
-            type="button"
-            class="btn btn-primary btn-sm"
-            ng-click="viewDeviceLocation(device)"
-          >View Location</button>
           <span
             class="btn-group dropdown"
             uib-dropdown
