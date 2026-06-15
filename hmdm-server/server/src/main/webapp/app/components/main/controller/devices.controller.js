@@ -1354,11 +1354,7 @@ angular.module('headwind-kiosk')
         };
 
         $scope.viewDeviceLocation = function (device) {
-            $window.location.href = '#/plugin-deviceinfo-dynamic/' + device.number;
-        };
-
-        $scope.viewWorktime = function (device) {
-            $window.location.href = '#/plugin-worktime';
+            $state.go('plugin-deviceinfo-dynamic', {deviceNumber: device.number});
         };
 
         var hiddenDevicePlugins = ['messaging'];
