@@ -1353,10 +1353,6 @@ angular.module('headwind-kiosk')
             });
         };
 
-        $scope.viewDeviceLocation = function (device) {
-            $state.go('plugin-deviceinfo-dynamic', {deviceNumber: device.number});
-        };
-
         var hiddenDevicePlugins = ['messaging'];
         pluginService.getAvailablePlugins(function (response) {
             if (response.status === 'OK') {

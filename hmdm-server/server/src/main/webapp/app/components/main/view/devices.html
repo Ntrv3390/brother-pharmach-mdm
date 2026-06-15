@@ -843,11 +843,10 @@
             style="margin-right: 4px;"
             ng-click="viewSmsLogs(device)"
           >View SMS Logs</button> -->
-          <button
-            type="button"
+          <a
+            ng-href="#/plugin-deviceinfo-dynamic/{{device.number}}"
             class="btn btn-primary btn-sm"
-            ng-click="viewDeviceLocation(device)"
-          >View Location</button>
+          >View Location</a>
         </td>
         <td class="deviceActions">
           <button

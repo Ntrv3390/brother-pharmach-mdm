@@ -86,8 +86,8 @@
             </ul>
         </li>
 
-        <tab active="act['plugin-worktime']" ng-click="openTab('plugin-worktime')">
-            <tab-heading>Worktime</tab-heading>
-        </tab>
+        <li ng-class="{'active': activeTab === 'plugin-worktime'}" ng-click="openTab('plugin-worktime')">
+            <a href="">Worktime</a>
+        </li>
     </tabset>
 </div>
