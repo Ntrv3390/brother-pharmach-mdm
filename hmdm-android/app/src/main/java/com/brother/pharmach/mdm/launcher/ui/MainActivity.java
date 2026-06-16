@@ -631,6 +631,22 @@ public class MainActivity
         }
     }
 
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent != null
+                && intent.getIntExtra(Const.POLICY_VIOLATION_CAUSE, 0) == Const.MOBILE_DATA_ON_REQUIRED) {
+            if (systemSettingsDialog == null || !systemSettingsDialog.isShowing()) {
+                boolean dataOn = Utils.isMobileDataEnabled(this);
+                String msg = getString(dataOn
+                        ? R.string.message_mobile_data_locked
+                        : R.string.message_turn_on_mobile_data);
+                createAndShowSystemSettingDialog(msg, null, null, dataOn ? null : Boolean.TRUE);
+            }
+        }
+    }
+
     private void lockOrientation() {
         int orientation = getResources().getConfiguration().orientation;
         int rotation = getWindowManager().getDefaultDisplay().getRotation();

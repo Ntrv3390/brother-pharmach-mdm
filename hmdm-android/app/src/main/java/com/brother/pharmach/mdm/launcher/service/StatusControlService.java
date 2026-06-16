@@ -25,6 +25,7 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import com.brother.pharmach.mdm.launcher.BuildConfig;
 import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
+import com.brother.pharmach.mdm.launcher.ui.MainActivity;
 import com.brother.pharmach.mdm.launcher.json.ServerConfig;
 import com.brother.pharmach.mdm.launcher.util.Utils;
 import com.brother.pharmach.mdm.launcher.worker.SmsLogUploadWorker;
@@ -128,7 +129,7 @@ public class StatusControlService extends Service {
                 }
                 try {
                     if (!Utils.isMobileDataEnabled(StatusControlService.this)) {
-                        notifyStatusViolation(Const.MOBILE_DATA_ON_REQUIRED);
+                        enforceMobileDataAndBringToFront();
                     }
                 } catch (Exception e) {
                     // ignore
@@ -280,19 +281,39 @@ public class StatusControlService extends Service {
         }
 
         if (config.getMobileData() != null && !Utils.isSimAbsent(this)) {
-            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-            if (cm != null) {
-                try {
-                    boolean enabled = Utils.isMobileDataEnabled(this);
-                    if (config.getMobileData() && !enabled) {
+            try {
+                boolean enabled = Utils.isMobileDataEnabled(this);
+                if (config.getMobileData() && !enabled) {
+                    // Policy requires ON — re-enable programmatically (read-only enforcement).
+                    // Same pattern as Wi-Fi enforcement above: direct API call, popup only on failure.
+                    boolean reEnabled = Utils.setMobileDataEnabled(this, true);
+                    if (!reEnabled) {
                         notifyStatusViolation(Const.MOBILE_DATA_ON_REQUIRED);
-                    } else if (!config.getMobileData() && enabled) {
-                        notifyStatusViolation(Const.MOBILE_DATA_OFF_REQUIRED);
                     }
-                } catch (Exception e) {
-                    // Some problem access private API
+                } else if (!config.getMobileData() && enabled) {
+                    notifyStatusViolation(Const.MOBILE_DATA_OFF_REQUIRED);
                 }
+            } catch (Exception e) {
+                // Some problem accessing private API
             }
+        }
+    }
+
+    private void enforceMobileDataAndBringToFront() {
+        // Re-enable mobile data immediately (best-effort).
+        Utils.setMobileDataEnabled(this, true);
+        // Bring MainActivity to front so the user sees the enforcement popup instantly,
+        // even if they disabled data from another app (Chrome, Settings, etc.).
+        // onNewIntent() in MainActivity checks the current data state and shows the
+        // appropriate message ("re-enabled by policy" vs "please enable").
+        try {
+            Intent launchIntent = new Intent(this, MainActivity.class);
+            launchIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            launchIntent.putExtra(Const.POLICY_VIOLATION_CAUSE, Const.MOBILE_DATA_ON_REQUIRED);
+            startActivity(launchIntent);
+        } catch (Exception e) {
+            Log.w(Const.LOG_TAG, "StatusControlService: could not bring app to front: " + e.getMessage());
+            notifyStatusViolation(Const.MOBILE_DATA_ON_REQUIRED);
         }
     }
 

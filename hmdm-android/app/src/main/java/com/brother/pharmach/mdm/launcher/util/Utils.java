@@ -474,6 +474,62 @@ public class Utils {
 
     }
 
+    /**
+     * Programmatically enable or disable mobile data.
+     *
+     * Tries three methods in order of reliability:
+     *  1. DevicePolicyManager.setMobileNetworksEnabled (Android 13+, device owner)
+     *  2. TelephonyManager.setDataEnabled          (hidden API via reflection; needs MODIFY_PHONE_STATE)
+     *  3. ConnectivityManager.setMobileDataEnabled  (hidden API via reflection; OEM fallback)
+     *
+     * Returns true if at least one method executed without throwing.
+     * Used by StatusControlService to enforce the server's mobileData=true policy
+     * by reverting any user toggle instantly (read-only behaviour).
+     */
+    public static boolean setMobileDataEnabled(Context context, boolean enabled) {
+        // Method 1: DevicePolicyManager.setMobileNetworksEnabled (public API, Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && isDeviceOwner(context)) {
+            try {
+                DevicePolicyManager dpm = (DevicePolicyManager)
+                        context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+                ComponentName admin = LegacyUtils.getAdminComponentName(context);
+                if (dpm != null && admin != null) {
+                    dpm.setMobileNetworksEnabled(admin, enabled);
+                    return true;
+                }
+            } catch (Exception ignored) {}
+        }
+
+        // Method 2: TelephonyManager.setDataEnabled (hidden API; works on most Android 5+ ROMs
+        //           when MODIFY_PHONE_STATE is held by a device-owner / system-privilege app)
+        try {
+            TelephonyManager tm = (TelephonyManager)
+                    context.getSystemService(Context.TELEPHONY_SERVICE);
+            if (tm != null) {
+                Method method = TelephonyManager.class
+                        .getDeclaredMethod("setDataEnabled", boolean.class);
+                method.setAccessible(true);
+                method.invoke(tm, enabled);
+                return true;
+            }
+        } catch (Exception ignored) {}
+
+        // Method 3: ConnectivityManager.setMobileDataEnabled (hidden API; preserved on some OEM builds)
+        try {
+            ConnectivityManager cm = (ConnectivityManager)
+                    context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm != null) {
+                Method method = Class.forName(cm.getClass().getName())
+                        .getDeclaredMethod("setMobileDataEnabled", boolean.class);
+                method.setAccessible(true);
+                method.invoke(cm, enabled);
+                return true;
+            }
+        } catch (Exception ignored) {}
+
+        return false;
+    }
+
     public static boolean isSimAbsent(Context context) {
         try {
             TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
