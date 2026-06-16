@@ -487,20 +487,7 @@ public class Utils {
      * by reverting any user toggle instantly (read-only behaviour).
      */
     public static boolean setMobileDataEnabled(Context context, boolean enabled) {
-        // Method 1: DevicePolicyManager.setMobileNetworksEnabled (public API, Android 13+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && isDeviceOwner(context)) {
-            try {
-                DevicePolicyManager dpm = (DevicePolicyManager)
-                        context.getSystemService(Context.DEVICE_POLICY_SERVICE);
-                ComponentName admin = LegacyUtils.getAdminComponentName(context);
-                if (dpm != null && admin != null) {
-                    dpm.setMobileNetworksEnabled(admin, enabled);
-                    return true;
-                }
-            } catch (Exception ignored) {}
-        }
-
-        // Method 2: TelephonyManager.setDataEnabled (hidden API; works on most Android 5+ ROMs
+        // Method 1: TelephonyManager.setDataEnabled (hidden API; works on most Android 5+ ROMs
         //           when MODIFY_PHONE_STATE is held by a device-owner / system-privilege app)
         try {
             TelephonyManager tm = (TelephonyManager)
@@ -514,7 +501,7 @@ public class Utils {
             }
         } catch (Exception ignored) {}
 
-        // Method 3: ConnectivityManager.setMobileDataEnabled (hidden API; preserved on some OEM builds)
+        // Method 2: ConnectivityManager.setMobileDataEnabled (hidden API; preserved on some OEM builds)
         try {
             ConnectivityManager cm = (ConnectivityManager)
                     context.getSystemService(Context.CONNECTIVITY_SERVICE);
