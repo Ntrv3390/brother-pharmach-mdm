@@ -22,6 +22,7 @@ import com.brother.pharmach.mdm.launcher.pro.ProUtils;
 import com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundAppAccessibilityService;
 import com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundApplicationService;
 import com.brother.pharmach.mdm.launcher.pro.worker.DetailedInfoWorker;
+import com.brother.pharmach.mdm.launcher.service.LocationForegroundService;
 import com.brother.pharmach.mdm.launcher.service.PushLongPollingService;
 import com.brother.pharmach.mdm.launcher.service.StatusControlService;
 import com.brother.pharmach.mdm.launcher.task.SendDeviceInfoTask;
@@ -71,7 +72,7 @@ public class Initializer {
 
             ConnectionWaiter.waitForConnect(context, () -> {
                 DetailedInfoWorker.schedule(context);
-                LocationWorker.schedule(context);
+                LocationForegroundService.start(context);
                 if (BuildConfig.ENABLE_PUSH) {
                     PushNotificationWorker.schedule(context);
                 }
@@ -234,7 +235,7 @@ public class Initializer {
                 DeviceInfo deviceInfo = DeviceInfoProvider.getDeviceInfo(context, true, true);
                 sendDeviceInfoTask.execute(deviceInfo);
                 SendDeviceInfoWorker.scheduleDeviceInfoSending(context);
-                LocationWorker.scheduleOneShot(context);
+                LocationForegroundService.triggerUrgent(context);
             }
 
             @Override

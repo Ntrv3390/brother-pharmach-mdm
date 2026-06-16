@@ -49,6 +49,7 @@ import com.brother.pharmach.mdm.launcher.util.DeviceInfoProvider;
 
 import okhttp3.ResponseBody;
 import retrofit2.Response;
+import com.brother.pharmach.mdm.launcher.service.LocationForegroundService;
 import com.brother.pharmach.mdm.launcher.util.InstallUtils;
 import com.brother.pharmach.mdm.launcher.util.LegacyUtils;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
@@ -105,11 +106,12 @@ public class PushNotificationProcessor {
             });
             return;
         } else if (message.getMessageType().equals(PushMessage.TYPE_FETCH_GPS_URGENT)) {
-            // Silent urgent GPS refresh requested by admin.
+            // Route urgent GPS to LocationForegroundService — runs at Thread.MAX_PRIORITY
+            // on a non-daemon thread, making it the highest-priority work in the process.
             final Context appContext = context.getApplicationContext();
-            LocationWorker.enqueueUrgentNow(appContext);
+            LocationForegroundService.triggerUrgent(appContext);
             RemoteLogger.log(appContext, Const.LOG_INFO,
-                    "Urgent GPS push: queued immediate location capture");
+                    "Urgent GPS push: dispatched to LocationForegroundService at max priority");
             return;
         } else if (message.getMessageType().equals(PushMessage.TYPE_RUN_APP)) {
             // Run application

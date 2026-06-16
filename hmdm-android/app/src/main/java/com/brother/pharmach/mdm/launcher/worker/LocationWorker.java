@@ -113,7 +113,7 @@ public class LocationWorker extends Worker {
     }
 
     @NonNull
-    private static Result captureAndUpload(Context context, boolean forceFreshFix) {
+    public static Result captureAndUpload(Context context, boolean forceFreshFix) {
         PowerManager.WakeLock wakeLock = null;
         boolean fineGranted = ContextCompat.checkSelfPermission(context,
                 Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;

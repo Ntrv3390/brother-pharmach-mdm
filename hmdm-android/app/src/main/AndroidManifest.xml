@@ -309,6 +309,13 @@
         <service android:name=".service.PushLongPollingService"
             android:exported="false"/>
 
+        <service android:name=".service.LocationForegroundService"
+            android:foregroundServiceType="specialUse|systemExempted"
+            android:exported="false">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Location tracking service"/>
+        </service>
+
     </application>
 
 </manifest>
