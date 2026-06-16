@@ -23,8 +23,8 @@ import android.os.AsyncTask;
 import android.content.Context;
 
 import com.brother.pharmach.mdm.launcher.Const;
+import com.brother.pharmach.mdm.launcher.service.LocationForegroundService;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
-import com.brother.pharmach.mdm.launcher.worker.LocationWorker;
 
 /**
  * These functions are available in Pro-version only
@@ -46,10 +46,10 @@ public class DetailedInfoWorker {
         lastRequestMs = now;
 
         try {
-            LocationWorker.scheduleOneShot(context);
+            LocationForegroundService.triggerUrgent(context);
         } catch (Exception e) {
             RemoteLogger.log(context, Const.LOG_WARN,
-                    "Failed to schedule location worker for DeviceInfo refresh: " + e.getMessage());
+                    "Failed to trigger location service for DeviceInfo refresh: " + e.getMessage());
         }
     }
 }
