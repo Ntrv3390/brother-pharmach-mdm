@@ -21,6 +21,7 @@ package com.brother.pharmach.mdm.launcher.ui;
 
 import android.Manifest;
 import android.app.Dialog;
+import android.app.NotificationManager;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.bluetooth.BluetoothAdapter;
@@ -637,6 +638,10 @@ public class MainActivity
         setIntent(intent);
         if (intent != null
                 && intent.getIntExtra(Const.POLICY_VIOLATION_CAUSE, 0) == Const.MOBILE_DATA_ON_REQUIRED) {
+            // Dismiss the enforcement notification (posted on Android 12+ when data was disabled).
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancel(StatusControlService.MOBILE_DATA_NOTIFICATION_ID);
+
             if (systemSettingsDialog == null || !systemSettingsDialog.isShowing()) {
                 boolean dataOn = Utils.isMobileDataEnabled(this);
                 String msg = getString(dataOn

@@ -526,6 +526,33 @@ public class Utils {
         }
     }
 
+    /**
+     * Locks or unlocks the mobile data toggle for the user.
+     * When locked=true the toggle is greyed out in Settings and Quick Settings —
+     * the user cannot tap it. Device owner only; no-op on non-owner builds.
+     */
+    public static boolean setMobileDataLocked(boolean locked, Context context) {
+        if (!isDeviceOwner(context)) {
+            return false;
+        }
+        DevicePolicyManager dpm = (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+        ComponentName admin = LegacyUtils.getAdminComponentName(context);
+        if (dpm == null || admin == null) {
+            return false;
+        }
+        try {
+            if (locked) {
+                dpm.addUserRestriction(admin, UserManager.DISALLOW_CONFIG_MOBILE_NETWORKS);
+            } else {
+                dpm.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_MOBILE_NETWORKS);
+            }
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     public static boolean isPackageInstalled(Context context, String targetPackage){
         PackageManager pm = context.getPackageManager();
         try {

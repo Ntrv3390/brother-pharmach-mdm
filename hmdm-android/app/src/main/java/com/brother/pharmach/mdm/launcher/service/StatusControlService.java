@@ -1,6 +1,10 @@
 package com.brother.pharmach.mdm.launcher.service;
 
 import android.Manifest;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
@@ -19,11 +23,13 @@ import android.os.Looper;
 import android.provider.Telephony;
 import android.util.Log;
 
+import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.brother.pharmach.mdm.launcher.BuildConfig;
 import com.brother.pharmach.mdm.launcher.Const;
+import com.brother.pharmach.mdm.launcher.R;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.ui.MainActivity;
 import com.brother.pharmach.mdm.launcher.json.ServerConfig;
@@ -45,6 +51,9 @@ public class StatusControlService extends Service {
     private final long ENABLE_CONTROL_DELAY = 60;
     private final long STATUS_CHECK_INTERVAL_MS = 10000;
     private final long SMS_TRIGGER_MIN_INTERVAL_MS = 4000;
+
+    public static final int MOBILE_DATA_NOTIFICATION_ID = 2001;
+    private static final String MOBILE_DATA_CHANNEL_ID = "mdm_mobile_data_channel";
 
     private long lastSmsTriggerMs = 0;
     private ContentObserver smsObserver;
@@ -280,18 +289,27 @@ public class StatusControlService extends Service {
             }
         }
 
-        if (config.getMobileData() != null && !Utils.isSimAbsent(this)) {
+        if (!Utils.isSimAbsent(this)) {
             try {
-                boolean enabled = Utils.isMobileDataEnabled(this);
-                if (config.getMobileData() && !enabled) {
-                    // Policy requires ON — re-enable programmatically (read-only enforcement).
-                    // Same pattern as Wi-Fi enforcement above: direct API call, popup only on failure.
-                    boolean reEnabled = Utils.setMobileDataEnabled(this, true);
-                    if (!reEnabled) {
-                        notifyStatusViolation(Const.MOBILE_DATA_ON_REQUIRED);
+                if (Boolean.TRUE.equals(config.getMobileData())) {
+                    // Lock the toggle so the user cannot disable mobile data at all.
+                    Utils.setMobileDataLocked(true, this);
+                    // Also ensure data is currently on (device may have just booted with it off).
+                    if (!Utils.isMobileDataEnabled(this)) {
+                        boolean reEnabled = Utils.setMobileDataEnabled(this, true);
+                        if (!reEnabled) {
+                            notifyStatusViolation(Const.MOBILE_DATA_ON_REQUIRED);
+                        }
                     }
-                } else if (!config.getMobileData() && enabled) {
-                    notifyStatusViolation(Const.MOBILE_DATA_OFF_REQUIRED);
+                } else if (Boolean.FALSE.equals(config.getMobileData())) {
+                    // Policy says OFF — unlock so we can read the real state, then warn if on.
+                    Utils.setMobileDataLocked(false, this);
+                    if (Utils.isMobileDataEnabled(this)) {
+                        notifyStatusViolation(Const.MOBILE_DATA_OFF_REQUIRED);
+                    }
+                } else {
+                    // No policy — remove the lock so the user can freely configure.
+                    Utils.setMobileDataLocked(false, this);
                 }
             } catch (Exception e) {
                 // Some problem accessing private API
@@ -300,21 +318,58 @@ public class StatusControlService extends Service {
     }
 
     private void enforceMobileDataAndBringToFront() {
-        // Re-enable mobile data immediately (best-effort).
         Utils.setMobileDataEnabled(this, true);
-        // Bring MainActivity to front so the user sees the enforcement popup instantly,
-        // even if they disabled data from another app (Chrome, Settings, etc.).
-        // onNewIntent() in MainActivity checks the current data state and shows the
-        // appropriate message ("re-enabled by policy" vs "please enable").
-        try {
-            Intent launchIntent = new Intent(this, MainActivity.class);
-            launchIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            launchIntent.putExtra(Const.POLICY_VIOLATION_CAUSE, Const.MOBILE_DATA_ON_REQUIRED);
-            startActivity(launchIntent);
-        } catch (Exception e) {
-            Log.w(Const.LOG_TAG, "StatusControlService: could not bring app to front: " + e.getMessage());
-            notifyStatusViolation(Const.MOBILE_DATA_ON_REQUIRED);
+
+        Intent launchIntent = new Intent(this, MainActivity.class);
+        launchIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+        launchIntent.putExtra(Const.POLICY_VIOLATION_CAUSE, Const.MOBILE_DATA_ON_REQUIRED);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Android 12+: the foreground-service exemption for background startActivity was
+            // removed for apps targeting SDK 31+. The OS silently intercepts the call (no
+            // exception thrown), so the app never comes to front. Use a high-priority
+            // notification with fullScreenIntent instead — the Android-recommended approach.
+            showMobileDataEnforcementNotification(launchIntent);
+        } else {
+            // Android 10-11: foreground-service exemption still applies; direct startActivity
+            // immediately brings the app to front.
+            try {
+                startActivity(launchIntent);
+            } catch (Exception e) {
+                Log.w(Const.LOG_TAG, "StatusControlService: startActivity failed: " + e.getMessage());
+                notifyStatusViolation(Const.MOBILE_DATA_ON_REQUIRED);
+            }
         }
+    }
+
+    private void showMobileDataEnforcementNotification(Intent launchIntent) {
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel ch = new NotificationChannel(
+                    MOBILE_DATA_CHANNEL_ID,
+                    "Mobile Data Policy",
+                    NotificationManager.IMPORTANCE_HIGH);
+            nm.createNotificationChannel(ch);
+        }
+
+        PendingIntent pi = PendingIntent.getActivity(
+                this, MOBILE_DATA_NOTIFICATION_ID, launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        Notification notification = new NotificationCompat.Builder(this, MOBILE_DATA_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_mqtt_service)
+                .setContentTitle(getString(R.string.app_name))
+                .setContentText(getString(R.string.message_turn_on_mobile_data))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setFullScreenIntent(pi, true)
+                .setContentIntent(pi)
+                .setAutoCancel(true)
+                .build();
+
+        nm.notify(MOBILE_DATA_NOTIFICATION_ID, notification);
     }
 
     private void notifyStatusViolation(int cause) {
