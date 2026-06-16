@@ -608,11 +608,13 @@ public class SyncResource {
                     this.unsecureDAO.updateDeviceCustomProperties(dbDevice.getId(), dbDevice);
                 }
 
-                // Auto-save phone number when the server field is blank and the device reports one
-                if (deviceInfo.getPhone() != null && !deviceInfo.getPhone().isEmpty()
-                        && (dbDevice.getPhone() == null || dbDevice.getPhone().isEmpty())) {
-                    logger.info("Auto-saving phone number {} for device {}", deviceInfo.getPhone(), dbDevice.getNumber());
-                    this.unsecureDAO.updateDevicePhone(dbDevice.getId(), deviceInfo.getPhone());
+                // Auto-save/update phone number whenever device reports one that differs from stored value
+                String incomingPhone = deviceInfo.getPhone();
+                String storedPhone = dbDevice.getPhone();
+                if (incomingPhone != null && !incomingPhone.isEmpty() && !incomingPhone.equals(storedPhone)) {
+                    logger.info("Updating phone number for device {} from '{}' to '{}'",
+                            dbDevice.getNumber(), storedPhone, incomingPhone);
+                    this.unsecureDAO.updateDevicePhone(dbDevice.getId(), incomingPhone);
                 }
 
                 if (deviceInfo.getBatteryLevel() != null) {
