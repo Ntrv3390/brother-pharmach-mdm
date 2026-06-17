@@ -343,6 +343,17 @@ public class StatusControlService extends Service {
     }
 
     private void showMobileDataEnforcementNotification(Intent launchIntent) {
+        // Android 13+ requires POST_NOTIFICATIONS runtime permission.
+        // Device owner apps should have it auto-granted during enrollment, but guard anyway.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            // Can't post a notification — fall back to the LocalBroadcast path which at least
+            // works if the user returns to the MDM app voluntarily.
+            notifyStatusViolation(Const.MOBILE_DATA_ON_REQUIRED);
+            return;
+        }
+
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
 

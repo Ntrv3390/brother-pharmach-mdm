@@ -614,6 +614,7 @@ public class MainActivity
         startServicesWithRetry();
 
         checkMobileDataViolation();
+        enforceOverlayPermission();
 
         if (interruptResumeFlow) {
             interruptResumeFlow = false;
@@ -1316,6 +1317,37 @@ public class MainActivity
             return true;
         }
         return false;
+    }
+
+    private void enforceOverlayPermission() {
+        if (Utils.canDrawOverlays(this)) {
+            return;
+        }
+        // For device owners, try to auto-grant silently first (works on most Android versions).
+        if (Utils.isDeviceOwner(this)) {
+            SystemUtils.autoSetOverlayPermission(this, getPackageName());
+            if (Utils.canDrawOverlays(this)) {
+                return;
+            }
+        }
+        // Mandatory dialog — no skip button, user must grant the permission.
+        // setCancelable(false) prevents back-button dismissal.
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.app_name))
+                .setMessage(getString(R.string.overlay_permission_required_message,
+                        getString(R.string.white_app_name)))
+                .setCancelable(false)
+                .setPositiveButton(getString(R.string.overlay_permission_grant), (d, w) -> {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:" + getPackageName()));
+                    try {
+                        startActivity(intent);
+                    } catch (Exception e) {
+                        Toast.makeText(this, R.string.overlays_not_supported,
+                                Toast.LENGTH_LONG).show();
+                    }
+                })
+                .show();
     }
 
     private boolean checkAlarmWindow() {
