@@ -1326,6 +1326,7 @@ angular.module('headwind-kiosk')
                     $scope.loadCallLogs();
                 },
                 size: 'lg',
+                windowClass: 'log-modal',
                 resolve: {
                     device: function () {
                         return device;
@@ -1342,6 +1343,7 @@ angular.module('headwind-kiosk')
                 templateUrl: 'app/components/plugins/smslog/views/modal.html',
                 controller: 'PluginSmsLogModalController',
                 size: 'lg',
+                windowClass: 'log-modal log-modal-wide',
                 resolve: {
                     device: function () {
                         return device;

@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./final-rebuild-android-only.sh)"
+      "Bash(./final-rebuild-android-only.sh)",
+      "Bash(grep -E '\\\\.\\(py|html|js\\)$')",
+      "Bash(grep -E '\\\\.\\(py|html\\)$')",
+      "Bash(grep -n \"navbar\\\\|#[0-9a-fA-F]\\\\{3,6\\\\}\" /home/mohammed/hmdm/hmdm-server/server/src/main/webapp/lib/bootstrap-css-only/css/bootstrap.css)"
     ]
   }
 }

@@ -19,30 +19,273 @@
   ~
   -->
 
-<div class="content-wrapper width-1000">
+<div class="content-wrapper width-1200" style="max-width: 75%; padding-left: 24px; padding-right: 24px;">
 
     <div ncy-breadcrumb></div>
 
-    <div class="text-center row">
-        <h4 localized>plugin.deviceinfo.dynamic.tab.title</h4>
-        <h4>{{formData.deviceNumber}}</h4>
+    <!-- Page Header -->
+    <div class="text-center" style="margin-bottom: 24px;">
+        <p style="margin: 0 0 4px; font-size: 11px; font-weight: 700; color: #8a9bb0; text-transform: uppercase; letter-spacing: 1.5px;" localized>plugin.deviceinfo.dynamic.tab.title</p>
+        <h3 style="margin: 0; font-weight: 700; color: #1e2d3d; font-size: 22px;">{{formData.deviceNumber}}</h3>
     </div>
 
-    <div class='form-group' ng-if='errorMessage'>
-        <div class='error'><span>{{errorMessage}}</span></div>
+    <!-- Alerts -->
+    <div ng-if='errorMessage' style="display:flex; align-items:center; gap:10px; padding: 12px 16px; background:#fff5f5; border: 1px solid #fca5a5; border-radius: 8px; margin-bottom: 16px; color: #c0392b; font-size: 13px;">
+        <span class="glyphicon glyphicon-exclamation-sign" style="flex-shrink:0;"></span>
+        <span>{{errorMessage}}</span>
     </div>
-    <div class='form-group' ng-if='successMessage'>
-        <div class='text-success' style="font-weight: bold; padding: 10px;"><span>{{successMessage}}</span></div>
-    </div>
-
-    <div>
-        <span class='pointer glyphicon'
-            ng-class="{'glyphicon-chevron-down': collapseState.main, 'glyphicon-chevron-up': !collapseState.main}"
-            ng-click="toggleParamsVisibility('main')"></span>
-        <h4 class='pointer collapse-control' style="display: inline"
-            ng-click="toggleParamsVisibility('main')">Dynamic Parameters</h4>
+    <div ng-if='successMessage' style="display:flex; align-items:center; gap:10px; padding: 12px 16px; background:#f0fdf4; border: 1px solid #86efac; border-radius: 8px; margin-bottom: 16px; color: #16a34a; font-size: 13px;">
+        <span class="glyphicon glyphicon-ok" style="flex-shrink:0;"></span>
+        <span>{{successMessage}}</span>
     </div>
 
+    <!-- ── Filter Card ─────────────────────────────────────────────── -->
+    <div style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:20px 24px; margin-bottom:20px; box-shadow:0 1px 6px rgba(0,0,0,0.06);">
+
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; background:#eef4f9; border-radius:6px;">
+                    <span class="glyphicon glyphicon-filter" style="color:#7a9ab9; font-size:12px;"></span>
+                </span>
+                <span style="font-weight:700; color:#1e2d3d; font-size:14px;">Filter by Date &amp; Time</span>
+            </div>
+            <button type="button" class="btn btn-link"
+                    ng-click="clearFilters()"
+                    ng-if="formData.dateFrom || formData.dateTo || formData.fromTime || formData.toTime"
+                    style="color:#ef4444; font-size:12px; padding:0; text-decoration:none; font-weight:600;">
+                <span class="glyphicon glyphicon-remove" style="margin-right:4px; font-size:10px;"></span>Clear All
+            </button>
+        </div>
+
+        <div class="row" style="margin-bottom:12px;">
+
+            <!-- From Date -->
+            <div class="col-sm-3" style="padding-right:8px;">
+                <label style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:6px; display:block;">From Date</label>
+                <div class="input-group" style="width:100%;">
+                    <input class="form-control"
+                           style="font-size:13px; border-radius:6px 0 0 6px; border-color:#cbd5e1; height:34px;"
+                           datepicker-popup="{{dateFormat}}"
+                           placeholder="dd/mm/yyyy"
+                           ng-model="formData.dateFrom"
+                           is-open="openDatePickers.dateFrom"
+                           show-button-bar="false"
+                           ng-change="onFromDateChange()"
+                           datepicker-options="datePickerOptions" />
+                    <span class="input-group-btn">
+                        <button class="btn btn-default" style="border-radius:0 6px 6px 0; border-color:#cbd5e1; height:34px; padding: 0 10px;" ng-click="openDateCalendar($event, true)">
+                            <span class="glyphicon glyphicon-calendar" style="color:#64748b;"></span>
+                        </button>
+                    </span>
+                </div>
+            </div>
+
+            <!-- From Time -->
+            <div class="col-sm-2" style="padding-right:8px;">
+                <label style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:6px; display:block;">
+                    From Time
+                </label>
+                <input type="time"
+                       class="form-control"
+                       style="font-size:13px; border-radius:6px; border-color:#cbd5e1; height:34px;"
+                       ng-model="formData.fromTime"
+                       ng-disabled="!formData.dateFrom"
+                       ng-change="onFilterChange()" />
+                <span ng-if="!formData.dateFrom" style="font-size:10px; color:#94a3b8; margin-top:3px; display:block;">Select date first</span>
+            </div>
+
+            <!-- Arrow Separator -->
+            <div class="col-sm-1 hidden-xs text-center" style="padding-top:26px;">
+                <span style="color:#94a3b8; font-size:16px;">&#8594;</span>
+            </div>
+
+            <!-- To Date -->
+            <div class="col-sm-3" style="padding-right:8px;">
+                <label style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:6px; display:block;">To Date</label>
+                <div class="input-group" style="width:100%;">
+                    <input class="form-control"
+                           style="font-size:13px; border-radius:6px 0 0 6px; border-color:#cbd5e1; height:34px;"
+                           datepicker-popup="{{dateFormat}}"
+                           placeholder="dd/mm/yyyy"
+                           ng-model="formData.dateTo"
+                           is-open="openDatePickers.dateTo"
+                           show-button-bar="false"
+                           ng-change="onToDateChange()"
+                           datepicker-options="datePickerOptions" />
+                    <span class="input-group-btn">
+                        <button class="btn btn-default" style="border-radius:0 6px 6px 0; border-color:#cbd5e1; height:34px; padding: 0 10px;" ng-click="openDateCalendar($event, false)">
+                            <span class="glyphicon glyphicon-calendar" style="color:#64748b;"></span>
+                        </button>
+                    </span>
+                </div>
+            </div>
+
+            <!-- To Time -->
+            <div class="col-sm-2" style="padding-right:8px;">
+                <label style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:6px; display:block;">
+                    To Time
+                </label>
+                <input type="time"
+                       class="form-control"
+                       style="font-size:13px; border-radius:6px; border-color:#cbd5e1; height:34px;"
+                       ng-model="formData.toTime"
+                       ng-disabled="!formData.dateTo"
+                       ng-change="onFilterChange()" />
+                <span ng-if="!formData.dateTo" style="font-size:10px; color:#94a3b8; margin-top:3px; display:block;">Select date first</span>
+            </div>
+
+        </div>
+
+        <!-- Active filter summary -->
+        <div style="padding:8px 12px; border-radius:6px; font-size:12px; margin-bottom:14px;"
+             ng-style="{'background': (formData.dateFrom || formData.dateTo) ? '#eef4f9' : '#f8fafc', 'color': (formData.dateFrom || formData.dateTo) ? '#5a7fa0' : '#94a3b8', 'border': (formData.dateFrom || formData.dateTo) ? '1px solid #b0cfe4' : '1px solid #e2e8f0'}">
+            <span class="glyphicon glyphicon-time" style="margin-right:6px; font-size:11px;"></span>
+            <span ng-if="!formData.dateFrom && !formData.dateTo">No date filter — showing all records</span>
+            <span ng-if="formData.dateFrom && !formData.dateTo">
+                From <strong>{{formData.dateFrom | date:'dd-MMM-yyyy'}}</strong>
+                <span ng-if="formData.fromTime"> at <strong>{{formData.fromTime | date:'HH:mm'}}</strong></span>
+                <span ng-if="!formData.fromTime"> at <strong>12:00 AM</strong> (default)</span>
+                onwards
+            </span>
+            <span ng-if="!formData.dateFrom && formData.dateTo">
+                Up to <strong>{{formData.dateTo | date:'dd-MMM-yyyy'}}</strong>
+                <span ng-if="formData.toTime"> at <strong>{{formData.toTime | date:'HH:mm'}}</strong></span>
+                <span ng-if="!formData.toTime"> at <strong>11:59 PM</strong> (default)</span>
+            </span>
+            <span ng-if="formData.dateFrom && formData.dateTo">
+                <strong>{{formData.dateFrom | date:'dd-MMM-yyyy'}}</strong>
+                <span ng-if="formData.fromTime"> <strong>{{formData.fromTime | date:'HH:mm'}}</strong></span>
+                <span ng-if="!formData.fromTime"> <strong>12:00 AM</strong></span>
+                &nbsp;&#8594;&nbsp;
+                <strong>{{formData.dateTo | date:'dd-MMM-yyyy'}}</strong>
+                <span ng-if="formData.toTime"> <strong>{{formData.toTime | date:'HH:mm'}}</strong></span>
+                <span ng-if="!formData.toTime"> <strong>11:59 PM</strong></span>
+            </span>
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="display:flex; align-items:center; gap:10px;">
+            <button type="button"
+                    style="display:inline-flex; align-items:center; gap:6px; padding:8px 20px; background:#7a9ab9; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; transition:background 0.2s;"
+                    ng-click="search()">
+                <span class="glyphicon glyphicon-search" style="font-size:11px;"></span> Search
+            </button>
+            <button type="button"
+                    style="display:inline-flex; align-items:center; gap:6px; padding:8px 16px; background:#fff; color:#475569; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer;"
+                    ng-click="doExport()" ng-disabled="loading">
+                <span class="glyphicon glyphicon-download-alt" style="font-size:11px;"></span> Export
+            </button>
+        </div>
+    </div>
+
+    <!-- ── Visible Columns Card ────────────────────────────────────── -->
+    <div style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:16px 20px; margin-bottom:20px; box-shadow:0 1px 6px rgba(0,0,0,0.06);">
+
+        <div style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" ng-click="toggleParamsVisibility('main')">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; background:#f0fdf4; border-radius:6px;">
+                    <span class="glyphicon glyphicon-th-list" style="color:#16a34a; font-size:12px;"></span>
+                </span>
+                <span style="font-weight:700; color:#1e2d3d; font-size:14px;">Visible Columns</span>
+                <span style="font-size:11px; color:#94a3b8; font-weight:400; margin-left:4px;">
+                    (click to {{collapseState.main ? 'expand' : 'collapse'}})
+                </span>
+            </div>
+            <span class="glyphicon" style="color:#94a3b8; font-size:12px;"
+                  ng-class="{'glyphicon-chevron-down': collapseState.main, 'glyphicon-chevron-up': !collapseState.main}"></span>
+        </div>
+
+        <div ng-show="!collapseState.main" style="margin-top:14px;">
+
+            <!-- Device -->
+            <div style="margin-bottom:12px;">
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; cursor:pointer;" ng-click="toggleParamsVisibility('device')">
+                    <span class="glyphicon" style="font-size:9px; color:#94a3b8;"
+                          ng-class="{'glyphicon-chevron-right': collapseState.device, 'glyphicon-chevron-down': !collapseState.device}"></span>
+                    <span style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.8px;">Device</span>
+                </div>
+                <div ng-show="!collapseState.device" style="display:flex; flex-wrap:wrap; gap:6px; padding-left:16px;">
+                    <div ng-repeat="fieldName in deviceFields"
+                         ng-click="toggleField(fieldName)"
+                         style="cursor:pointer; padding:3px 11px; border-radius:20px; font-size:12px; border:1px solid; transition:all 0.15s; user-select:none;"
+                         ng-style="fieldsSelection[fieldName] ? {'background':'#dceaf4','border-color':'#7a9ab9','color':'#4e7a9a','font-weight':'600'} : {'background':'#f8fafc','border-color':'#e2e8f0','color':'#64748b'}">
+                        {{('plugin.deviceinfo.title.group.' + fieldName) | localize}}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Wi-Fi -->
+            <div style="margin-bottom:12px;">
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; cursor:pointer;" ng-click="toggleParamsVisibility('wifi')">
+                    <span class="glyphicon" style="font-size:9px; color:#94a3b8;"
+                          ng-class="{'glyphicon-chevron-right': collapseState.wifi, 'glyphicon-chevron-down': !collapseState.wifi}"></span>
+                    <span style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.8px;">Wi-Fi</span>
+                </div>
+                <div ng-show="!collapseState.wifi" style="display:flex; flex-wrap:wrap; gap:6px; padding-left:16px;">
+                    <div ng-repeat="fieldName in wifiFields"
+                         ng-click="toggleField(fieldName)"
+                         style="cursor:pointer; padding:3px 11px; border-radius:20px; font-size:12px; border:1px solid; transition:all 0.15s; user-select:none;"
+                         ng-style="fieldsSelection[fieldName] ? {'background':'#dceaf4','border-color':'#7a9ab9','color':'#4e7a9a','font-weight':'600'} : {'background':'#f8fafc','border-color':'#e2e8f0','color':'#64748b'}">
+                        {{('plugin.deviceinfo.title.group.' + fieldName) | localize}}
+                    </div>
+                </div>
+            </div>
+
+            <!-- GPS -->
+            <div style="margin-bottom:12px;">
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; cursor:pointer;" ng-click="toggleParamsVisibility('gps')">
+                    <span class="glyphicon" style="font-size:9px; color:#94a3b8;"
+                          ng-class="{'glyphicon-chevron-right': collapseState.gps, 'glyphicon-chevron-down': !collapseState.gps}"></span>
+                    <span style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.8px;">GPS</span>
+                </div>
+                <div ng-show="!collapseState.gps" style="display:flex; flex-wrap:wrap; gap:6px; padding-left:16px;">
+                    <div ng-repeat="fieldName in gpsFields"
+                         ng-click="toggleField(fieldName)"
+                         style="cursor:pointer; padding:3px 11px; border-radius:20px; font-size:12px; border:1px solid; transition:all 0.15s; user-select:none;"
+                         ng-style="fieldsSelection[fieldName] ? {'background':'#dceaf4','border-color':'#7a9ab9','color':'#4e7a9a','font-weight':'600'} : {'background':'#f8fafc','border-color':'#e2e8f0','color':'#64748b'}">
+                        {{('plugin.deviceinfo.title.group.' + fieldName) | localize}}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile 1 -->
+            <div style="margin-bottom:12px;">
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; cursor:pointer;" ng-click="toggleParamsVisibility('mobile1')">
+                    <span class="glyphicon" style="font-size:9px; color:#94a3b8;"
+                          ng-class="{'glyphicon-chevron-right': collapseState.mobile1, 'glyphicon-chevron-down': !collapseState.mobile1}"></span>
+                    <span style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.8px;">Mobile 1</span>
+                </div>
+                <div ng-show="!collapseState.mobile1" style="display:flex; flex-wrap:wrap; gap:6px; padding-left:16px;">
+                    <div ng-repeat="fieldName in mobile1Fields"
+                         ng-click="toggleField(fieldName)"
+                         style="cursor:pointer; padding:3px 11px; border-radius:20px; font-size:12px; border:1px solid; transition:all 0.15s; user-select:none;"
+                         ng-style="fieldsSelection[fieldName] ? {'background':'#dceaf4','border-color':'#7a9ab9','color':'#4e7a9a','font-weight':'600'} : {'background':'#f8fafc','border-color':'#e2e8f0','color':'#64748b'}">
+                        {{('plugin.deviceinfo.title.group.' + fieldName) | localize}}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile 2 -->
+            <div>
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; cursor:pointer;" ng-click="toggleParamsVisibility('mobile2')">
+                    <span class="glyphicon" style="font-size:9px; color:#94a3b8;"
+                          ng-class="{'glyphicon-chevron-right': collapseState.mobile2, 'glyphicon-chevron-down': !collapseState.mobile2}"></span>
+                    <span style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.8px;">Mobile 2</span>
+                </div>
+                <div ng-show="!collapseState.mobile2" style="display:flex; flex-wrap:wrap; gap:6px; padding-left:16px;">
+                    <div ng-repeat="fieldName in mobile2Fields"
+                         ng-click="toggleField(fieldName)"
+                         style="cursor:pointer; padding:3px 11px; border-radius:20px; font-size:12px; border:1px solid; transition:all 0.15s; user-select:none;"
+                         ng-style="fieldsSelection[fieldName] ? {'background':'#dceaf4','border-color':'#7a9ab9','color':'#4e7a9a','font-weight':'600'} : {'background':'#f8fafc','border-color':'#e2e8f0','color':'#64748b'}">
+                        {{('plugin.deviceinfo.title.group.' + fieldName) | localize}}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Spinner -->
     <sarsha-spinner name="spinner2">
         <div class="spinner">
             <div class="rect1"></div>
@@ -53,201 +296,8 @@
         </div>
     </sarsha-spinner>
 
-    <form class="form-horizontal margin-top" ng-show="!collapseState.main">
-
-        <div class="row">
-            <div class="col-sm-4">
-                <div class='form-group'>
-                    <div class="col-sm-4">
-                        <label for="fixedInterval" localized>plugin.deviceinfo.dynamic.period</label>
-                    </div>
-                    <div class='col-sm-8'>
-                        <select id="fixedInterval" class='form-control'
-                                ng-model="formData.fixedInterval" ng-change="fixedIntervalSelected()">
-                            <option ng-value='3600' ng-selected="formData.fixedInterval === 3600" localized>plugin.deviceinfo.dynamic.period.1</option>
-                            <option ng-value='6 * 3600' ng-selected="formData.fixedInterval === 6 * 3600" localized>plugin.deviceinfo.dynamic.period.6</option>
-                            <option ng-value='24 * 3600' ng-selected="formData.fixedInterval === 24 * 3600" localized>plugin.deviceinfo.dynamic.period.24</option>
-                            <option ng-value='48 * 3600' ng-selected="formData.fixedInterval === 48 * 3600" localized>plugin.deviceinfo.dynamic.period.48</option>
-                            <option ng-value='-1' ng-selected="formData.fixedInterval === -1" localized>plugin.deviceinfo.dynamic.period.any</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-sm-3" ng-if="!formData.useFixedInterval">
-                <div class='min-padding date-picker date-picker-input'>
-                    <input class='form-control' datepicker-popup='{{dateFormat}}'
-                           localized-placeholder="search.placeholder.from"
-                           ng-model='formData.dateFrom' is-open='openDatePickers.dateFrom' show-button-bar='false'
-                           ng-change="timeParamsChanged()"
-                           datepicker-options='datePickerOptions'/>
-                </div>
-                <div class='min-padding date-picker date-picker-button'>
-                    <button type='button' class='btn btn-default' ng-click='openDateCalendar( $event, true )'>
-                        <span class='glyphicon glyphicon-calendar'></span>
-                    </button>
-                </div>
-            </div>
-
-            <div class="col-sm-3" ng-if="!formData.useFixedInterval">
-                <div class='min-padding date-picker date-picker-input'>
-                    <input class='form-control' datepicker-popup='{{dateFormat}}' localized-placeholder="search.placeholder.to"
-                           ng-model='formData.dateTo' is-open='openDatePickers.dateTo' show-button-bar='false'
-                           ng-change="timeParamsChanged()"
-                           datepicker-options='datePickerOptions'/>
-                </div>
-                <div class='min-padding date-picker date-picker-button'>
-                    <button type='button' class='btn btn-default' ng-click='openDateCalendar( $event, false )'>
-                        <span class='glyphicon glyphicon-calendar'></span>
-                    </button>
-                </div>
-            </div>
-
-            <div class="col-sm-2 text-left">
-                <button type='button' class='btn btn-default' ng-click='search()'>Search</button>
-            </div>
-        </div>
-
-        <div class="row" ng-if="!formData.useFixedInterval">
-            <div class="col-sm-offset-4 col-sm-3">
-                <div class='min-padding time-picker'>
-                    <timepicker ng-model='formData.timeFrom' show-meridian='false' show-seconds="true"
-                                ng-change="timeParamsChanged()"
-                                show-spinners="false" arrowkeys="true"></timepicker>
-                </div>
-            </div>
-            <div class="col-sm-3">
-                <div class='min-padding time-picker'>
-                    <timepicker ng-model='formData.timeTo' show-meridian='false' show-seconds="true"
-                                ng-change="timeParamsChanged()"
-                                show-spinners="false" arrowkeys="true"></timepicker>
-                </div>
-            </div>
-        </div>
-
-        <div class="row margin-top">
-            <div class="col-sm-4">
-                <span class='pointer glyphicon'
-                      ng-class="{'glyphicon-chevron-down': collapseState.device, 'glyphicon-chevron-up': !collapseState.device}"
-                      ng-click="toggleParamsVisibility('device')"></span>
-                <h4 class='pointer collapse-control'
-                    ng-click="toggleParamsVisibility('device')" localized>plugin.deviceinfo.title.group.device</h4>
-            </div>
-            <div class="col-sm-4">
-                <span class='pointer glyphicon'
-                      ng-class="{'glyphicon-chevron-down': collapseState.wifi, 'glyphicon-chevron-up': !collapseState.wifi}"
-                      ng-click="toggleParamsVisibility('wifi')"></span>
-                <h4 class='pointer collapse-control'
-                    ng-click="toggleParamsVisibility('wifi')" localized>plugin.deviceinfo.title.group.wifi</h4>
-            </div>
-            <div class="col-sm-4">
-                <span class='pointer glyphicon'
-                      ng-class="{'glyphicon-chevron-down': collapseState.gps, 'glyphicon-chevron-up': !collapseState.gps}"
-                      ng-click="toggleParamsVisibility('gps')"></span>
-                <h4 class='pointer collapse-control'
-                    ng-click="toggleParamsVisibility('gps')" localized>plugin.deviceinfo.title.group.gps</h4>
-            </div>
-        </div>
-
-        <div class="row margin-top">
-            <div class="col-sm-4">
-                <div class="form-group" ng-repeat="fieldName in deviceFields" ng-show="!collapseState.device">
-                    <div class="col-sm-6">
-                        <label for="device_box_{{fieldName}}">
-                            {{('plugin.deviceinfo.title.group.' + fieldName) | localize}}
-                        </label>
-                    </div>
-                    <div class="col-sm-2">
-                        <input type="checkbox" class="form-control" id="device_box_{{fieldName}}"
-                               ng-change="fieldsSelectionChanged()"
-                               ng-model="fieldsSelection[fieldName]"/>
-                    </div>
-                </div>
-            </div>
-            <div class="col-sm-4">
-                <div class="form-group" ng-repeat="fieldName in wifiFields" ng-show="!collapseState.wifi">
-                    <div class="col-sm-6">
-                        <label for="wifi_box_{{fieldName}}">
-                            {{('plugin.deviceinfo.title.group.' + fieldName) | localize}}
-                        </label>
-                    </div>
-                    <div class="col-sm-2">
-                        <input type="checkbox" class="form-control" id="wifi_box_{{fieldName}}"
-                               ng-change="fieldsSelectionChanged()"
-                               ng-model="fieldsSelection[fieldName]"/>
-                    </div>
-                </div>
-            </div>
-            <div class="col-sm-4">
-                <div class="form-group" ng-repeat="fieldName in gpsFields" ng-show="!collapseState.gps">
-                    <div class="col-sm-6">
-                        <label for="gps_box_{{fieldName}}">
-                            {{('plugin.deviceinfo.title.group.' + fieldName) | localize}}
-                        </label>
-                    </div>
-                    <div class="col-sm-2">
-                        <input type="checkbox" class="form-control" id="gps_box_{{fieldName}}"
-                               ng-change="fieldsSelectionChanged()"
-                               ng-model="fieldsSelection[fieldName]"/>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row margin-top">
-            <div class="col-sm-4">
-                <span class='pointer glyphicon'
-                      ng-class="{'glyphicon-chevron-down': collapseState.mobile1, 'glyphicon-chevron-up': !collapseState.mobile1}"
-                      ng-click="toggleParamsVisibility('mobile1')"></span>
-                <h4 class='pointer collapse-control'
-                    ng-click="toggleParamsVisibility('mobile1')" localized>plugin.deviceinfo.title.group.mobile1</h4>
-            </div>
-            <div class="col-sm-4">
-                <span class='pointer glyphicon'
-                      ng-class="{'glyphicon-chevron-down': collapseState.mobile2, 'glyphicon-chevron-up': !collapseState.mobile2}"
-                      ng-click="toggleParamsVisibility('mobile2')"></span>
-                <h4 class='pointer collapse-control'
-                    ng-click="toggleParamsVisibility('mobile2')" localized>plugin.deviceinfo.title.group.mobile2</h4>
-            </div>
-        </div>
-
-        <div class="row margin-top">
-            <div class="col-sm-4">
-                <div class="form-group" ng-repeat="fieldName in mobile1Fields" ng-show="!collapseState.mobile1">
-                    <div class="col-sm-6">
-                        <label for="mobile1_box_{{fieldName}}">
-                            {{('plugin.deviceinfo.title.group.' + fieldName) | localize}}
-                        </label>
-                    </div>
-                    <div class="col-sm-2">
-                        <input type="checkbox" class="form-control" id="mobile1_box_{{fieldName}}"
-                               ng-change="fieldsSelectionChanged()"
-                               ng-model="fieldsSelection[fieldName]"/>
-                    </div>
-                </div>
-            </div>
-            <div class="col-sm-4">
-                <div class="form-group" ng-repeat="fieldName in mobile2Fields" ng-show="!collapseState.mobile2">
-                    <div class="col-sm-6">
-                        <label for="mobile2_box_{{fieldName}}">
-                            {{('plugin.deviceinfo.title.group.' + fieldName) | localize}}
-                        </label>
-                    </div>
-                    <div class="col-sm-2">
-                        <input type="checkbox" class="form-control" id="mobile2_box_{{fieldName}}"
-                               ng-change="fieldsSelectionChanged()"
-                               ng-model="fieldsSelection[fieldName]"/>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </form>
-
-    <div class="text-left margin-top">
-        <button type='submit' class='btn btn-default' ng-click='doExport()' ng-disabled="loading">Export</button>
-    </div>
-
-    <div class="text-center margin-top" ng-if="formData.totalItems > formData.pageSize">
+    <!-- Top Pagination -->
+    <div class="text-center" ng-if="formData.totalItems > formData.pageSize" style="margin-bottom:16px;">
         <pagination
                 boundary-links='true' class='pagination-sm'
                 max-size='3'
@@ -258,67 +308,106 @@
                 last-text='&raquo;'></pagination>
     </div>
 
-    <div class="row margin-top-20">
-        <div class="col-sm-12 text-right">
-             <button class="btn btn-info" ng-click="refreshLocation()">
-                <span class="glyphicon glyphicon-refresh"></span> Get Latest Location
+    <!-- Action Bar -->
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+        <div style="font-size:12px; color:#94a3b8;" ng-if="formData.totalItems > 0">
+            Showing {{data.length}} of {{formData.totalItems}} records
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; margin-left:auto;">
+            <button type="button"
+                    style="display:inline-flex; align-items:center; gap:7px; padding:8px 18px; background:#7a9ab9; color:#fff; border:none; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; box-shadow:0 1px 4px rgba(122,154,185,0.35);"
+                    ng-click="refreshLocation()">
+                <span class="glyphicon glyphicon-refresh" style="font-size:11px;"></span> Get Latest Location
             </button>
-            <a class="btn btn-default"
-               ng-if="hasMapCoordinates()"
+            <a ng-if="hasMapCoordinates()"
                ng-href="{{getGoogleMapsUrl()}}"
                target="_blank"
                rel="noopener noreferrer"
-               style="margin-left: 10px;">
-                <span class="glyphicon glyphicon-map-marker"></span> Open Google Maps
+               style="display:inline-flex; align-items:center; gap:7px; padding:8px 18px; background:#fff; color:#475569; border:1px solid #cbd5e1; border-radius:7px; font-size:13px; font-weight:600; text-decoration:none; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                <span class="glyphicon glyphicon-map-marker" style="font-size:11px; color:#ef4444;"></span> Open Google Maps
             </a>
-            <div class="margin-top-10" ng-if="refreshState.lastRequestedAt">
-                <small class="text-muted">Last refresh request: {{refreshState.lastRequestedAt | date:'dd.MM.yy HH:mm:ss'}}</small>
-                <br/>
-                <small class="text-muted">Pending: {{refreshState.pendingCount}} | Completed: {{refreshState.completedCount}}</small>
-                <br ng-if="refreshState.waitingForNewData"/>
-                <small class="text-warning" ng-if="refreshState.waitingForNewData">Waiting for updated GPS data from device...</small>
+        </div>
+    </div>
+
+    <!-- Refresh State Info -->
+    <div ng-if="refreshState.lastRequestedAt" style="background:#fffbeb; border:1px solid #fcd34d; border-radius:7px; padding:10px 14px; margin-bottom:16px; font-size:12px; color:#92400e;">
+        <div>Last refresh request: <strong>{{refreshState.lastRequestedAt | date:'dd.MM.yy HH:mm:ss'}}</strong>
+            &nbsp;|&nbsp; Pending: <strong>{{refreshState.pendingCount}}</strong>
+            &nbsp;|&nbsp; Completed: <strong>{{refreshState.completedCount}}</strong>
+        </div>
+        <div ng-if="refreshState.waitingForNewData" style="margin-top:4px; color:#b45309;">
+            <span class="glyphicon glyphicon-refresh" style="margin-right:4px;"></span>Waiting for updated GPS data from device...
+        </div>
+    </div>
+
+    <!-- Map & Table -->
+    <div ng-show="data">
+
+        <!-- Map -->
+        <div id="locationMap"
+             style="height:420px; width:100%; border-radius:10px; border:1px solid #e2e8f0; margin-bottom:20px; box-shadow:0 2px 10px rgba(0,0,0,0.08); overflow:hidden;"></div>
+
+        <!-- Data Table Card -->
+        <div style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; box-shadow:0 1px 6px rgba(0,0,0,0.06);">
+            <div style="overflow-x:auto; border-radius:10px;">
+            <table class="table" style="margin-bottom:0; font-size:13px; min-width:700px;">
+                <thead>
+                    <tr style="background:linear-gradient(90deg, #5a7fa0 0%, #7a9ab9 100%);">
+                        <th style="color:#e2e8f0; border:none; font-size:11px; font-weight:700; padding:12px 14px; white-space:nowrap; text-transform:uppercase; letter-spacing:0.6px;"
+                            localized>plugin.deviceinfo.title.time</th>
+                        <th ng-repeat="fieldName in allFields" ng-if="fieldsSelection[fieldName] === true"
+                            style="color:#e2e8f0; border:none; font-size:11px; font-weight:700; padding:12px 14px; white-space:nowrap; text-transform:uppercase; letter-spacing:0.6px;">
+                            {{('plugin.deviceinfo.title.group.' + fieldName) | localize}}
+                        </th>
+                        <th style="position:sticky; right:0; z-index:3; background:#7a9ab9; color:#e2e8f0; border:none; font-size:11px; font-weight:700; padding:12px 16px; white-space:nowrap; text-transform:uppercase; letter-spacing:0.6px; text-align:center; box-shadow:-3px 0 6px rgba(0,0,0,0.25);">
+                            <span class="glyphicon glyphicon-map-marker" style="font-size:12px;"></span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr ng-repeat="record in data" ng-init="item = parseDynamicInfoRecord(record)"
+                        style="border-bottom:1px solid #f1f5f9; transition:background 0.15s;"
+                        ng-style="{'background': $even ? '#ffffff' : '#f8fafc'}">
+                        <td style="padding:10px 14px; white-space:nowrap;">
+                            <div style="font-weight:600; color:#334155; font-size:13px;">{{record.latestUpdateTime | date:'dd.MM.yyyy'}}</div>
+                            <div style="font-size:11px; color:#94a3b8; margin-top:2px;">{{record.latestUpdateTime | date:'HH:mm:ss'}}</div>
+                        </td>
+                        <td ng-repeat="fieldName in allFields" ng-if="fieldsSelection[fieldName] === true"
+                            style="padding:10px 14px; color:#475569;">
+                            <span ng-if="item[fieldName].isBoolean">{{('plugin.deviceinfo.boolean.' + item[fieldName].value) | localize}}</span>
+                            <span ng-if="item[fieldName].isEnumerated">{{('plugin.deviceinfo.state.' + fieldName + '.' + item[fieldName].value) | localize}}</span>
+                            <span ng-if="!item[fieldName].isBoolean && !item[fieldName].isEnumerated">{{item[fieldName].value}}</span>
+                        </td>
+                        <td style="position:sticky; right:0; z-index:2; padding:10px 16px; text-align:center; white-space:nowrap; box-shadow:-3px 0 6px rgba(0,0,0,0.07);"
+                            ng-style="{'background': $even ? '#ffffff' : '#f8fafc'}">
+                            <a ng-if="item.gpsLat && item.gpsLon && item.gpsLat.value !== null && item.gpsLon.value !== null && item.gpsLat.value !== '' && item.gpsLon.value !== ''"
+                               ng-href="https://www.google.com/maps?q={{item.gpsLat.value}},{{item.gpsLon.value}}"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; background:#eef4f9; border:1px solid #b0cfe4; border-radius:6px; color:#7a9ab9; font-size:13px; text-decoration:none; transition:all 0.15s;"
+                               title="Open in Google Maps">
+                                <span class="glyphicon glyphicon-map-marker"></span>
+                            </a>
+                            <span ng-if="!item.gpsLat || !item.gpsLon || item.gpsLat.value === null || item.gpsLon.value === null || item.gpsLat.value === '' || item.gpsLon.value === ''"
+                                  style="color:#cbd5e1; font-size:16px;">&#8212;</span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
             </div>
         </div>
     </div>
 
-    <div ng-show="data" class="row margin-top-40">
-        <div class="col-sm-12">
-            <div id="locationMap" style="height: 400px; width: 100%; border: 1px solid #ccc; margin-bottom: 20px;"></div>
-
-            <table class="table">
-                <tr>
-                    <th localized>plugin.deviceinfo.title.time</th>
-                    <th ng-repeat="fieldName in allFields" ng-if="fieldsSelection[fieldName] === true">
-                        {{('plugin.deviceinfo.title.group.' + fieldName) | localize}}
-                    </th>
-                    <th class="text-right">Map</th>
-                </tr>
-
-                <tr ng-repeat="record in data" ng-init="item = parseDynamicInfoRecord(record)">
-                    <td>{{record.latestUpdateTime | date:'dd.MM.yy HH:mm:ss'}}</td>
-
-                    <td ng-repeat="fieldName in allFields" ng-if="fieldsSelection[fieldName] === true">
-                        <span ng-if="item[fieldName].isBoolean">{{('plugin.deviceinfo.boolean.' + item[fieldName].value) | localize}}</span>
-                        <span ng-if="item[fieldName].isEnumerated">{{('plugin.deviceinfo.state.' + fieldName + '.' + item[fieldName].value) | localize}}</span>
-                        <span ng-if="!item[fieldName].isBoolean && !item[fieldName].isEnumerated">{{item[fieldName].value}}</span>
-                    </td>
-                    <td class="text-right" style="white-space: nowrap;">
-                        <a ng-if="item.gpsLat && item.gpsLon && item.gpsLat.value !== null && item.gpsLon.value !== null && item.gpsLat.value !== '' && item.gpsLon.value !== ''"
-                           ng-href="https://www.google.com/maps?q={{item.gpsLat.value}},{{item.gpsLon.value}}"
-                           target="_blank"
-                           rel="noopener noreferrer"
-                           class="btn btn-link btn-xs"
-                           style="padding: 0;">
-                            <span class="glyphicon glyphicon-map-marker"></span>
-                        </a>
-                        <span ng-if="!item.gpsLat || !item.gpsLon || item.gpsLat.value === null || item.gpsLon.value === null || item.gpsLat.value === '' || item.gpsLon.value === ''">-</span>
-                    </td>
-                </tr>
-            </table>
-        </div>
+    <!-- Empty state -->
+    <div ng-show="data && data.length === 0"
+         style="text-align:center; padding:60px 20px; background:#fff; border:1px solid #e2e8f0; border-radius:10px; margin-top:4px;">
+        <span class="glyphicon glyphicon-search" style="font-size:40px; color:#cbd5e1; display:block; margin-bottom:14px;"></span>
+        <p style="color:#64748b; font-size:14px; margin:0; font-weight:500;">No records found for the selected filters.</p>
+        <p style="color:#94a3b8; font-size:12px; margin:8px 0 0;">Try adjusting the date range or clear all filters.</p>
     </div>
 
-    <div class="text-center" ng-if="formData.totalItems > formData.pageSize">
+    <!-- Bottom Pagination -->
+    <div class="text-center" ng-if="formData.totalItems > formData.pageSize" style="margin-top:20px;">
         <pagination
                 boundary-links='true' class='pagination-sm'
                 max-size='3'
@@ -328,4 +417,5 @@
                 previous-text='&lsaquo;' next-text='&rsaquo;' first-text='&laquo;'
                 last-text='&raquo;'></pagination>
     </div>
+
 </div>

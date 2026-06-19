@@ -65,8 +65,8 @@ angular.module('plugin-smslog', ['ngResource', 'ui.bootstrap', 'ui.router', 'ngT
 
 // Register the modal controller on the main app module so it's accessible from devices page
 angular.module('headwind-kiosk')
-    .controller('PluginSmsLogModalController', function ($scope, $modalInstance, device, $injector, 
-                                                          alertService, localization) {
+    .controller('PluginSmsLogModalController', function ($scope, $modalInstance, device, $injector,
+                                                          alertService, localization, $timeout) {
         // Inject pluginSmsLogService dynamically to avoid dependency issues if plugin not loaded
         try {
             var pluginSmsLogService = $injector.get('pluginSmsLogService');
@@ -76,9 +76,10 @@ angular.module('headwind-kiosk')
             $modalInstance.dismiss();
             return;
         }
-        
+
         $scope.device = device;
-        $scope.loading = true;
+        $scope.initialLoading = false;  // true only until the first response (success or error)
+        $scope.loading = false;        // true during any subsequent reload
         $scope.smsLogs = [];
         $scope.availableMessageTypes = [
             { value: '', label: 'All Types' },
@@ -142,8 +143,24 @@ angular.module('headwind-kiosk')
             }, 400);
         });
 
+        function _doneLoading() {
+            $scope.initialLoading = false;
+            $scope.loading = false;
+        }
+
         $scope.loadSmsLogs = function () {
             $scope.loading = true;
+            $scope.errorMessage = null;
+
+            // Safety net: if an interceptor swallows the response the callbacks
+            // never fire and the spinner hangs.  Force-clear after 15 s.
+            var _safetyTimer = $timeout(function () {
+                if ($scope.initialLoading || $scope.loading) {
+                    _doneLoading();
+                    $scope.errorMessage = localization.localize('error.request.failure') || 'Request timed out';
+                }
+            }, 15000);
+
             pluginSmsLogService.getSmsLogs({
                 deviceId: device.id,
                 page: $scope.pagination.page,
@@ -152,14 +169,24 @@ angular.module('headwind-kiosk')
                 simSlot: $scope.filters.simSlot || undefined,
                 search: ($scope.filters.search || '').trim() || undefined
             }, function (response) {
-                $scope.loading = false;
-                if (response.status === 'OK' && response.data) {
-                    $scope.smsLogs = response.data.items || [];
-                    $scope.pagination.total = response.data.total || 0;
+                $timeout.cancel(_safetyTimer);
+                try {
+                    if (response.status === 'OK' && response.data) {
+                        $scope.smsLogs = response.data.items || [];
+                        $scope.pagination.total = response.data.total || 0;
+                    } else {
+                        $scope.errorMessage = localization.localize('error.request.failure');
+                    }
+                } finally {
+                    _doneLoading();
                 }
-            }, function (error) {
-                $scope.loading = false;
-                alertService.showAlertMessage(localization.localize('error.request.failure'));
+            }, function () {
+                $timeout.cancel(_safetyTimer);
+                try {
+                    $scope.errorMessage = localization.localize('error.request.failure');
+                } finally {
+                    _doneLoading();
+                }
             });
         };
 

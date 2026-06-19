@@ -550,38 +550,42 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                 });
         };
 
+        // Build the server request applying all 8 date/time filter cases.
+        // fromTime / toTime are Date objects (from input[type=time]) or null/undefined.
+        // When only a date is given with no time:
+        //   fromDate defaults to 00:00:00  (start of day)
+        //   toDate   defaults to 23:59:59  (end of day)
         var prepareRequestToServer = function () {
-            var request = copyFormData();
+            var request = {
+                deviceNumber: $scope.formData.deviceNumber,
+                pageSize: $scope.formData.pageSize,
+                pageNum: $scope.formData.pageNum,
+                useFixedInterval: false
+            };
 
-            delete request.totalItems;
+            var fromDate = $scope.formData.dateFrom;   // Date | null
+            var fromTime = $scope.formData.fromTime;   // Date (time component) | null
+            var toDate   = $scope.formData.dateTo;     // Date | null
+            var toTime   = $scope.formData.toTime;     // Date (time component) | null
 
-            if (request.useFixedInterval) {
-                delete request.timeFrom;
-                delete request.timeTo;
-                delete request.dateFrom;
-                delete request.dateTo;
-            } else if (request.fixedInterval === -1) {
-                // "Any" interval should not apply date boundaries.
-                delete request.timeFrom;
-                delete request.timeTo;
-                delete request.dateFrom;
-                delete request.dateTo;
-            } else {
-                var from = new Date(request.dateFrom.getTime());
-                from.setHours(request.timeFrom.getHours());
-                from.setMinutes(request.timeFrom.getMinutes());
-                from.setSeconds(0, 0);
-
+            if (fromDate) {
+                var from = new Date(fromDate.getTime());
+                if (fromTime) {
+                    from.setHours(fromTime.getHours(), fromTime.getMinutes(), 0, 0);
+                } else {
+                    from.setHours(0, 0, 0, 0);
+                }
                 request.dateFrom = from;
-                delete request.timeFrom;
+            }
 
-                var to = new Date(request.dateTo.getTime());
-                to.setHours(request.timeTo.getHours());
-                to.setMinutes(request.timeTo.getMinutes());
-                to.setSeconds(59, 999);
-
+            if (toDate) {
+                var to = new Date(toDate.getTime());
+                if (toTime) {
+                    to.setHours(toTime.getHours(), toTime.getMinutes(), 59, 999);
+                } else {
+                    to.setHours(23, 59, 59, 999);
+                }
                 request.dateTo = to;
-                delete request.timeTo;
             }
 
             return request;
@@ -651,7 +655,6 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                 }
             };
 
-            // Track explicit user viewport actions and preserve them across auto-refreshes.
             mapInstance.on('dragstart', markUserAdjustedViewport);
             mapInstance.on('zoomstart', markUserAdjustedViewport);
             mapInstance.on('moveend', saveMapViewport);
@@ -665,7 +668,6 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                     try {
                         mapInstanceRef = mapService.initMap($scope, 'locationMap', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
                         bindMapInteractionTracking(mapInstanceRef);
-                        restoreMapViewport();
                         addMarkers(items);
 
                         if (mapInstanceRef && mapInstanceRef.invalidateSize) {
@@ -686,15 +688,14 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
         var addMarkers = function (items) {
             if (!items) return;
             mapService.removeAllMarkers();
-            
-            // Find the most recent item with valid GPS coordinates
+
             var latestItem = null;
             for (var i = 0; i < items.length; i++) {
                 var lat = parseFloat(items[i] && items[i].gpsLat);
                 var lon = parseFloat(items[i] && items[i].gpsLon);
                 if (isFinite(lat) && isFinite(lon)) {
                     latestItem = items[i];
-                    break; // Found the latest one
+                    break;
                 }
             }
 
@@ -741,14 +742,11 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
 
         var loadData = function () {
             if (loading) {
-                console.log("Skipping to query for list of device dynamic info dynamic since a previous request is pending");
                 return;
             }
 
             clearMessages();
-
             loading = true;
-
             spinnerService.show('spinner2');
 
             var request = prepareRequestToServer();
@@ -813,85 +811,52 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
 
         $scope.parseDynamicInfoRecord = parseDynamicInfoRecord;
 
-        $scope.deviceFields = [].concat(DEVICE_PARAMS);
-        $scope.wifiFields = [].concat(WIFI_PARAMS);
-        $scope.gpsFields = [].concat(GPS_PARAMS);
+        $scope.deviceFields  = [].concat(DEVICE_PARAMS);
+        $scope.wifiFields    = [].concat(WIFI_PARAMS);
+        $scope.gpsFields     = [].concat(GPS_PARAMS);
         $scope.mobile1Fields = [].concat(MOBILE1_PARAMS);
         $scope.mobile2Fields = [].concat(MOBILE2_PARAMS);
-        $scope.allFields = [].concat(DEVICE_PARAMS).concat(WIFI_PARAMS).concat(GPS_PARAMS).concat(MOBILE1_PARAMS).concat(MOBILE2_PARAMS);
+        $scope.allFields     = [].concat(DEVICE_PARAMS).concat(WIFI_PARAMS).concat(GPS_PARAMS).concat(MOBILE1_PARAMS).concat(MOBILE2_PARAMS);
 
         $scope.dateFormat = localization.localize('format.date.plugin.deviceinfo.datePicker');
-        $scope.createTimeFormat = localization.localize('format.date.plugin.deviceinfo.createTime');
         $scope.datePickerOptions = { 'show-weeks': false };
-        $scope.openDatePickers = {
-            'dateFrom': false,
-            'dateTo': false
-        };
+        $scope.openDatePickers = { dateFrom: false, dateTo: false };
+
+        // ── Stored form data ──────────────────────────────────────────
+        var storageFormDataAttrName        = 'hmdm-plugin-deviceinfo-formData';
+        var storageFormDataVersionAttrName = 'hmdm-plugin-deviceinfo-formData-version';
+        var formDataStorageVersion         = '3';
 
         var defaultFormData = {
             deviceNumber: $stateParams.deviceNumber,
-            useFixedInterval: false,
-            fixedInterval: -1,
-            dateFrom: new Date(),
-            dateTo: new Date(),
-            timeFrom: new Date(),
-            timeTo: new Date(),
-            intervalSelectionTouched: false,
-            pageSize: 50,
-            pageNum: 1
+            dateFrom:  null,
+            fromTime:  null,
+            dateTo:    null,
+            toTime:    null,
+            pageSize:  50,
+            pageNum:   1
         };
 
-        var storageFormDataAttrName = 'hmdm-plugin-deviceinfo-formData';
-        var storageFormDataVersionAttrName = 'hmdm-plugin-deviceinfo-formData-version';
-        var formDataStorageVersion = '2';
         var storedFormData = $window.localStorage.getItem(storageFormDataAttrName);
         if (storedFormData) {
             try {
-                var formData = JSON.parse(storedFormData);
-                formData.deviceNumber = $stateParams.deviceNumber;
-                formData.fixedInterval = parseInt(formData.fixedInterval);
-                if (!isFinite(formData.fixedInterval)) {
-                    formData.fixedInterval = -1;
-                }
+                var parsed = JSON.parse(storedFormData);
                 var storedVersion = $window.localStorage.getItem(storageFormDataVersionAttrName);
-                // One-time hard migration to avoid stale browser filters hiding historical records.
-                // If the schema version is old/missing, reset interval to "Any" regardless of legacy values.
                 if (storedVersion !== formDataStorageVersion) {
-                    formData.fixedInterval = -1;
-                    formData.useFixedInterval = false;
-                    formData.intervalSelectionTouched = false;
+                    // Schema changed — reset to defaults
+                    $scope.formData = defaultFormData;
                     $window.localStorage.setItem(storageFormDataVersionAttrName, formDataStorageVersion);
                 } else {
-                    // Backward compatibility for values saved by old builds.
-                    if (!formData.hasOwnProperty('intervalSelectionTouched')) {
-                        formData.intervalSelectionTouched = false;
-                    }
-                    formData.useFixedInterval = formData.fixedInterval > 0;
+                    $scope.formData = {
+                        deviceNumber: $stateParams.deviceNumber,
+                        dateFrom:  parsed.dateFrom  ? new Date(parsed.dateFrom)  : null,
+                        fromTime:  parsed.fromTime  ? new Date(parsed.fromTime)  : null,
+                        dateTo:    parsed.dateTo    ? new Date(parsed.dateTo)    : null,
+                        toTime:    parsed.toTime    ? new Date(parsed.toTime)    : null,
+                        pageSize:  50,
+                        pageNum:   1
+                    };
                 }
-                if (formData.dateFrom) {
-                    formData.dateFrom = new Date(formData.dateFrom);
-                } else {
-                    formData.dateFrom = new Date();
-                }
-                if (formData.dateTo) {
-                    formData.dateTo = new Date(formData.dateTo);
-                } else {
-                    formData.dateTo = new Date();
-                }
-                if (formData.timeFrom) {
-                    formData.timeFrom = new Date(formData.timeFrom);
-                } else {
-                    formData.timeFrom = new Date();
-                }
-                if (formData.timeTo) {
-                    formData.timeTo = new Date(formData.timeTo);
-                } else {
-                    formData.timeTo = new Date();
-                }
-                formData.pageSize = 50;
-                formData.pageNum = 1;
-
-                $scope.formData = formData;
             } catch (e) {
                 $scope.formData = defaultFormData;
             }
@@ -900,17 +865,16 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
             $window.localStorage.setItem(storageFormDataVersionAttrName, formDataStorageVersion);
         }
 
-        // Always start the page in "Any" interval to avoid stale browser state hiding old records.
-        $scope.formData.fixedInterval = -1;
-        $scope.formData.useFixedInterval = false;
-
+        // ── Field visibility ──────────────────────────────────────────
         var defaultFieldsSelection = {
             "deviceBatteryCharging": true,
-            "wifiSsid": true,
-            "wifiState": true,
-            "wifiRssi": true,
-            "mobile1State": true,
-            "mobile1Rssi": true,
+            "wifiRssi":              true,
+            "wifiSsid":              true,
+            "wifiState":             true,
+            "gpsLat":                true,
+            "gpsLon":                true,
+            "mobile1Rssi":           true,
+            "mobile1State":          true
         };
         var storageSelectionAttrName = 'hmdm-plugin-deviceinfo-fieldsSelection';
         var storedSelection = $window.localStorage.getItem(storageSelectionAttrName);
@@ -924,13 +888,14 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
             $scope.fieldsSelection = defaultFieldsSelection;
         }
 
+        // ── Collapse state ────────────────────────────────────────────
         var defaultCollapseState = {
-            main: true,
-            device: false,
-            wifi: false,
-            gps: false,
+            main:    true,   // "Visible Columns" panel collapsed by default
+            device:  true,
+            wifi:    false,
+            gps:     false,
             mobile1: false,
-            mobile2: false,
+            mobile2: true
         };
         var storageCollapseAttrName = 'hmdm-plugin-deviceinfo-collapseState';
         var storedCollapseState = $window.localStorage.getItem(storageCollapseAttrName);
@@ -944,64 +909,103 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
             $scope.collapseState = defaultCollapseState;
         }
 
-        var copyFormData = function () {
-            var request = {};
-            for (var p in $scope.formData) {
-                if ($scope.formData.hasOwnProperty(p)) {
-                    request[p] = $scope.formData[p];
-                }
-            }
-
-            return request;
-        };
-
+        // ── Persistence helpers ───────────────────────────────────────
         var saveFormData = function () {
-            var copy = copyFormData();
-            delete copy.pageSize;
-            delete copy.pageNum;
-            delete copy.totalItems;
-            delete copy.deviceNumber;
-
+            var copy = {
+                dateFrom: $scope.formData.dateFrom  || null,
+                fromTime: $scope.formData.fromTime  || null,
+                dateTo:   $scope.formData.dateTo    || null,
+                toTime:   $scope.formData.toTime    || null
+            };
             $window.localStorage.setItem(storageFormDataAttrName, JSON.stringify(copy));
         };
 
+        // ── Filter change callbacks ───────────────────────────────────
+        $scope.onFilterChange = function () {
+            saveFormData();
+        };
+
+        $scope.onFromDateChange = function () {
+            if (!$scope.formData.dateFrom) {
+                $scope.formData.fromTime = null;
+            }
+            saveFormData();
+        };
+
+        $scope.onToDateChange = function () {
+            if (!$scope.formData.dateTo) {
+                $scope.formData.toTime = null;
+            }
+            saveFormData();
+        };
+
+        $scope.clearFilters = function () {
+            $scope.formData.dateFrom = null;
+            $scope.formData.fromTime = null;
+            $scope.formData.dateTo   = null;
+            $scope.formData.toTime   = null;
+            saveFormData();
+        };
+
+        // ── Column toggle ─────────────────────────────────────────────
+        $scope.toggleField = function (fieldName) {
+            $scope.fieldsSelection[fieldName] = !$scope.fieldsSelection[fieldName];
+            $window.localStorage.setItem(storageSelectionAttrName, JSON.stringify($scope.fieldsSelection));
+        };
+
+        // kept for any external callers
         $scope.fieldsSelectionChanged = function () {
             $window.localStorage.setItem(storageSelectionAttrName, JSON.stringify($scope.fieldsSelection));
         };
 
-        $scope.fixedIntervalSelected = function () {
-            $scope.formData.useFixedInterval = $scope.formData.fixedInterval > 0;
-            $scope.formData.intervalSelectionTouched = true;
-            if ($scope.formData.useFixedInterval) {
-                $scope.formData.dateFrom = new Date();
-                $scope.formData.dateTo = new Date();
-                $scope.formData.timeFrom = new Date();
-                $scope.formData.timeTo = new Date();
-            }
-            saveFormData();
-        };
-
-        $scope.timeParamsChanged = function () {
-            saveFormData();
-        };
-
-        $scope.openDateCalendar = function( $event, isStartDate ) {
+        // ── Date picker open ──────────────────────────────────────────
+        $scope.openDateCalendar = function ($event, isStartDate) {
             $event.preventDefault();
             $event.stopPropagation();
-
-            if ( isStartDate ) {
+            if (isStartDate) {
                 $scope.openDatePickers.dateFrom = true;
             } else {
                 $scope.openDatePickers.dateTo = true;
             }
         };
 
+        // ── Collapse toggle ───────────────────────────────────────────
+        $scope.toggleParamsVisibility = function (type) {
+            $scope.collapseState[type] = !$scope.collapseState[type];
+            $window.localStorage.setItem(storageCollapseAttrName, JSON.stringify($scope.collapseState));
+        };
+
+        // ── Search with validation ────────────────────────────────────
         $scope.search = function () {
             clearMessages();
 
+            // Rule 1: time cannot be set without its corresponding date
+            if ($scope.formData.fromTime && !$scope.formData.dateFrom) {
+                $scope.errorMessage = 'From Time requires a From Date to be selected.';
+                return;
+            }
+            if ($scope.formData.toTime && !$scope.formData.dateTo) {
+                $scope.errorMessage = 'To Time requires a To Date to be selected.';
+                return;
+            }
+
+            // Rule 2: start datetime must be <= end datetime
             if ($scope.formData.dateFrom && $scope.formData.dateTo) {
-                if ($scope.formData.dateFrom > $scope.formData.dateTo) {
-                    $scope.errorMessage = localization.localize('error.plugin.deviceinfo.date.range.invalid');
+                var from = new Date($scope.formData.dateFrom.getTime());
+                if ($scope.formData.fromTime) {
+                    from.setHours($scope.formData.fromTime.getHours(), $scope.formData.fromTime.getMinutes(), 0, 0);
+                } else {
+                    from.setHours(0, 0, 0, 0);
+                }
+                var to = new Date($scope.formData.dateTo.getTime());
+                if ($scope.formData.toTime) {
+                    to.setHours($scope.formData.toTime.getHours(), $scope.formData.toTime.getMinutes(), 59, 999);
+                } else {
+                    to.setHours(23, 59, 59, 999);
+                }
+                if (from > to) {
+                    $scope.errorMessage = localization.localize('error.plugin.deviceinfo.date.range.invalid') ||
+                        'Start datetime must be less than or equal to End datetime.';
                     return;
                 }
             }
@@ -1010,16 +1014,13 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
             loadData();
         };
 
-        $scope.toggleParamsVisibility = function (type) {
-            $scope.collapseState[type] = !$scope.collapseState[type];
-            $window.localStorage.setItem(storageCollapseAttrName, JSON.stringify($scope.collapseState));
-        };
-
+        // ── Pagination watch ──────────────────────────────────────────
         $scope.$watch('formData.pageNum', function () {
             $window.scrollTo(0, 0);
             loadData();
         });
 
+        // ── Export ────────────────────────────────────────────────────
         $scope.doExport = function () {
             clearMessages();
             $scope.loading = true;
@@ -1029,10 +1030,8 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
             exportRequest.locale = localization.getLocale();
             exportRequest.fields = [];
             for (var p in $scope.fieldsSelection) {
-                if ($scope.fieldsSelection.hasOwnProperty(p)) {
-                    if ($scope.fieldsSelection[p] === true) {
-                        exportRequest.fields.push(p);
-                    }
+                if ($scope.fieldsSelection.hasOwnProperty(p) && $scope.fieldsSelection[p] === true) {
+                    exportRequest.fields.push(p);
                 }
             }
 
@@ -1041,11 +1040,9 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                 clearMessages();
 
                 var downloadableBlob = URL.createObjectURL(data.response);
-
                 var link = document.createElement('a');
                 link.href = downloadableBlob;
                 link.download = $scope.formData.deviceNumber + '.csv';
-
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -1056,11 +1053,10 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
             });
         };
 
-
+        // ── Init ──────────────────────────────────────────────────────
         loadData();
 
-
-        const updateInterval = $interval(function () {
+        var updateInterval = $interval(function () {
             loadData();
         }, 60 * 1000);
         $scope.$on('$destroy', function () {
