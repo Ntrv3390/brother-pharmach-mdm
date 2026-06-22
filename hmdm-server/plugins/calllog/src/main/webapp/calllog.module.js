@@ -146,19 +146,19 @@ angular.module('headwind-kiosk')
             return 'SIM ' + simSlot;
         };
 
-        // When any filter changes, reset to page 0 and re-fetch from the server.
-        // Server already applies all filter logic, so client-side re-filtering is redundant.
-        var filterWatchActive = false;
-        function onFilterChange() {
-            if (filterWatchActive) return;
-            filterWatchActive = true;
+        $scope.applyFilter = function () {
             $scope.pagination.page = 0;
             $scope.loadCallLogs();
-            filterWatchActive = false;
-        }
-        $scope.$watch('filters.type',    function (newVal, oldVal) { if (newVal !== oldVal) onFilterChange(); });
-        $scope.$watch('filters.simSlot', function (newVal, oldVal) { if (newVal !== oldVal) onFilterChange(); });
-        $scope.$watch('filters.search',  function (newVal, oldVal) { if (newVal !== oldVal) onFilterChange(); });
+        };
+
+        var _searchDebounce = null;
+        $scope.$watch('filters.search', function (newVal, oldVal) {
+            if (newVal === oldVal) return;
+            if (_searchDebounce) { clearTimeout(_searchDebounce); }
+            _searchDebounce = setTimeout(function () {
+                $scope.$apply(function () { $scope.applyFilter(); });
+            }, 500);
+        });
 
         $scope.loadCallLogs = function () {
             $scope.loading = true;
