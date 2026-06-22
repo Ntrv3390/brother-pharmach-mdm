@@ -1127,6 +1127,8 @@ angular.module('headwind-kiosk')
         $scope.viewCallLogs = function (device) {
             var modalInstance = $modal.open({
                 templateUrl: 'app/components/plugins/calllog/views/modal.html',
+                size: 'lg',
+                windowClass: 'log-modal log-modal-wide',
                 controller: function ($scope, $modalInstance, device, $injector, localization, $timeout) {
                     // Load plugin localizations
                     try {
