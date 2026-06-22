@@ -247,7 +247,6 @@ COPY --from=server-builder /build/install/sql/hmdm_init.en.sql /opt/hmdm-setup/h
 # Keep APK paths expected by entrypoint without building Android in this pipeline.
 # If files are absent in build context, create empty placeholders.
 COPY app/app-enterprise-release.apk /opt/hmdm-setup/brother-pharmach-mdm.apk
-COPY app/apk-cert.txt /opt/hmdm-setup/apk_hash.txt
 RUN test -s /opt/hmdm-setup/brother-pharmach-mdm.apk || truncate -s 0 /opt/hmdm-setup/brother-pharmach-mdm.apk
 
 # Copy Docker support scripts
