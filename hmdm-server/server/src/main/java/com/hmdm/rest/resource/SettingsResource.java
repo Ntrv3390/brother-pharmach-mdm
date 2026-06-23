@@ -53,9 +53,14 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Api(tags = {"Settings"}, authorizations = {@Authorization("Bearer Token")})
@@ -256,7 +261,14 @@ public class SettingsResource {
             String dbUser = getEnv("DB_USER", "hmdm");
             String dbPassword = getEnv("DB_PASSWORD", "hmdm");
 
-            ProcessBuilder pb = new ProcessBuilder(
+            // Log tables: export only last 1 hour of data (timestamps are epoch milliseconds)
+            Map<String, String> logTableFilters = new LinkedHashMap<>();
+            logTableFilters.put("plugin_audit_log",
+                    "createtime > EXTRACT(EPOCH FROM NOW())::BIGINT * 1000 - 3600000");
+            logTableFilters.put("plugin_devicelog_log",
+                    "createtime > EXTRACT(EPOCH FROM NOW())::BIGINT * 1000 - 3600000");
+
+            List<String> pgDumpArgs = new ArrayList<>(Arrays.asList(
                     "pg_dump",
                     "-h", dbHost,
                     "-p", dbPort,
@@ -265,7 +277,12 @@ public class SettingsResource {
                     "-d", dbName,
                     "--format=plain",
                     "--encoding=UTF8"
-            );
+            ));
+            for (String table : logTableFilters.keySet()) {
+                pgDumpArgs.add("--exclude-table-data=" + table);
+            }
+
+            ProcessBuilder pb = new ProcessBuilder(pgDumpArgs);
             pb.environment().put("PGPASSWORD", dbPassword);
             pb.redirectErrorStream(false);
 
@@ -275,6 +292,7 @@ public class SettingsResource {
             String filename = "hmdm_backup_" + timestamp + ".sql";
 
             StreamingOutput stream = output -> {
+                // Stream full dump (log table schemas included, but their data excluded)
                 try (InputStream in = process.getInputStream()) {
                     byte[] buffer = new byte[8192];
                     int bytesRead;
@@ -291,6 +309,48 @@ public class SettingsResource {
                     Thread.currentThread().interrupt();
                     log.warn("pg_dump wait interrupted");
                 }
+
+                // Append last 1 hour of each log table as COPY statements
+                for (Map.Entry<String, String> entry : logTableFilters.entrySet()) {
+                    String table = entry.getKey();
+                    String filter = entry.getValue();
+
+                    String copyHeader = "\n-- Last 1 hour of " + table + "\n" +
+                            "COPY " + table + " FROM stdin;\n";
+                    output.write(copyHeader.getBytes(StandardCharsets.UTF_8));
+
+                    ProcessBuilder copyPb = new ProcessBuilder(
+                            "psql",
+                            "-h", dbHost,
+                            "-p", dbPort,
+                            "-U", dbUser,
+                            "--no-password",
+                            "-d", dbName,
+                            "-c", "COPY (SELECT * FROM " + table + " WHERE " + filter + ") TO STDOUT"
+                    );
+                    copyPb.environment().put("PGPASSWORD", dbPassword);
+                    copyPb.redirectErrorStream(false);
+
+                    Process copyProcess = copyPb.start();
+                    try (InputStream copyIn = copyProcess.getInputStream()) {
+                        byte[] buffer = new byte[8192];
+                        int bytesRead;
+                        while ((bytesRead = copyIn.read(buffer)) != -1) {
+                            output.write(buffer, 0, bytesRead);
+                        }
+                    }
+                    try {
+                        int exitCode = copyProcess.waitFor();
+                        if (exitCode != 0) {
+                            log.warn("psql COPY for {} exited with code: {}", table, exitCode);
+                        }
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+
+                    output.write("\\.\n".getBytes(StandardCharsets.UTF_8));
+                }
+                output.flush();
             };
 
             return javax.ws.rs.core.Response.ok(stream)
