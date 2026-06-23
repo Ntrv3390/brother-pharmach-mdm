@@ -78,16 +78,15 @@ angular.module('headwind-kiosk')
         }
 
         $scope.device = device;
-        $scope.initialLoading = false;  // true only until the first response (success or error)
+        $scope.initialLoading = true;  // true only until the first response (success or error)
         $scope.loading = false;        // true during any subsequent reload
         $scope.smsLogs = [];
+        // "All" options are prepended by the template via concat — don't duplicate them here
         $scope.availableMessageTypes = [
-            { value: '', label: 'All Types' },
             { value: 1, label: 'Incoming' },
             { value: 2, label: 'Outgoing' }
         ];
         $scope.availableSimSlots = [
-            { value: '', label: 'All SIMs' },
             { value: 1, label: 'SIM 1' },
             { value: 2, label: 'SIM 2' }
         ];
@@ -127,6 +126,8 @@ angular.module('headwind-kiosk')
             $scope.loadSmsLogs();
         };
 
+        var _requestSeq = 0;  // incremented on every load; callbacks ignore stale responses
+
         var _searchDebounce;
         $scope.$watch('filters.search', function (newVal, oldVal) {
             if (newVal === oldVal) {
@@ -149,13 +150,14 @@ angular.module('headwind-kiosk')
         }
 
         $scope.loadSmsLogs = function () {
+            var seq = ++_requestSeq;  // capture sequence for this specific request
             $scope.loading = true;
             $scope.errorMessage = null;
 
             // Safety net: if an interceptor swallows the response the callbacks
             // never fire and the spinner hangs.  Force-clear after 15 s.
             var _safetyTimer = $timeout(function () {
-                if ($scope.initialLoading || $scope.loading) {
+                if (seq === _requestSeq && ($scope.initialLoading || $scope.loading)) {
                     _doneLoading();
                     $scope.errorMessage = localization.localize('error.request.failure') || 'Request timed out';
                 }
@@ -170,6 +172,7 @@ angular.module('headwind-kiosk')
                 search: ($scope.filters.search || '').trim() || undefined
             }, function (response) {
                 $timeout.cancel(_safetyTimer);
+                if (seq !== _requestSeq) { return; }  // discard stale response
                 try {
                     if (response.status === 'OK' && response.data) {
                         $scope.smsLogs = response.data.items || [];
@@ -182,6 +185,7 @@ angular.module('headwind-kiosk')
                 }
             }, function () {
                 $timeout.cancel(_safetyTimer);
+                if (seq !== _requestSeq) { return; }  // discard stale response
                 try {
                     $scope.errorMessage = localization.localize('error.request.failure');
                 } finally {
@@ -213,6 +217,7 @@ angular.module('headwind-kiosk')
                 pluginSmsLogService.deleteSmsLogs({ deviceId: device.id }, function (response) {
                     if (response.status === 'OK') {
                         alertService.showAlertMessage(localization.localize('success.deleted'));
+                        $scope.pagination.page = 0;
                         $scope.loadSmsLogs();
                     } else {
                         alertService.showAlertMessage(localization.localize('error.request.failure'));
