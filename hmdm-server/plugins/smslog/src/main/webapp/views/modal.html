@@ -142,22 +142,22 @@
     </div>
 
     <!-- Initial loading (first fetch only — hidden as soon as data or error arrives) -->
-    <div class="lm-loading" ng-if="smsLogs.length === 0">
+    <!-- <div class="lm-loading" ng-if="smsLogs.length === 0">
       <div><span class="glyphicon glyphicon-refresh lm-spin"></span></div>
       <div style="font-size:13px; font-weight:500; margin-top:6px;">Loading SMS logs…</div>
-    </div>
+    </div> -->
 
     <!-- Error -->
-    <div class="lm-err" ng-if="!loading && errorMessage">
+    <!-- <div class="lm-err" ng-if="!loading && errorMessage">
       <span class="glyphicon glyphicon-exclamation-sign" style="margin-right:6px;"></span>{{errorMessage}}
-    </div>
+    </div> -->
 
     <!-- Empty -->
-    <div class="lm-empty" ng-if="!loading && !errorMessage && smsLogs.length === 0">
+    <!-- <div class="lm-empty" ng-if="!loading && !errorMessage && smsLogs.length === 0">
       <span class="glyphicon glyphicon-envelope lm-empty-ico"></span>
       <div class="lm-empty-txt">No SMS logs found</div>
       <div class="lm-empty-sub">SMS history will appear here once recorded.</div>
-    </div>
+    </div> -->
 
     <!-- Table — stays visible during reload, dims slightly -->
     <div ng-if="smsLogs.length > 0" ng-style="{'opacity': loading ? '0.55' : '1', 'transition': 'opacity 0.2s'}">
