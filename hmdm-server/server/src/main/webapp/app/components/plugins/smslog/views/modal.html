@@ -82,6 +82,8 @@
 .lm-empty-txt { font-size: 14px; color: #64748b; font-weight: 500; }
 .lm-empty-sub { font-size: 12px; color: #94a3b8; margin-top: 4px; }
 .lm-err { margin: 14px 20px; padding: 11px 15px; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; color: #dc2626; font-size: 13px; }
+/* Opacity fade for table while reloading — kept in CSS so ng-if removals don't trigger stale transitionend waits */
+.lm-data { transition: opacity 0.2s; }
 </style>
 
 <div style="display:flex; flex-direction:column; flex:1 1 auto; min-height:0; overflow:hidden;">
@@ -141,26 +143,26 @@
       </div>
     </div>
 
-    <!-- Initial loading (first fetch only — hidden as soon as data or error arrives) -->
-    <div class="lm-loading" ng-if="initialLoading && smsLogs.length === 0">
+    <!-- Loading (shows whenever a fetch is in progress with no data yet) -->
+    <div class="lm-loading" ng-show="loading && smsLogs.length === 0">
       <div><span class="glyphicon glyphicon-refresh lm-spin"></span></div>
       <div style="font-size:13px; font-weight:500; margin-top:6px;">Loading SMS logs…</div>
     </div>
 
     <!-- Error -->
-    <div class="lm-err" ng-if="!initialLoading && !loading && errorMessage">
+    <div class="lm-err" ng-show="!loading && errorMessage">
       <span class="glyphicon glyphicon-exclamation-sign" style="margin-right:6px;"></span>{{errorMessage}}
     </div>
 
     <!-- Empty -->
-    <div class="lm-empty" ng-if="!initialLoading && !loading && !errorMessage && smsLogs.length === 0">
+    <div class="lm-empty" ng-show="!loading && !errorMessage && smsLogs.length === 0">
       <span class="glyphicon glyphicon-envelope lm-empty-ico"></span>
       <div class="lm-empty-txt">No SMS logs found</div>
       <div class="lm-empty-sub">SMS history will appear here once recorded.</div>
     </div>
 
-    <!-- Table — stays visible during reload, dims slightly -->
-    <div ng-if="smsLogs.length > 0" ng-style="{'opacity': loading ? '0.55' : '1', 'transition': 'opacity 0.2s'}">
+    <!-- Table — dims slightly while reloading; transition is in CSS (.lm-data) not inline so ng-if removals don't stall ngAnimate -->
+    <div class="lm-data" ng-show="smsLogs.length > 0" ng-style="{'opacity': loading ? '0.55' : '1'}">
       <div class="lm-tbl-wrap">
         <table class="lm-tbl">
           <thead>

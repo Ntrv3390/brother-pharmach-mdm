@@ -78,8 +78,8 @@ angular.module('headwind-kiosk')
         }
 
         $scope.device = device;
-        $scope.initialLoading = true;  // true only until the first response (success or error)
-        $scope.loading = false;        // true during any subsequent reload
+        $scope.initialLoading = false;
+        $scope.loading = false;
         $scope.smsLogs = [];
         // "All" options are prepended by the template via concat — don't duplicate them here
         $scope.availableMessageTypes = [
@@ -122,6 +122,8 @@ angular.module('headwind-kiosk')
         };
 
         $scope.applyFilter = function () {
+            $scope.smsLogs = [];
+            $scope.pagination.total = 0;
             $scope.pagination.page = 0;
             $scope.loadSmsLogs();
         };
@@ -138,6 +140,8 @@ angular.module('headwind-kiosk')
             }
             _searchDebounce = setTimeout(function () {
                 $scope.$apply(function () {
+                    $scope.smsLogs = [];
+                    $scope.pagination.total = 0;
                     $scope.pagination.page = 0;
                     $scope.loadSmsLogs();
                 });
