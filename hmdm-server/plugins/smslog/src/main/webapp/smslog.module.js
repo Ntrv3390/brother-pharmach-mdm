@@ -79,8 +79,7 @@ angular.module('headwind-kiosk')
         }
 
         $scope.device = device;
-        $scope.initialLoading = false;  // true only until the first response (success or error)
-        $scope.loading = false;        // true during any subsequent reload
+        $scope.loading = false;
         $scope.smsLogs = [];
         $scope.availableMessageTypes = [
             { value: 1, label: 'Incoming' },
@@ -142,19 +141,26 @@ angular.module('headwind-kiosk')
             }, 400);
         });
 
+        // Sequence counter: each call gets a unique ID so stale responses are discarded.
+        var _reqSeq = 0;
+        // Module-level safety timer so we can cancel the previous one before starting a new request.
+        var _safetyTimer = null;
+
         function _doneLoading() {
-            $scope.initialLoading = false;
             $scope.loading = false;
         }
 
         $scope.loadSmsLogs = function () {
+            var seq = ++_reqSeq;
             $scope.loading = true;
             $scope.errorMessage = null;
 
-            // Safety net: if an interceptor swallows the response the callbacks
-            // never fire and the spinner hangs.  Force-clear after 15 s.
-            var _safetyTimer = $timeout(function () {
-                if ($scope.initialLoading || $scope.loading) {
+            // Cancel any leftover safety timer from a previous in-flight request.
+            if (_safetyTimer) {
+                $timeout.cancel(_safetyTimer);
+            }
+            _safetyTimer = $timeout(function () {
+                if (seq === _reqSeq && $scope.loading) {
                     _doneLoading();
                     $scope.errorMessage = localization.localize('error.request.failure') || 'Request timed out';
                 }
@@ -168,6 +174,8 @@ angular.module('headwind-kiosk')
                 simSlot: $scope.filters.simSlot || undefined,
                 search: ($scope.filters.search || '').trim() || undefined
             }, function (response) {
+                // Discard stale responses from superseded requests.
+                if (seq !== _reqSeq) { return; }
                 $timeout.cancel(_safetyTimer);
                 try {
                     if (response.status === 'OK' && response.data) {
@@ -180,6 +188,7 @@ angular.module('headwind-kiosk')
                     _doneLoading();
                 }
             }, function () {
+                if (seq !== _reqSeq) { return; }
                 $timeout.cancel(_safetyTimer);
                 try {
                     $scope.errorMessage = localization.localize('error.request.failure');

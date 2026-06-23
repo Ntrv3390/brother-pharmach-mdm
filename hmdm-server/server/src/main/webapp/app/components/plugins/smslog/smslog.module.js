@@ -48,6 +48,7 @@ angular.module('plugin-smslog', ['ngResource', 'ui.bootstrap', 'ui.router', 'ngT
                 $scope.saving = false;
                 if (response.status === 'OK') {
                     alertService.showAlertMessage(localization.localize('success.settings.saved'));
+                    $scope.init();
                 } else {
                     alertService.showAlertMessage(localization.localize('error.request.failure'));
                 }
@@ -78,10 +79,8 @@ angular.module('headwind-kiosk')
         }
 
         $scope.device = device;
-        $scope.initialLoading = false;
         $scope.loading = false;
         $scope.smsLogs = [];
-        // "All" options are prepended by the template via concat — don't duplicate them here
         $scope.availableMessageTypes = [
             { value: 1, label: 'Incoming' },
             { value: 2, label: 'Outgoing' }
@@ -122,13 +121,9 @@ angular.module('headwind-kiosk')
         };
 
         $scope.applyFilter = function () {
-            $scope.smsLogs = [];
-            $scope.pagination.total = 0;
             $scope.pagination.page = 0;
             $scope.loadSmsLogs();
         };
-
-        var _requestSeq = 0;  // incremented on every load; callbacks ignore stale responses
 
         var _searchDebounce;
         $scope.$watch('filters.search', function (newVal, oldVal) {
@@ -140,28 +135,32 @@ angular.module('headwind-kiosk')
             }
             _searchDebounce = setTimeout(function () {
                 $scope.$apply(function () {
-                    $scope.smsLogs = [];
-                    $scope.pagination.total = 0;
                     $scope.pagination.page = 0;
                     $scope.loadSmsLogs();
                 });
             }, 400);
         });
 
+        // Sequence counter: each call gets a unique ID so stale responses are discarded.
+        var _reqSeq = 0;
+        // Module-level safety timer so we can cancel the previous one before starting a new request.
+        var _safetyTimer = null;
+
         function _doneLoading() {
-            $scope.initialLoading = false;
             $scope.loading = false;
         }
 
         $scope.loadSmsLogs = function () {
-            var seq = ++_requestSeq;  // capture sequence for this specific request
+            var seq = ++_reqSeq;
             $scope.loading = true;
             $scope.errorMessage = null;
 
-            // Safety net: if an interceptor swallows the response the callbacks
-            // never fire and the spinner hangs.  Force-clear after 15 s.
-            var _safetyTimer = $timeout(function () {
-                if (seq === _requestSeq && ($scope.initialLoading || $scope.loading)) {
+            // Cancel any leftover safety timer from a previous in-flight request.
+            if (_safetyTimer) {
+                $timeout.cancel(_safetyTimer);
+            }
+            _safetyTimer = $timeout(function () {
+                if (seq === _reqSeq && $scope.loading) {
                     _doneLoading();
                     $scope.errorMessage = localization.localize('error.request.failure') || 'Request timed out';
                 }
@@ -175,8 +174,9 @@ angular.module('headwind-kiosk')
                 simSlot: $scope.filters.simSlot || undefined,
                 search: ($scope.filters.search || '').trim() || undefined
             }, function (response) {
+                // Discard stale responses from superseded requests.
+                if (seq !== _reqSeq) { return; }
                 $timeout.cancel(_safetyTimer);
-                if (seq !== _requestSeq) { return; }  // discard stale response
                 try {
                     if (response.status === 'OK' && response.data) {
                         $scope.smsLogs = response.data.items || [];
@@ -188,8 +188,8 @@ angular.module('headwind-kiosk')
                     _doneLoading();
                 }
             }, function () {
+                if (seq !== _reqSeq) { return; }
                 $timeout.cancel(_safetyTimer);
-                if (seq !== _requestSeq) { return; }  // discard stale response
                 try {
                     $scope.errorMessage = localization.localize('error.request.failure');
                 } finally {
