@@ -159,6 +159,12 @@
       <div class="lm-empty-sub">SMS history will appear here once recorded.</div>
     </div> -->
 
+    <div class="lm-empty" ng-if="smsLogs.length === 0">
+      <span class="glyphicon glyphicon-envelope lm-empty-ico"></span>
+      <div class="lm-empty-txt">No SMS logs found</div>
+      <div class="lm-empty-sub">SMS history will appear here once recorded.</div>
+    </div>
+
     <!-- Table — stays visible during reload, dims slightly -->
     <div ng-if="smsLogs.length > 0" ng-style="{'opacity': loading ? '0.55' : '1', 'transition': 'opacity 0.2s'}">
       <div class="lm-tbl-wrap">
