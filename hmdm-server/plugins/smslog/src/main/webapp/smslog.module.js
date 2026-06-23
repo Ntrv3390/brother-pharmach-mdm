@@ -154,6 +154,8 @@ angular.module('headwind-kiosk')
             var seq = ++_reqSeq;
             $scope.loading = true;
             $scope.errorMessage = null;
+            $scope.smsLogs = [];
+            $scope.pagination.total = 0;
 
             // Cancel any leftover safety timer from a previous in-flight request.
             if (_safetyTimer) {
