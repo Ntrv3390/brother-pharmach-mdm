@@ -59,7 +59,7 @@
                     <ng-include src="'app/components/main/view/settings/hints.html'" ng-if="activeTab === 'HINTS'"></ng-include>
                 </tab> -->
                 <tab ng-repeat="plugin in settingsPlugins" active="act['plugin-settings-' + plugin.identifier]"
-                     ng-if="!plugin.settingsPermission || hasPermission(plugin.settingsPermission)"
+                     ng-if="plugin.identifier !== 'calllog' && plugin.identifier !== 'smslog' && (!plugin.settingsPermission || hasPermission(plugin.settingsPermission))"
                      ng-click="openTab('plugin-settings-' + plugin.identifier)">
 
                     <tab-heading>{{localization.localize(plugin.nameLocalizationKey)}}</tab-heading>
@@ -77,7 +77,7 @@
             </a>
             <ul class="dropdown-menu" uib-dropdown-menu>
                 <tab ng-repeat="plugin in functionsPlugins" active="act['plugin-' + plugin.identifier]"
-                     ng-if="!plugin.functionsPermission || hasPermission(plugin.functionsPermission)"
+                     ng-if="plugin.identifier !== 'calllog' && plugin.identifier !== 'smslog' && (!plugin.functionsPermission || hasPermission(plugin.functionsPermission))"
                      ng-click="openTab('plugin-' + plugin.identifier)">
                     <tab-heading>{{localization.localize(plugin.nameLocalizationKey)}}</tab-heading>
                     <ng-include src="plugin.functionsViewTemplate"
