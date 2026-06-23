@@ -289,7 +289,7 @@ public class SettingsResource {
             Process process = pb.start();
 
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            String filename = "hmdm_backup_" + timestamp + ".sql";
+            String filename = "brothers_mdm_backup_" + timestamp + ".sql";
 
             StreamingOutput stream = output -> {
                 // Stream full dump (log table schemas included, but their data excluded)

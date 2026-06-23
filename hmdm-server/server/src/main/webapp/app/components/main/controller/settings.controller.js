@@ -311,7 +311,7 @@ angular.module('headwind-kiosk')
                 $scope.dbExport.loading = false;
                 var contentDisposition = response.headers('Content-Disposition') || '';
                 var match = contentDisposition.match(/filename="?([^"]+)"?/);
-                var filename = match ? match[1] : 'hmdm_backup.sql';
+                var filename = match ? match[1] : 'brothers_mdm_backup.sql';
                 var blob = new Blob([response.data], {type: 'application/octet-stream'});
                 var url = window.URL.createObjectURL(blob);
                 var a = document.createElement('a');
