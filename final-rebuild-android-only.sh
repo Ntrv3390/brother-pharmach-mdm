@@ -6,7 +6,6 @@ ANDROID_DIR="$ROOT_DIR/hmdm-android"
 ENV_FILE="$ROOT_DIR/.env.android"
 VERSION_FILE="$ANDROID_DIR/version.properties"
 LOCAL_PROPERTIES_FILE="$ANDROID_DIR/local.properties"
-APP_ARTIFACT_DIR="$ROOT_DIR/app"
 APP_INSTALLER_DIR="$ROOT_DIR/app-installer"
 
 cd "$ROOT_DIR"
@@ -188,20 +187,11 @@ if [[ ! -f "$AAB_PATH" ]]; then
   exit 1
 fi
 
-ANDROID_VERSION_CODE="$(grep '^VERSION_CODE=' "$VERSION_FILE" | head -1 | cut -d= -f2 | tr -d '[:space:]')"
-APK_NAME="app-enterprise-release-${ANDROID_VERSION_CODE}.apk"
-
-mkdir -p "$APP_ARTIFACT_DIR" "$APP_INSTALLER_DIR"
-cp -f "$APK_PATH" "$APP_ARTIFACT_DIR/app-enterprise-release.apk"
-cp -f "$AAB_PATH" "$APP_ARTIFACT_DIR/app-enterprise-release.aab"
-cp -f "$APK_PATH" "$APP_ARTIFACT_DIR/$APK_NAME"
+mkdir -p "$APP_INSTALLER_DIR"
 cp -f "$APK_PATH" "$APP_INSTALLER_DIR/app-enterprise-release.apk"
 
 echo
 echo "Success: Android enterprise APK/AAB built."
 echo "Refreshed:"
-echo "  - app/app-enterprise-release.apk"
-echo "  - app/app-enterprise-release.aab"
-echo "  - app/$APK_NAME"
 echo "  - app-installer/app-enterprise-release.apk"
 echo "WSL Android rebuild completed successfully."
