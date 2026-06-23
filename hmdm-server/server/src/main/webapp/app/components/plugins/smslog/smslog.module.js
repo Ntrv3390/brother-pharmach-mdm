@@ -81,14 +81,17 @@ angular.module('headwind-kiosk')
         $scope.device = device;
         $scope.loading = false;
         $scope.smsLogs = [];
-        $scope.availableMessageTypes = [
-            { value: 1, label: 'Incoming' },
-            { value: 2, label: 'Outgoing' }
+        var availableMessageTypes = [
+            { value: 1, label: localization.localize('plugin.smslog.type.incoming') || 'Incoming' },
+            { value: 2, label: localization.localize('plugin.smslog.type.outgoing') || 'Outgoing' }
         ];
-        $scope.availableSimSlots = [
+        var availableSimSlots = [
             { value: 1, label: 'SIM 1' },
             { value: 2, label: 'SIM 2' }
         ];
+
+        $scope.messageTypeOptions = [{ value: '', label: 'All Types' }].concat(availableMessageTypes);
+        $scope.simSlotOptions = [{ value: '', label: 'All SIMs' }].concat(availableSimSlots);
         // Use object (dot notation) so ng-if child scopes don't shadow these
         $scope.filters = { messageType: '', simSlot: '', search: '' };
 
@@ -154,8 +157,6 @@ angular.module('headwind-kiosk')
             var seq = ++_reqSeq;
             $scope.loading = true;
             $scope.errorMessage = null;
-            $scope.smsLogs = [];
-            $scope.pagination.total = 0;
 
             // Cancel any leftover safety timer from a previous in-flight request.
             if (_safetyTimer) {

@@ -126,8 +126,8 @@
         <span class="lm-bar-title">SMS Log History</span>
         <span class="lm-cnt" ng-if="pagination.total">{{pagination.total}}</span>
         <span class="lm-sp"></span>
-        <select class="lm-sel" ng-model="filters.messageType" ng-options="t.value as t.label for t in [{value:'',label:'All Types'}].concat(availableMessageTypes)" ng-change="applyFilter()" ng-disabled="loading"></select>
-        <select class="lm-sel" ng-model="filters.simSlot" ng-options="s.value as s.label for s in [{value:'',label:'All SIMs'}].concat(availableSimSlots)" ng-change="applyFilter()" ng-disabled="loading"></select>
+        <select class="lm-sel" ng-model="filters.messageType" ng-options="t.value as t.label for t in messageTypeOptions" ng-change="applyFilter()" ng-disabled="loading"></select>
+        <select class="lm-sel" ng-model="filters.simSlot" ng-options="s.value as s.label for s in simSlotOptions" ng-change="applyFilter()" ng-disabled="loading"></select>
         <button type="button" class="lm-btn-d" ng-click="deleteAllLogs()" ng-disabled="loading || pagination.total === 0">
           <span class="glyphicon glyphicon-trash" style="font-size:10px;"></span> Delete All
         </button>
