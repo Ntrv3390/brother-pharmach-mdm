@@ -266,46 +266,9 @@ cat > "${CONTEXT_DIR}/ROOT.xml" << EOF
 EOF
 
 # ---------------------------------------------------------------------------
-# Always update the APK URL + hash in the database (keeps DB in sync with
-# the APK baked into this image, even after image upgrades)
+# (Removed) APK URL + hash automatic DB update was previously here.
+# APK updates are now expected to be managed via the Web UI.
 # ---------------------------------------------------------------------------
-if [ -n "${APK_HASH}" ] && [ -f "${APK_DEST}" ]; then
-    echo "==> [hmdm] Syncing APK metadata in database..."
-    CURRENT_VERSION="$(PGPASSWORD="${DB_PASSWORD}" psql \
-        -h "${DB_HOST}" \
-        -p "${DB_PORT}" \
-        -U "${DB_USER}" \
-        -d "${DB_NAME}" \
-        -tA \
-        -c "SELECT av.version
-            FROM applicationversions av
-            JOIN applications a ON a.id = av.applicationid
-            WHERE a.pkg = '${PKG_NAME}'
-            ORDER BY av.id DESC
-            LIMIT 1;" 2>/dev/null | tr -d '[:space:]')"
-    NEXT_VERSION="$(increment_app_version "${CURRENT_VERSION:-1.0}")"
-
-    PGPASSWORD="${DB_PASSWORD}" psql \
-        -h "${DB_HOST}" \
-        -p "${DB_PORT}" \
-        -U "${DB_USER}" \
-        -d "${DB_NAME}" \
-        -c "UPDATE applicationversions
-            SET url = '${APK_URL}',
-                apkhash = '${APK_HASH}',
-                version = '${NEXT_VERSION}'
-            WHERE id = (
-                SELECT av.id
-                FROM applicationversions av
-                JOIN applications a ON a.id = av.applicationid
-                WHERE a.pkg = '${PKG_NAME}'
-                ORDER BY av.id DESC
-                LIMIT 1
-            );" 2>&1 || echo "==> [hmdm] WARNING: Failed to update APK metadata in DB (DB may not be fully initialized yet)."
-    echo "==> [hmdm] APK metadata synced. New app version: ${NEXT_VERSION}"
-else
-    echo "==> [hmdm] WARNING: Skipping APK metadata sync (no hash or APK file available)."
-fi
 
 # ---------------------------------------------------------------------------
 # Fix any localhost / wrong-host URLs stored in the database so that every
