@@ -22,7 +22,6 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
-import android.os.UserManager;
 import android.provider.Settings;
 import android.provider.Telephony;
 import android.util.Log;
@@ -290,24 +289,17 @@ public class StatusControlService extends Service {
             if (lm != null) {
                 boolean enabled = lm.isProviderEnabled(LocationManager.GPS_PROVIDER);
                 if (Boolean.TRUE.equals(config.getGps())) {
-                    // GPS must be ON: lock the settings screen and force enable if currently off.
-                    applyGpsLock(true);
                     if (!enabled) {
                         enforceGpsEnabled();
                         return;
                     }
                 } else if (Boolean.FALSE.equals(config.getGps())) {
-                    // GPS must be OFF: remove lock and notify user if still on.
-                    applyGpsLock(false);
                     if (enabled) {
                         notifyStatusViolation(Const.GPS_OFF_REQUIRED);
                         return;
                     }
                 }
             }
-        } else {
-            // No GPS policy — remove any previously applied lock so user can freely configure.
-            applyGpsLock(false);
         }
 
         if (!Utils.isSimAbsent(this)) {
@@ -412,13 +404,10 @@ public class StatusControlService extends Service {
         ServerConfig config = settingsHelper.getConfig();
         if (config == null) return;
         if (Boolean.TRUE.equals(config.getGps())) {
-            applyGpsLock(true);
             LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
             if (lm != null && !lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 enforceGpsEnabled();
             }
-        } else {
-            applyGpsLock(false);
         }
     }
 
@@ -478,27 +467,6 @@ public class StatusControlService extends Service {
             RemoteLogger.log(this, Const.LOG_WARN,
                     "StatusControlService: GPS enforcement failed: " + e.getMessage());
             notifyStatusViolation(Const.GPS_ON_REQUIRED);
-        }
-    }
-
-    private void applyGpsLock(boolean lock) {
-        if (!Utils.isDeviceOwner(this) || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-            return; // DISALLOW_CONFIG_LOCATION requires device owner on API 28+
-        }
-        try {
-            DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
-            ComponentName admin = LegacyUtils.getAdminComponentName(this);
-            if (dpm == null || admin == null) return;
-            if (lock) {
-                dpm.addUserRestriction(admin, UserManager.DISALLOW_CONFIG_LOCATION);
-            } else {
-                dpm.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_LOCATION);
-            }
-            RemoteLogger.log(this, Const.LOG_INFO,
-                    "StatusControlService: location settings " + (lock ? "locked" : "unlocked"));
-        } catch (Exception e) {
-            RemoteLogger.log(this, Const.LOG_WARN,
-                    "StatusControlService: applyGpsLock(" + lock + ") failed: " + e.getMessage());
         }
     }
 
