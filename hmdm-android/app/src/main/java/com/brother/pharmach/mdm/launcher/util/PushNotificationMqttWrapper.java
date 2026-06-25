@@ -70,7 +70,10 @@ public class PushNotificationMqttWrapper {
     private boolean needProcessConnectExtended;
 
     private static final String WORKER_TAG_MQTT_RECONNECT = "com.brother.pharmach.mdm.launcher.WORK_TAG_MQTT_RECONNECT";
-    private static final int MQTT_RECONNECT_INTERVAL_SEC = 900;
+    // 60 s: recover from initial connection failure quickly without hammering the broker.
+    // Paho's built-in auto-reconnect (exponential back-off) handles connection-lost after
+    // initial success; this interval only fires for the outright initial-connect failure path.
+    private static final int MQTT_RECONNECT_INTERVAL_SEC = 60;
 
     // If more than 20 connections per minute, we are stopping:
     // this is a sign that two devices with the same ID are registered

@@ -44,7 +44,8 @@ public class Const {
     public static final String EXTRA_ENABLED = "ENABLED";
 
     public static long CONNECTION_TIMEOUT = 10000;
-    public static long LONG_POLLING_READ_TIMEOUT = 300000;
+    // 240 s < typical 4G NAT timeout (300 s) — prevents silent TCP drops during long polling.
+    public static long LONG_POLLING_READ_TIMEOUT = 240000;
     public static final String STATUS_OK = "OK";
     public static final String ORIENTATION = "ORIENTATION";
     public static final String PACKAGE_NAME = "PACKAGE_NAME";
@@ -165,6 +166,8 @@ public class Const {
     public static final int DIRECTION_UP = 2;
     public static final int DIRECTION_DOWN = 3;
 
-    public static final int DEFAULT_PUSH_ALARM_KEEPALIVE_TIME_SEC = 300;
-    public static final int DEFAULT_PUSH_WORKER_KEEPALIVE_TIME_SEC = 900;
+    // 240 s keeps both keepalive modes well below the typical 4G carrier NAT timeout of ~300 s,
+    // ensuring the MQTT ping fires before the NAT silently drops the TCP session.
+    public static final int DEFAULT_PUSH_ALARM_KEEPALIVE_TIME_SEC = 240;
+    public static final int DEFAULT_PUSH_WORKER_KEEPALIVE_TIME_SEC = 240;
 }

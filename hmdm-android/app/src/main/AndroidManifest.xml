@@ -68,6 +68,10 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
+    <!-- Required (API 34+) for foreground services that access location. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- Required for PowerManager.isIgnoringBatteryOptimizations() and the system settings dialog. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.REQUEST_PASSWORD_COMPLEXITY" />
     <uses-permission android:name="android.permission.MASTER_CLEAR"
@@ -311,8 +315,11 @@
         <service android:name=".service.PushLongPollingService"
             android:exported="false"/>
 
+        <!-- foregroundServiceType includes "location" (required from API 34 for any FGS that
+             accesses location), plus "specialUse|systemExempted" for the fallback path when
+             the app is not registered as device owner. -->
         <service android:name=".service.LocationForegroundService"
-            android:foregroundServiceType="specialUse|systemExempted"
+            android:foregroundServiceType="location|specialUse|systemExempted"
             android:exported="false">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Location tracking service"/>

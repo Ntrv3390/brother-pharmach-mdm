@@ -7,15 +7,19 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
+import android.provider.Settings;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -143,7 +147,18 @@ public class LocationForegroundService extends Service {
         Intent intent = new Intent(context, LocationForegroundService.class);
         intent.setAction(ACTION_URGENT_GPS);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent);
+            try {
+                context.startForegroundService(intent);
+            } catch (Exception e) {
+                // ForegroundServiceStartNotAllowedException (API 31+) is thrown on Android 12+
+                // when startForegroundService() is called from a background context — tightened
+                // further in Android 14/15. Fall back to a direct thread-based capture that
+                // bypasses FGS restrictions so urgent GPS never silently fails.
+                RemoteLogger.log(context, Const.LOG_WARN,
+                        "LocationForegroundService: startForegroundService blocked ("
+                        + e.getClass().getSimpleName() + "), falling back to direct capture");
+                LocationWorker.enqueueUrgentNow(context);
+            }
         } else {
             context.startService(intent);
         }
@@ -178,6 +193,7 @@ public class LocationForegroundService extends Service {
 
         startForegroundWithNotification();
         startContinuousTracking();
+        requestBatteryOptimizationExemptionIfNeeded();
 
         // Flush the SQLite queue every 15 min — clears any fixes that were queued
         // while the device was offline. Initial delay = 15 min since the continuous
@@ -434,6 +450,44 @@ public class LocationForegroundService extends Service {
         } catch (Exception e) {
             RemoteLogger.log(getApplicationContext(), Const.LOG_WARN,
                     "LocationForegroundService: flush cycle failed: " + e.getMessage());
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Battery optimization exemption — request once per install so Doze mode
+    // does not suspend network access for the MQTT client or this service.
+    // Foreground services CAN start activities on Android 10+ (unlike pure background),
+    // so the system settings dialog is safe to launch from here.
+    // ---------------------------------------------------------------------------
+
+    private static final String PREFS_SERVICE = "mdm_service_prefs";
+    private static final String PREF_BATTERY_OPT_REQUESTED = "battery_opt_requested";
+
+    private void requestBatteryOptimizationExemptionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        if (pm == null || pm.isIgnoringBatteryOptimizations(getPackageName())) return;
+
+        RemoteLogger.log(this, Const.LOG_WARN,
+                "LocationForegroundService: app is subject to battery optimization — "
+                + "GPS and MQTT delivery may be delayed when the device is idle");
+
+        // Only prompt once: a SharedPreferences flag survives app restarts/upgrades
+        // but is cleared on factory reset, which is the correct behaviour.
+        SharedPreferences prefs = getSharedPreferences(PREFS_SERVICE, Context.MODE_PRIVATE);
+        if (prefs.getBoolean(PREF_BATTERY_OPT_REQUESTED, false)) return;
+        prefs.edit().putBoolean(PREF_BATTERY_OPT_REQUESTED, true).apply();
+
+        try {
+            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            intent.setData(Uri.parse("package:" + getPackageName()));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+            RemoteLogger.log(this, Const.LOG_INFO,
+                    "LocationForegroundService: requested battery optimization exemption");
+        } catch (Exception e) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationForegroundService: could not request battery exemption: " + e.getMessage());
         }
     }
 
