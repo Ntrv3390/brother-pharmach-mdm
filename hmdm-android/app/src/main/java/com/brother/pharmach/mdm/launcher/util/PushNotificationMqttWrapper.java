@@ -106,9 +106,13 @@ public class PushNotificationMqttWrapper {
         connectOptions.setKeepAliveInterval(keepaliveTime);
         connectOptions.setCleanSession(false);
         if (pushType.equals(ServerConfig.PUSH_OPTIONS_MQTT_WORKER)) {
-            connectOptions.setPingType(MqttAndroidConnectOptions.PING_WORKER);
-            // For worker, keepalive time cannot be less than 15 minutes
-            connectOptions.setKeepAliveInterval(Const.DEFAULT_PUSH_WORKER_KEEPALIVE_TIME_SEC);
+            // PING_WORKER uses a OneTimeWorkRequest that Doze can defer past the broker's
+            // 1.5 × keepAlive disconnect window, so any keepalive under ~600 s is unsafe
+            // in worker mode. Instead, switch to PING_ALARM (SCHEDULE_EXACT_ALARM is already
+            // declared) which fires reliably during Doze and supports the 240 s interval
+            // needed to stay below the typical 4G carrier NAT timeout of ~300 s.
+            connectOptions.setPingType(MqttAndroidConnectOptions.PING_ALARM);
+            connectOptions.setKeepAliveInterval(Const.DEFAULT_PUSH_ALARM_KEEPALIVE_TIME_SEC);
         } else {
             connectOptions.setPingType(MqttAndroidConnectOptions.PING_ALARM);
             connectOptions.setKeepAliveInterval(keepaliveTime);

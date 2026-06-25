@@ -166,8 +166,14 @@ public class Const {
     public static final int DIRECTION_UP = 2;
     public static final int DIRECTION_DOWN = 3;
 
-    // 240 s keeps both keepalive modes well below the typical 4G carrier NAT timeout of ~300 s,
-    // ensuring the MQTT ping fires before the NAT silently drops the TCP session.
+    // 240 s is below the typical 4G carrier NAT timeout (~300 s), so the ping fires before the
+    // NAT silently drops the TCP session. Used for PING_ALARM mode (AlarmManager, Doze-safe via
+    // SCHEDULE_EXACT_ALARM) and as the effective keepalive for PING_WORKER connections (which
+    // are switched to PING_ALARM internally — see PushNotificationMqttWrapper).
     public static final int DEFAULT_PUSH_ALARM_KEEPALIVE_TIME_SEC = 240;
-    public static final int DEFAULT_PUSH_WORKER_KEEPALIVE_TIME_SEC = 240;
+    // 900 s is the correct value for a genuine WorkManager-based ping sender: OneTimeWorkRequest
+    // can be deferred by Doze, so only the 900-second tolerance (1.5 × 900 = 1350 s broker window)
+    // is safe. This constant is preserved for reference; the PING_WORKER branch in
+    // PushNotificationMqttWrapper now redirects to PING_ALARM to get the shorter interval safely.
+    public static final int DEFAULT_PUSH_WORKER_KEEPALIVE_TIME_SEC = 900;
 }
