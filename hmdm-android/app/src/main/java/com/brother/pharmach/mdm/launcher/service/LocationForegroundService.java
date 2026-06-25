@@ -12,6 +12,10 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
@@ -98,6 +102,9 @@ public class LocationForegroundService extends Service {
 
     // Track in-flight urgent task so a new push cancels any pending one.
     private volatile Future<?> currentUrgentTask;
+
+    // Flush the offline SQLite queue when the network comes back.
+    private ConnectivityManager.NetworkCallback networkCallback;
 
     // ---------------------------------------------------------------------------
     // Continuous LocationListener — callbacks delivered on listenerThread.
@@ -194,6 +201,7 @@ public class LocationForegroundService extends Service {
         startForegroundWithNotification();
         startContinuousTracking();
         requestBatteryOptimizationExemptionIfNeeded();
+        registerNetworkCallback();
 
         // Flush the SQLite queue every 15 min — clears any fixes that were queued
         // while the device was offline. Initial delay = 15 min since the continuous
@@ -221,6 +229,7 @@ public class LocationForegroundService extends Service {
     public void onDestroy() {
         super.onDestroy();
         stopContinuousTracking();
+        unregisterNetworkCallback();
         flushScheduler.shutdownNow();
         urgentExecutor.shutdownNow();
         uploadExecutor.shutdownNow();
@@ -430,12 +439,51 @@ public class LocationForegroundService extends Service {
                     + (fixAge == Long.MAX_VALUE ? "none" : fixAge + "ms")
                     + ") — falling back to cold-start capture");
             try {
-                LocationWorker.captureAndUpload(appContext, true);
+                LocationWorker.captureAndUpload(appContext, true, () -> false);
             } catch (Exception e) {
                 RemoteLogger.log(appContext, Const.LOG_WARN,
                         "LocationForegroundService: urgent cold-start failed: " + e.getMessage());
             }
         });
+    }
+
+    // ---------------------------------------------------------------------------
+    // Network reconnect callback — flushes the offline SQLite queue immediately
+    // when connectivity is restored (e.g. device leaves a tunnel or Wi-Fi dead-zone)
+    // ---------------------------------------------------------------------------
+
+    private void registerNetworkCallback() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) return;
+        networkCallback = new ConnectivityManager.NetworkCallback() {
+            @Override
+            public void onAvailable(@androidx.annotation.NonNull Network network) {
+                RemoteLogger.log(getApplicationContext(), Const.LOG_INFO,
+                        "LocationForegroundService: network available — flushing offline queue");
+                uploadExecutor.execute(LocationForegroundService.this::runFlushCycle);
+            }
+        };
+        try {
+            NetworkRequest req = new NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .build();
+            cm.registerNetworkCallback(req, networkCallback);
+        } catch (Exception e) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationForegroundService: failed to register NetworkCallback: " + e.getMessage());
+            networkCallback = null;
+        }
+    }
+
+    private void unregisterNetworkCallback() {
+        if (networkCallback == null) return;
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm != null) {
+            try {
+                cm.unregisterNetworkCallback(networkCallback);
+            } catch (Exception ignored) {}
+        }
+        networkCallback = null;
     }
 
     // ---------------------------------------------------------------------------

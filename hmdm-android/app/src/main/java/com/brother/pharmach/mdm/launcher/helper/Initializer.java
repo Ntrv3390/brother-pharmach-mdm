@@ -12,6 +12,9 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.util.Log;
 
+import android.app.admin.DevicePolicyManager;
+import android.content.ComponentName;
+
 import com.brother.pharmach.mdm.launcher.BuildConfig;
 import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.json.Application;
@@ -22,6 +25,7 @@ import com.brother.pharmach.mdm.launcher.pro.ProUtils;
 import com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundAppAccessibilityService;
 import com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundApplicationService;
 import com.brother.pharmach.mdm.launcher.pro.worker.DetailedInfoWorker;
+import com.brother.pharmach.mdm.launcher.receiver.LocationWatchdogReceiver;
 import com.brother.pharmach.mdm.launcher.service.LocationForegroundService;
 import com.brother.pharmach.mdm.launcher.service.PushLongPollingService;
 import com.brother.pharmach.mdm.launcher.service.StatusControlService;
@@ -29,6 +33,7 @@ import com.brother.pharmach.mdm.launcher.task.SendDeviceInfoTask;
 import com.brother.pharmach.mdm.launcher.util.ConnectionWaiter;
 import com.brother.pharmach.mdm.launcher.util.DeviceInfoProvider;
 import com.brother.pharmach.mdm.launcher.util.InstallUtils;
+import com.brother.pharmach.mdm.launcher.util.LegacyUtils;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 import com.brother.pharmach.mdm.launcher.util.Utils;
 import com.brother.pharmach.mdm.launcher.worker.PushNotificationWorker;
@@ -36,6 +41,8 @@ import com.brother.pharmach.mdm.launcher.worker.ScheduledAppUpdateWorker;
 import com.brother.pharmach.mdm.launcher.worker.SendDeviceInfoWorker;
 import com.brother.pharmach.mdm.launcher.worker.SmsLogUploadWorker;
 import com.brother.pharmach.mdm.launcher.worker.LocationWorker;
+
+import java.util.Collections;
 
 import org.eclipse.paho.android.service.MqttAndroidClient;
 
@@ -73,6 +80,33 @@ public class Initializer {
             ConnectionWaiter.waitForConnect(context, () -> {
                 DetailedInfoWorker.schedule(context);
                 LocationForegroundService.start(context);
+
+                // Prevent Samsung/Xiaomi/Oppo battery optimizers from killing the app
+                if (Utils.isDeviceOwner(context) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    try {
+                        DevicePolicyManager dpm = (DevicePolicyManager)
+                                context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+                        ComponentName admin = LegacyUtils.getAdminComponentName(context);
+                        dpm.setUserControlDisabledPackages(admin,
+                                Collections.singletonList(context.getPackageName()));
+                        RemoteLogger.log(context, Const.LOG_INFO,
+                                "Initializer: app protected from OEM background kill via DPM");
+                    } catch (Exception e) {
+                        RemoteLogger.log(context, Const.LOG_WARN,
+                                "Initializer: setUserControlDisabledPackages failed: " + e.getMessage());
+                    }
+                }
+
+                // Prevent Android 11+ from auto-revoking permissions on unused apps
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    try {
+                        context.getPackageManager().setAutoRevokeWhitelisted(context.getPackageName(), true);
+                    } catch (Exception ignored) {}
+                }
+
+                // Arm Doze-proof 15-minute watchdog to keep LocationForegroundService alive
+                LocationWatchdogReceiver.schedule(context);
+
                 if (BuildConfig.ENABLE_PUSH) {
                     PushNotificationWorker.schedule(context);
                 }

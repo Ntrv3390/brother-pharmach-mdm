@@ -20,6 +20,7 @@ import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.json.Application;
 import com.brother.pharmach.mdm.launcher.json.RemoteFile;
 import com.brother.pharmach.mdm.launcher.json.ServerConfig;
+import com.brother.pharmach.mdm.launcher.util.OemCompatHelper;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 import com.brother.pharmach.mdm.launcher.util.Utils;
 
@@ -126,6 +127,7 @@ public class InitialSetupActivity extends BaseActivity implements ConfigUpdater.
                     Const.PREFERENCES_ON : Const.PREFERENCES_OFF).commit();
             if (deviceOwner) {
                 Utils.autoGrantRequestedPermissions(this, getPackageName(), config.getAppPermissions(), true);
+                OemCompatHelper.tryEnableAutostart(this);
             }
 
             if (Utils.isDeviceOwner(this) &&
