@@ -22,6 +22,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.UserManager;
 import android.provider.Settings;
 import android.provider.Telephony;
 import android.util.Log;
@@ -401,6 +402,10 @@ public class StatusControlService extends Service {
     // ---------------------------------------------------------------------------
 
     private void applyInitialGpsPolicy() {
+        // Clear any DISALLOW_CONFIG_LOCATION restriction that may have been applied by a
+        // previous build — device policy restrictions survive app updates until explicitly removed.
+        clearGpsLock();
+
         ServerConfig config = settingsHelper.getConfig();
         if (config == null) return;
         if (Boolean.TRUE.equals(config.getGps())) {
@@ -408,6 +413,20 @@ public class StatusControlService extends Service {
             if (lm != null && !lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 enforceGpsEnabled();
             }
+        }
+    }
+
+    private void clearGpsLock() {
+        if (!Utils.isDeviceOwner(this) || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return;
+        try {
+            DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
+            ComponentName admin = LegacyUtils.getAdminComponentName(this);
+            if (dpm == null || admin == null) return;
+            dpm.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_LOCATION);
+            RemoteLogger.log(this, Const.LOG_INFO,
+                    "StatusControlService: cleared DISALLOW_CONFIG_LOCATION restriction");
+        } catch (Exception e) {
+            // Not applied or already cleared — safe to ignore
         }
     }
 
