@@ -6,7 +6,7 @@
 # Root-level local envs
 .env
 .env.android
-
+oracle
 # hmdm-server local envs (all real configs — stage/prod included)
 hmdm-server/.env
 hmdm-server/.env.stage
