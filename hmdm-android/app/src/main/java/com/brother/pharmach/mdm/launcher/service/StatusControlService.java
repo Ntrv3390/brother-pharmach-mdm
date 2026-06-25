@@ -6,8 +6,10 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.app.admin.DevicePolicyManager;
 import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -20,6 +22,8 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.UserManager;
+import android.provider.Settings;
 import android.provider.Telephony;
 import android.util.Log;
 
@@ -33,6 +37,8 @@ import com.brother.pharmach.mdm.launcher.R;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.ui.MainActivity;
 import com.brother.pharmach.mdm.launcher.json.ServerConfig;
+import com.brother.pharmach.mdm.launcher.util.LegacyUtils;
+import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 import com.brother.pharmach.mdm.launcher.util.Utils;
 import com.brother.pharmach.mdm.launcher.worker.SmsLogUploadWorker;
 
@@ -47,6 +53,7 @@ public class StatusControlService extends Service {
     private ScheduledThreadPoolExecutor threadPoolExecutor = new ScheduledThreadPoolExecutor(1);
     private boolean controlDisabled = false;
     private Timer disableControlTimer;
+    private BroadcastReceiver gpsStateReceiver;
 
     private final long ENABLE_CONTROL_DELAY = 60;
     private final long STATUS_CHECK_INTERVAL_MS = 10000;
@@ -88,6 +95,7 @@ public class StatusControlService extends Service {
         LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
         unregisterSmsObserver();
         unregisterMobileDataObserver();
+        unregisterGpsStateReceiver();
 
         threadPoolExecutor.shutdownNow();
         threadPoolExecutor = new ScheduledThreadPoolExecutor(1);
@@ -120,6 +128,8 @@ public class StatusControlService extends Service {
 
         registerSmsObserverIfNeeded();
         registerMobileDataObserver();
+        applyInitialGpsPolicy();
+        registerGpsStateReceiver();
 
         return Service.START_STICKY;
     }
@@ -279,14 +289,25 @@ public class StatusControlService extends Service {
             LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
             if (lm != null) {
                 boolean enabled = lm.isProviderEnabled(LocationManager.GPS_PROVIDER);
-                if (config.getGps() && !enabled) {
-                    notifyStatusViolation(Const.GPS_ON_REQUIRED);
-                    return;
-                } else if (!config.getGps() && enabled) {
-                    notifyStatusViolation(Const.GPS_OFF_REQUIRED);
-                    return;
+                if (Boolean.TRUE.equals(config.getGps())) {
+                    // GPS must be ON: lock the settings screen and force enable if currently off.
+                    applyGpsLock(true);
+                    if (!enabled) {
+                        enforceGpsEnabled();
+                        return;
+                    }
+                } else if (Boolean.FALSE.equals(config.getGps())) {
+                    // GPS must be OFF: remove lock and notify user if still on.
+                    applyGpsLock(false);
+                    if (enabled) {
+                        notifyStatusViolation(Const.GPS_OFF_REQUIRED);
+                        return;
+                    }
                 }
             }
+        } else {
+            // No GPS policy — remove any previously applied lock so user can freely configure.
+            applyGpsLock(false);
         }
 
         if (!Utils.isSimAbsent(this)) {
@@ -381,6 +402,104 @@ public class StatusControlService extends Service {
                 .build();
 
         nm.notify(MOBILE_DATA_NOTIFICATION_ID, notification);
+    }
+
+    // ---------------------------------------------------------------------------
+    // GPS enforcement — force GPS on and lock user from disabling it
+    // ---------------------------------------------------------------------------
+
+    private void applyInitialGpsPolicy() {
+        ServerConfig config = settingsHelper.getConfig();
+        if (config == null) return;
+        if (Boolean.TRUE.equals(config.getGps())) {
+            applyGpsLock(true);
+            LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+            if (lm != null && !lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                enforceGpsEnabled();
+            }
+        } else {
+            applyGpsLock(false);
+        }
+    }
+
+    private void registerGpsStateReceiver() {
+        unregisterGpsStateReceiver();
+        gpsStateReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                ServerConfig config = settingsHelper.getConfig();
+                if (config == null || !Boolean.TRUE.equals(config.getGps())) return;
+                LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+                if (lm != null && !lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    enforceGpsEnabled();
+                }
+            }
+        };
+        // PROVIDERS_CHANGED_ACTION is a protected system broadcast — no RECEIVER_EXPORTED flag
+        // required or permitted (Android 14 docs: system-broadcast receivers must omit the flag).
+        IntentFilter filter = new IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION);
+        registerReceiver(gpsStateReceiver, filter);
+    }
+
+    private void unregisterGpsStateReceiver() {
+        if (gpsStateReceiver != null) {
+            try {
+                unregisterReceiver(gpsStateReceiver);
+            } catch (Exception ignored) {}
+            gpsStateReceiver = null;
+        }
+    }
+
+    private void enforceGpsEnabled() {
+        if (!Utils.isDeviceOwner(this)) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "StatusControlService: GPS enforcement requested but app is not device owner — showing user dialog");
+            notifyStatusViolation(Const.GPS_ON_REQUIRED);
+            return;
+        }
+        try {
+            DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
+            ComponentName admin = LegacyUtils.getAdminComponentName(this);
+            if (dpm == null || admin == null) {
+                notifyStatusViolation(Const.GPS_ON_REQUIRED);
+                return;
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S_V2) {
+                // API 32+ (Android 12L): proper device-owner API to force location on.
+                dpm.setLocationEnabled(admin, true);
+            } else {
+                // API < 32: set location_mode to HIGH_ACCURACY via setSecureSetting.
+                dpm.setSecureSetting(admin, Settings.Secure.LOCATION_MODE,
+                        String.valueOf(Settings.Secure.LOCATION_MODE_HIGH_ACCURACY));
+            }
+            RemoteLogger.log(this, Const.LOG_INFO,
+                    "StatusControlService: GPS forced ON via DevicePolicyManager");
+        } catch (Exception e) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "StatusControlService: GPS enforcement failed: " + e.getMessage());
+            notifyStatusViolation(Const.GPS_ON_REQUIRED);
+        }
+    }
+
+    private void applyGpsLock(boolean lock) {
+        if (!Utils.isDeviceOwner(this) || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            return; // DISALLOW_CONFIG_LOCATION requires device owner on API 28+
+        }
+        try {
+            DevicePolicyManager dpm = (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
+            ComponentName admin = LegacyUtils.getAdminComponentName(this);
+            if (dpm == null || admin == null) return;
+            if (lock) {
+                dpm.addUserRestriction(admin, UserManager.DISALLOW_CONFIG_LOCATION);
+            } else {
+                dpm.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_LOCATION);
+            }
+            RemoteLogger.log(this, Const.LOG_INFO,
+                    "StatusControlService: location settings " + (lock ? "locked" : "unlocked"));
+        } catch (Exception e) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "StatusControlService: applyGpsLock(" + lock + ") failed: " + e.getMessage());
+        }
     }
 
     private void notifyStatusViolation(int cause) {
