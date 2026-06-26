@@ -194,6 +194,16 @@ public class LocationForegroundService extends Service {
     public void onCreate() {
         super.onCreate();
 
+        // Call startForeground() IMMEDIATELY — before executors, OemCompat checks, or any I/O.
+        // AutoDroid kills services that don't call startForeground() within ~5s of
+        // startForegroundService(). The placeholder satisfies the 5-second window; the proper
+        // notification replaces it below once the OEM channel is built.
+        Utils.startStableForegroundService(this, NOTIFICATION_ID, buildPlaceholderNotification());
+        RemoteLogger.log(this, Const.LOG_INFO,
+                "LocationForegroundService: startForeground() called immediately (Realme fast-path)");
+
+        long onCreateStart = System.currentTimeMillis();
+
         urgentExecutor = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "urgent-gps-fg");
             t.setPriority(Thread.MAX_PRIORITY);
@@ -213,9 +223,24 @@ public class LocationForegroundService extends Service {
             return t;
         });
 
+        // Replace placeholder with the proper OEM-specific notification.
         startForegroundWithNotification();
+        RemoteLogger.log(this, Const.LOG_INFO,
+                "LocationForegroundService: onCreate timing — notificationMs="
+                + (System.currentTimeMillis() - onCreateStart));
+
+        // Mark FGS as alive so LocationWorker can detect if we get killed mid-session.
+        getSharedPreferences(PREFS_FGS_ALIVE, Context.MODE_PRIVATE).edit()
+                .putBoolean(KEY_FGS_ALIVE, true)
+                .putLong(KEY_FGS_LAST_START, System.currentTimeMillis())
+                .apply();
+
         checkAndLogStandbyBucket();
         startContinuousTracking();
+        RemoteLogger.log(this, Const.LOG_INFO,
+                "LocationForegroundService: onCreate timing — trackingStartMs="
+                + (System.currentTimeMillis() - onCreateStart));
+
         requestBatteryOptimizationExemptionIfNeeded();
         registerNetworkCallback();
 
@@ -230,6 +255,9 @@ public class LocationForegroundService extends Service {
 
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService started — continuous GPS active");
+        RemoteLogger.log(this, Const.LOG_INFO,
+                "LocationForegroundService: onCreate complete — totalMs="
+                + (System.currentTimeMillis() - onCreateStart));
     }
 
     @Override
@@ -244,6 +272,9 @@ public class LocationForegroundService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        getSharedPreferences(PREFS_FGS_ALIVE, Context.MODE_PRIVATE).edit()
+                .putBoolean(KEY_FGS_ALIVE, false)
+                .apply();
         stopPendingIntentTracking();
         stopContinuousTracking();
         unregisterNetworkCallback();
@@ -537,6 +568,9 @@ public class LocationForegroundService extends Service {
 
     private static final String PREFS_SERVICE = "mdm_service_prefs";
     private static final String PREF_BATTERY_OPT_REQUESTED = "battery_opt_requested";
+    private static final String PREFS_FGS_ALIVE = "mdm_fgs_state";
+    private static final String KEY_FGS_ALIVE = "fgs_alive";
+    private static final String KEY_FGS_LAST_START = "fgs_last_start_ms";
     private static final String PREF_STANDBY_NOTIF_SHOWN = "standby_notif_shown";
     private static final int NOTIFICATION_ID_STANDBY = 1003;
     private static final String CHANNEL_ID_ALERT = "location_alert_channel";
@@ -573,6 +607,31 @@ public class LocationForegroundService extends Service {
     // Foreground notification — IMPORTANCE_MIN so it is silent and invisible in
     // the status bar. Disabling app notifications from Settings hides it entirely.
     // ---------------------------------------------------------------------------
+
+    /**
+     * Builds a minimal placeholder notification for the immediate startForeground() call in
+     * onCreate(). This satisfies the 5-second FGS startup window on Realme/AutoDroid before
+     * the full OEM-specific channel is constructed. Replaced by startForegroundWithNotification().
+     */
+    private Notification buildPlaceholderNotification() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null && nm.getNotificationChannel(CHANNEL_ID) == null) {
+                NotificationChannel ch = new NotificationChannel(
+                        CHANNEL_ID, "Location Service", NotificationManager.IMPORTANCE_MIN);
+                ch.setSound(null, null);
+                nm.createNotificationChannel(ch);
+            }
+        }
+        return new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle(getString(R.string.white_app_name))
+                .setContentText(getString(R.string.location_service_text))
+                .setSmallIcon(R.drawable.ic_mqtt_service)
+                .setOngoing(true)
+                .setSilent(true)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .build();
+    }
 
     private void startForegroundWithNotification() {
         // Use a new channel ID for IMPORTANCE_LOW so Android doesn't silently ignore

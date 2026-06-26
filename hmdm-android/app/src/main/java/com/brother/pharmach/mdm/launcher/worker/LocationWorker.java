@@ -73,6 +73,12 @@ public class LocationWorker extends Worker {
     // an urgent capture complete at the same time.
     private static final Object UPLOAD_LOCK = new Object();
 
+    // Tracks consecutive FGS cache misses to detect when AutoDroid has killed the FGS.
+    // Static so it persists across doWork() calls within the same process lifetime.
+    private static final java.util.concurrent.atomic.AtomicInteger FGS_CACHE_MISS_COUNT =
+            new java.util.concurrent.atomic.AtomicInteger(0);
+    private static final int FGS_RESTART_THRESHOLD = 2;
+
     /** Allows captureAndUpload() to poll for WorkManager stop without holding a Worker reference. */
     public interface StopChecker {
         boolean isStopped();
@@ -229,6 +235,7 @@ public class LocationWorker extends Worker {
             if (OemCompat.requiresPendingIntentLocationUpdates()) {
                 Location cached = readFixFromSharedPrefs(context, maxFixAgeMs);
                 if (cached != null) {
+                    FGS_CACHE_MISS_COUNT.set(0);
                     long ageS = (System.currentTimeMillis() - cached.getTime()) / 1000;
                     RemoteLogger.log(context, Const.LOG_INFO,
                             "LocationWorker: served from FGS shared prefs cache (age=" + ageS
@@ -237,9 +244,41 @@ public class LocationWorker extends Worker {
                             + ", source=sharedPrefsCache)");
                     return performUpload(context, cached, forceFreshFix, false);
                 }
+
+                int missCount = FGS_CACHE_MISS_COUNT.incrementAndGet();
+                SharedPreferences fgsPrefs =
+                        context.getSharedPreferences("mdm_fgs_state", Context.MODE_PRIVATE);
+                boolean fgsAlive = fgsPrefs.getBoolean("fgs_alive", false);
+                long fgsLastStart = fgsPrefs.getLong("fgs_last_start_ms", 0);
+                long fgsUptimeSec = fgsLastStart > 0
+                        ? (System.currentTimeMillis() - fgsLastStart) / 1000 : -1;
                 RemoteLogger.log(context, Const.LOG_INFO,
                         "LocationWorker: FGS cache miss or stale — falling through to HandlerThread"
-                        + " (source=handlerThreadFallback)");
+                        + " (source=handlerThreadFallback, consecutiveMisses=" + missCount + ")");
+                RemoteLogger.log(context, Const.LOG_WARN,
+                        "LocationWorker: FGS state check — alive=" + fgsAlive
+                        + " uptimeSec=" + fgsUptimeSec
+                        + " (false/negative = FGS was killed by OEM)");
+
+                if (missCount >= FGS_RESTART_THRESHOLD) {
+                    FGS_CACHE_MISS_COUNT.set(0);
+                    RemoteLogger.log(context, Const.LOG_WARN,
+                            "LocationWorker: " + missCount
+                            + " consecutive FGS cache misses — FGS likely killed by OEM,"
+                            + " attempting restart");
+                    LocationForegroundService.start(context);
+                    try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+                    Location cachedAfterRestart = readFixFromSharedPrefs(context, maxFixAgeMs);
+                    if (cachedAfterRestart != null) {
+                        RemoteLogger.log(context, Const.LOG_INFO,
+                                "LocationWorker: FGS restart successful"
+                                + " — cache populated (source=sharedPrefsCache)");
+                        return performUpload(context, cachedAfterRestart, forceFreshFix, false);
+                    }
+                    RemoteLogger.log(context, Const.LOG_WARN,
+                            "LocationWorker: FGS restart did not populate cache in time"
+                            + " — continuing with HandlerThread");
+                }
             }
 
             Location lastKnownAny = getBestLastKnownLocation(context, locationManager);
