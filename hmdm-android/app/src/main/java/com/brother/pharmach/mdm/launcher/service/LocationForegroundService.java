@@ -40,10 +40,13 @@ import com.brother.pharmach.mdm.launcher.util.Utils;
 import com.brother.pharmach.mdm.launcher.worker.LocationWorker;
 
 import android.app.PendingIntent;
+import android.app.admin.DevicePolicyManager;
 import android.app.usage.UsageStatsManager;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.IntentFilter;
 
+import com.brother.pharmach.mdm.launcher.util.LegacyUtils;
 import com.brother.pharmach.mdm.launcher.util.OemCompat;
 
 import java.util.concurrent.ExecutorService;
@@ -236,12 +239,14 @@ public class LocationForegroundService extends Service {
                 .apply();
 
         checkAndLogStandbyBucket();
+        // Ensure battery optimization exemption BEFORE registering listeners so Realme's
+        // LocationManager dispatch layer does not suppress callbacks on registration.
+        ensureBatteryOptimizationExempted();
         startContinuousTracking();
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService: onCreate timing — trackingStartMs="
                 + (System.currentTimeMillis() - onCreateStart));
 
-        requestBatteryOptimizationExemptionIfNeeded();
         registerNetworkCallback();
 
         // Flush the SQLite queue every 15 min — clears any fixes that were queued
@@ -560,14 +565,15 @@ public class LocationForegroundService extends Service {
     }
 
     // ---------------------------------------------------------------------------
-    // Battery optimization exemption — request once per install so Doze mode
-    // does not suspend network access for the MQTT client or this service.
-    // Foreground services CAN start activities on Android 10+ (unlike pure background),
-    // so the system settings dialog is safe to launch from here.
+    // Battery optimization exemption — required for GPS callback delivery on Realme/MIUI.
+    // Realme's LocationManager dispatch layer suppresses callbacks when battery optimization
+    // is active, even for foreground services with PendingIntent registration.
+    //
+    // Strategy: Device Owner → programmatic exemption (no dialog).
+    // Fallback: system dialog (no one-time gate — retry until actually granted).
     // ---------------------------------------------------------------------------
 
     private static final String PREFS_SERVICE = "mdm_service_prefs";
-    private static final String PREF_BATTERY_OPT_REQUESTED = "battery_opt_requested";
     private static final String PREFS_FGS_ALIVE = "mdm_fgs_state";
     private static final String KEY_FGS_ALIVE = "fgs_alive";
     private static final String KEY_FGS_LAST_START = "fgs_last_start_ms";
@@ -575,32 +581,118 @@ public class LocationForegroundService extends Service {
     private static final int NOTIFICATION_ID_STANDBY = 1003;
     private static final String CHANNEL_ID_ALERT = "location_alert_channel";
 
-    private void requestBatteryOptimizationExemptionIfNeeded() {
+    /**
+     * Ensures battery optimization is disabled for this package.
+     *
+     * Strategy:
+     * 1. Already exempt — do nothing.
+     * 2. Device Owner — programmatic exemption via DPM (no user dialog needed).
+     * 3. Fallback — system dialog without the old one-time gate; retries until actually granted.
+     *
+     * Called from onCreate() BEFORE startContinuousTracking() so listeners are registered
+     * only after exemption is in effect (Realme suppresses LocationManager dispatch otherwise).
+     */
+    private void ensureBatteryOptimizationExempted() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-        if (pm == null || pm.isIgnoringBatteryOptimizations(getPackageName())) return;
+        if (pm == null) return;
 
+        if (pm.isIgnoringBatteryOptimizations(getPackageName())) {
+            RemoteLogger.log(this, Const.LOG_INFO,
+                    "LocationForegroundService: battery optimization already exempt — OK");
+            return;
+        }
+
+        boolean deviceOwner = Utils.isDeviceOwner(this);
         RemoteLogger.log(this, Const.LOG_WARN,
-                "LocationForegroundService: app is subject to battery optimization — "
-                + "GPS and MQTT delivery may be delayed when the device is idle");
+                "LocationForegroundService: battery optimization active — attempting exemption"
+                + " (deviceOwner=" + deviceOwner + ")");
 
-        // Only prompt once: a SharedPreferences flag survives app restarts/upgrades
-        // but is cleared on factory reset, which is the correct behaviour.
-        SharedPreferences prefs = getSharedPreferences(PREFS_SERVICE, Context.MODE_PRIVATE);
-        if (prefs.getBoolean(PREF_BATTERY_OPT_REQUESTED, false)) return;
-        prefs.edit().putBoolean(PREF_BATTERY_OPT_REQUESTED, true).apply();
+        if (deviceOwner) {
+            boolean attempted = tryGrantExemptionAsDeviceOwner();
+            if (attempted && pm.isIgnoringBatteryOptimizations(getPackageName())) {
+                RemoteLogger.log(this, Const.LOG_INFO,
+                        "LocationForegroundService: battery optimization exemption granted"
+                        + " via DeviceOwner — GPS callbacks will now be delivered");
+                return;
+            } else if (attempted) {
+                RemoteLogger.log(this, Const.LOG_WARN,
+                        "LocationForegroundService: DeviceOwner exemption API called"
+                        + " but isIgnoringBatteryOptimizations still false — falling through to dialog");
+            }
+        }
 
+        // Fallback: system dialog. No one-time gate — battery optimization exemption is a hard
+        // requirement for GPS delivery, not optional. Retries on every onCreate() until granted.
         try {
             Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
             intent.setData(Uri.parse("package:" + getPackageName()));
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
             RemoteLogger.log(this, Const.LOG_INFO,
-                    "LocationForegroundService: requested battery optimization exemption");
+                    "LocationForegroundService: launched battery optimization exemption dialog");
         } catch (Exception e) {
             RemoteLogger.log(this, Const.LOG_WARN,
-                    "LocationForegroundService: could not request battery exemption: " + e.getMessage());
+                    "LocationForegroundService: could not launch exemption dialog: " + e.getMessage());
         }
+    }
+
+    /**
+     * Attempts to grant battery optimization exemption using Device Owner privileges.
+     * Tries approaches in order from most specific to most compatible. Returns true if
+     * any approach executed without fatal exception (caller must verify with
+     * isIgnoringBatteryOptimizations() after this returns).
+     */
+    private boolean tryGrantExemptionAsDeviceOwner() {
+        DevicePolicyManager dpm =
+                (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
+        if (dpm == null) return false;
+        ComponentName admin = LegacyUtils.getAdminComponentName(this);
+
+        // Approach A: API 35 — setApplicationExemptions() (Device Owner API, Android 15+)
+        if (Build.VERSION.SDK_INT >= 35) {
+            try {
+                java.util.Set<Integer> exemptions = new java.util.HashSet<>();
+                exemptions.add(1); // DevicePolicyManager.BATTERY_OPTIMIZATION_EXEMPTION
+                dpm.getClass()
+                   .getMethod("setApplicationExemptions", ComponentName.class, String.class,
+                           java.util.Set.class)
+                   .invoke(dpm, admin, getPackageName(), exemptions);
+                RemoteLogger.log(this, Const.LOG_INFO,
+                        "LocationForegroundService: tried setApplicationExemptions() API (API 35)");
+                return true;
+            } catch (Exception e) {
+                RemoteLogger.log(this, Const.LOG_WARN,
+                        "LocationForegroundService: setApplicationExemptions() failed: "
+                        + e.getClass().getSimpleName() + " — " + e.getMessage());
+            }
+        }
+
+        // Approach B: executeShellCommand("cmd deviceidle whitelist +package") via DPM
+        // Device Owner can execute shell commands; equivalent to:
+        //   adb shell cmd deviceidle whitelist +<package>
+        try {
+            android.os.ParcelFileDescriptor[] pipe =
+                    android.os.ParcelFileDescriptor.createPipe();
+            dpm.getClass()
+               .getMethod("executeShellCommand", ComponentName.class, String.class,
+                       android.os.ParcelFileDescriptor.class,
+                       android.os.ParcelFileDescriptor.class)
+               .invoke(dpm, admin,
+                       "cmd deviceidle whitelist +" + getPackageName(),
+                       pipe[1], null);
+            pipe[0].close();
+            pipe[1].close();
+            RemoteLogger.log(this, Const.LOG_INFO,
+                    "LocationForegroundService: executed shell whitelist command via DPM");
+            return true;
+        } catch (Exception e) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationForegroundService: DPM shell command failed: "
+                    + e.getClass().getSimpleName() + " — " + e.getMessage());
+        }
+
+        return false;
     }
 
     // ---------------------------------------------------------------------------

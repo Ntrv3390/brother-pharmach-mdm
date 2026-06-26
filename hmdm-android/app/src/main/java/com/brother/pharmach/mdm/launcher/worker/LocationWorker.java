@@ -252,13 +252,17 @@ public class LocationWorker extends Worker {
                 long fgsLastStart = fgsPrefs.getLong("fgs_last_start_ms", 0);
                 long fgsUptimeSec = fgsLastStart > 0
                         ? (System.currentTimeMillis() - fgsLastStart) / 1000 : -1;
+                PowerManager pmDiag = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+                boolean batteryExempt = pmDiag != null
+                        && pmDiag.isIgnoringBatteryOptimizations(context.getPackageName());
                 RemoteLogger.log(context, Const.LOG_INFO,
                         "LocationWorker: FGS cache miss or stale — falling through to HandlerThread"
                         + " (source=handlerThreadFallback, consecutiveMisses=" + missCount + ")");
                 RemoteLogger.log(context, Const.LOG_WARN,
                         "LocationWorker: FGS state check — alive=" + fgsAlive
                         + " uptimeSec=" + fgsUptimeSec
-                        + " (false/negative = FGS was killed by OEM)");
+                        + " batteryOptExempt=" + batteryExempt
+                        + " (batteryOptExempt=false means GPS callbacks suppressed by OEM)");
 
                 if (missCount >= FGS_RESTART_THRESHOLD) {
                     FGS_CACHE_MISS_COUNT.set(0);
@@ -266,6 +270,12 @@ public class LocationWorker extends Worker {
                             "LocationWorker: " + missCount
                             + " consecutive FGS cache misses — FGS likely killed by OEM,"
                             + " attempting restart");
+                    if (!batteryExempt) {
+                        RemoteLogger.log(context, Const.LOG_WARN,
+                                "LocationWorker: battery optimization is ACTIVE during restart attempt"
+                                + " — GPS callbacks will be suppressed after restart too."
+                                + " Starting FGS anyway, exemption will be re-requested in onCreate().");
+                    }
                     LocationForegroundService.start(context);
                     try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
                     Location cachedAfterRestart = readFixFromSharedPrefs(context, maxFixAgeMs);
