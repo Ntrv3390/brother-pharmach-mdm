@@ -76,6 +76,7 @@
          The runtime code that requests the exemption already has a try-catch, so if the
          system rejects the intent it is silently logged and the app continues normally. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.REQUEST_PASSWORD_COMPLEXITY" />
     <uses-permission android:name="android.permission.MASTER_CLEAR"
         tools:ignore="ProtectedPermissions"/>

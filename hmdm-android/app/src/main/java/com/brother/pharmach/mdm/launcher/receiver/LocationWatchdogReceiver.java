@@ -56,10 +56,24 @@ public class LocationWatchdogReceiver extends BroadcastReceiver {
 
         long triggerAt = System.currentTimeMillis() + INTERVAL_MS;
         try {
-            // setExactAndAllowWhileIdle fires in Doze; setExact/setInexactRepeating do not.
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
-            RemoteLogger.log(context, Const.LOG_INFO,
-                    "LocationWatchdog: next alarm scheduled in 15 min");
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (am.canScheduleExactAlarms()) {
+                    am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
+                    RemoteLogger.log(context, Const.LOG_INFO,
+                            "LocationWatchdog: exact alarm scheduled");
+                } else {
+                    // USE_EXACT_ALARM / SCHEDULE_EXACT_ALARM not granted — setWindow gives a
+                    // ~10-min delivery window and still wakes the device from Doze.
+                    am.setWindow(AlarmManager.RTC_WAKEUP, triggerAt,
+                            TimeUnit.MINUTES.toMillis(10), pi);
+                    RemoteLogger.log(context, Const.LOG_WARN,
+                            "LocationWatchdog: exact alarm unavailable — using setWindow fallback");
+                }
+            } else {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
+                RemoteLogger.log(context, Const.LOG_INFO,
+                        "LocationWatchdog: exact alarm scheduled (API < 31)");
+            }
         } catch (Exception e) {
             RemoteLogger.log(context, Const.LOG_WARN,
                     "LocationWatchdog: failed to schedule alarm: " + e.getMessage());

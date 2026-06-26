@@ -39,6 +39,13 @@ import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 import com.brother.pharmach.mdm.launcher.util.Utils;
 import com.brother.pharmach.mdm.launcher.worker.LocationWorker;
 
+import android.app.PendingIntent;
+import android.app.usage.UsageStatsManager;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+
+import com.brother.pharmach.mdm.launcher.util.OemCompat;
+
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -65,6 +72,9 @@ public class LocationForegroundService extends Service {
 
     private static final String CHANNEL_ID = "location_service_channel";
     private static final int NOTIFICATION_ID = 1002;
+    private static final String PREFS_LOCATION_CACHE = "mdm_location_cache";
+    private static final String ACTION_PENDING_INTENT_LOCATION =
+            "com.brother.pharmach.mdm.launcher.LOCATION_UPDATE";
 
     // Continuous listener update frequency — aggressive for vehicle tracking.
     private static final long GPS_MIN_TIME_MS = 4_000L;       // GPS callback at most every 4s
@@ -106,6 +116,10 @@ public class LocationForegroundService extends Service {
     // Flush the offline SQLite queue when the network comes back.
     private ConnectivityManager.NetworkCallback networkCallback;
 
+    // PendingIntent-based location path — active in parallel with HandlerThread on restricted OEMs.
+    private PendingIntent locationPendingIntent;
+    private BroadcastReceiver pendingIntentReceiver;
+
     // ---------------------------------------------------------------------------
     // Continuous LocationListener — callbacks delivered on listenerThread.
     // ---------------------------------------------------------------------------
@@ -117,7 +131,8 @@ public class LocationForegroundService extends Service {
                 return;
             }
             latestContinuousFix = location;
-            considerUpload(location);
+            writeFixToSharedPrefs(location);
+            considerUpload(location, "handlerThread");
         }
 
         @Override
@@ -199,6 +214,7 @@ public class LocationForegroundService extends Service {
         });
 
         startForegroundWithNotification();
+        checkAndLogStandbyBucket();
         startContinuousTracking();
         requestBatteryOptimizationExemptionIfNeeded();
         registerNetworkCallback();
@@ -228,6 +244,7 @@ public class LocationForegroundService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        stopPendingIntentTracking();
         stopContinuousTracking();
         unregisterNetworkCallback();
         flushScheduler.shutdownNow();
@@ -273,6 +290,10 @@ public class LocationForegroundService extends Service {
         registerProvider(LocationManager.NETWORK_PROVIDER, coarseGranted || fineGranted,
                 NETWORK_MIN_TIME_MS, NETWORK_MIN_DISTANCE_M);
 
+        if (OemCompat.requiresPendingIntentLocationUpdates()) {
+            startPendingIntentTracking();
+        }
+
         // Seed latestContinuousFix from the system cache so urgent requests before
         // the first live callback have something to work with.
         seedLastKnownFix();
@@ -283,6 +304,11 @@ public class LocationForegroundService extends Service {
             return;
         }
         try {
+            if (LocationManager.NETWORK_PROVIDER.equals(provider) && !OemCompat.isGmsAvailable(this)) {
+                RemoteLogger.log(this, Const.LOG_INFO,
+                        "LocationForegroundService: NETWORK_PROVIDER skipped — GMS absent, NLP unavailable");
+                return;
+            }
             if (locationManager.isProviderEnabled(provider)) {
                 locationManager.requestLocationUpdates(
                         provider, minTime, minDistance, continuousListener, listenerThread.getLooper());
@@ -353,7 +379,7 @@ public class LocationForegroundService extends Service {
     // Upload logic — continuous stream path
     // ---------------------------------------------------------------------------
 
-    private void considerUpload(Location location) {
+    private void considerUpload(Location location, String source) {
         long now = System.currentTimeMillis();
         long timeSinceLast = now - lastUploadTimeMs;
         float distSinceLast = lastUploadedFix != null
@@ -367,7 +393,7 @@ public class LocationForegroundService extends Service {
             // Set optimistically before queuing to prevent duplicate uploads from rapid callbacks.
             lastUploadTimeMs = now;
             lastUploadedFix = location;
-            uploadFix(new Location(location), false);
+            uploadFix(new Location(location), false, source);
         }
     }
 
@@ -375,7 +401,7 @@ public class LocationForegroundService extends Service {
      * Queues a location for upload on the background upload executor.
      * On success: done. On failure (offline): inserts into SQLite for the flush cycle.
      */
-    private void uploadFix(Location location, boolean isUrgent) {
+    private void uploadFix(Location location, boolean isUrgent, String source) {
         final Context appContext = getApplicationContext();
         uploadExecutor.execute(() -> {
             try {
@@ -392,7 +418,7 @@ public class LocationForegroundService extends Service {
                 }
                 RemoteLogger.log(appContext, Const.LOG_INFO,
                         "LocationForegroundService: fix " + (sent ? "uploaded" : "queued offline")
-                        + " (" + (isUrgent ? "urgent" : "stream") + ")");
+                        + " (" + (isUrgent ? "urgent" : "stream") + ", source=" + source + ")");
             } catch (Exception e) {
                 RemoteLogger.log(appContext, Const.LOG_WARN,
                         "LocationForegroundService: uploadFix failed: " + e.getMessage());
@@ -427,8 +453,9 @@ public class LocationForegroundService extends Service {
             if (recent != null && fixAge < URGENT_FIX_MAX_AGE_MS) {
                 // GPS is warm — serve the latest streaming fix instantly (sub-second).
                 RemoteLogger.log(appContext, Const.LOG_INFO,
-                        "LocationForegroundService: urgent served from stream (fix age=" + fixAge + "ms)");
-                uploadFix(new Location(recent), true);
+                        "LocationForegroundService: urgent served from stream (fix age=" + fixAge
+                        + "ms, source=fgsMemoryCache)");
+                uploadFix(new Location(recent), true, "fgsMemoryCache");
                 return;
             }
 
@@ -510,6 +537,9 @@ public class LocationForegroundService extends Service {
 
     private static final String PREFS_SERVICE = "mdm_service_prefs";
     private static final String PREF_BATTERY_OPT_REQUESTED = "battery_opt_requested";
+    private static final String PREF_STANDBY_NOTIF_SHOWN = "standby_notif_shown";
+    private static final int NOTIFICATION_ID_STANDBY = 1003;
+    private static final String CHANNEL_ID_ALERT = "location_alert_channel";
 
     private void requestBatteryOptimizationExemptionIfNeeded() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
@@ -545,28 +575,238 @@ public class LocationForegroundService extends Service {
     // ---------------------------------------------------------------------------
 
     private void startForegroundWithNotification() {
+        // Use a new channel ID for IMPORTANCE_LOW so Android doesn't silently ignore
+        // the importance upgrade (channel importance cannot be lowered after creation,
+        // and Android ignores changes to an already-created channel ID).
+        int importance = OemCompat.requiredFgsNotificationImportance();
+        String channelId = (importance == NotificationManager.IMPORTANCE_LOW)
+                ? "location_service_channel_low"
+                : CHANNEL_ID;
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID,
-                    "Location Service",
-                    NotificationManager.IMPORTANCE_MIN);
+                    channelId, "Location Service", importance);
             channel.setShowBadge(false);
             channel.setSound(null, null);
+            if (importance > NotificationManager.IMPORTANCE_MIN) {
+                channel.enableLights(false);
+                channel.enableVibration(false);
+            }
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) {
                 nm.createNotificationChannel(channel);
             }
         }
 
-        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
+        RemoteLogger.log(this, Const.LOG_INFO,
+                "LocationForegroundService: notification channelId=" + channelId
+                + " importance=" + importance + " OEM=" + Build.MANUFACTURER);
+
+        Notification notification = new NotificationCompat.Builder(this, channelId)
                 .setContentTitle(getString(R.string.white_app_name))
                 .setContentText(getString(R.string.location_service_text))
                 .setSmallIcon(R.drawable.ic_mqtt_service)
                 .setOngoing(true)
                 .setSilent(true)
-                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setPriority(OemCompat.requiredNotificationPriority())
                 .build();
 
         Utils.startStableForegroundService(this, NOTIFICATION_ID, notification);
+    }
+
+    // ---------------------------------------------------------------------------
+    // PendingIntent tracking — parallel path for OEMs that freeze HandlerThread loopers
+    // (Realme AutoDroid, Xiaomi MIUI, Vivo OriginOS). PendingIntent delivery routes
+    // through ActivityManagerService → BroadcastQueue in system server, which the OEM
+    // process manager cannot freeze.
+    // ---------------------------------------------------------------------------
+
+    private void startPendingIntentTracking() {
+        try {
+            pendingIntentReceiver = new LocationUpdateReceiver();
+            IntentFilter filter = new IntentFilter(ACTION_PENDING_INTENT_LOCATION);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(pendingIntentReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(pendingIntentReceiver, filter);
+            }
+
+            Intent baseIntent = new Intent(ACTION_PENDING_INTENT_LOCATION)
+                    .setPackage(getPackageName());
+            int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                piFlags |= PendingIntent.FLAG_MUTABLE;
+            }
+            locationPendingIntent = PendingIntent.getBroadcast(this, 0, baseIntent, piFlags);
+
+            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,
+                        GPS_MIN_TIME_MS, GPS_MIN_DISTANCE_M, locationPendingIntent);
+            }
+            if (OemCompat.isGmsAvailable(this)
+                    && locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER,
+                        NETWORK_MIN_TIME_MS, NETWORK_MIN_DISTANCE_M, locationPendingIntent);
+            }
+
+            RemoteLogger.log(this, Const.LOG_INFO,
+                    "LocationForegroundService: OEM=" + Build.MANUFACTURER
+                    + " — PendingIntent path active (parallel with HandlerThread)");
+        } catch (SecurityException e) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationForegroundService: PendingIntent path SecurityException: " + e.getMessage());
+        } catch (Exception e) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationForegroundService: PendingIntent path failed: " + e.getMessage());
+        }
+    }
+
+    private void stopPendingIntentTracking() {
+        if (pendingIntentReceiver != null) {
+            try {
+                unregisterReceiver(pendingIntentReceiver);
+            } catch (Exception ignored) {}
+            pendingIntentReceiver = null;
+        }
+        if (locationPendingIntent != null && locationManager != null) {
+            try {
+                locationManager.removeUpdates(locationPendingIntent);
+            } catch (Exception ignored) {}
+            locationPendingIntent = null;
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // SharedPreferences cache — written on every fix so LocationWorker can read it
+    // without waiting 45 s for a HandlerThread that may be frozen by the OEM.
+    // Uses doubleToRawLongBits for full double precision (putFloat loses accuracy).
+    // ---------------------------------------------------------------------------
+
+    void writeFixToSharedPrefs(Location location) {
+        getApplicationContext()
+                .getSharedPreferences(PREFS_LOCATION_CACHE, Context.MODE_PRIVATE)
+                .edit()
+                .putLong("last_fix_lat_bits", Double.doubleToRawLongBits(location.getLatitude()))
+                .putLong("last_fix_lng_bits", Double.doubleToRawLongBits(location.getLongitude()))
+                .putLong("last_fix_time", location.getTime())
+                .putFloat("last_fix_accuracy", location.hasAccuracy() ? location.getAccuracy() : -1f)
+                .putString("last_fix_provider",
+                        location.getProvider() != null ? location.getProvider() : "")
+                .apply();
+    }
+
+    // ---------------------------------------------------------------------------
+    // LocationUpdateReceiver — receives PendingIntent-delivered GPS fixes.
+    // Validates KEY_LOCATION_CHANGED presence (security: rejects spoofed intents
+    // without the system-filled extra). Package-scoped action means only system can send.
+    // ---------------------------------------------------------------------------
+
+    // ---------------------------------------------------------------------------
+    // App Standby Bucket — AOSP feature (API 28+), not Samsung-specific.
+    // Checks once at startup; warns user if in RARE/RESTRICTED state.
+    // ---------------------------------------------------------------------------
+
+    private void checkAndLogStandbyBucket() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return;
+        UsageStatsManager usm = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
+        if (usm == null) return;
+
+        int bucket = usm.getAppStandbyBucket();
+        String bucketName;
+        if (bucket == UsageStatsManager.STANDBY_BUCKET_ACTIVE) bucketName = "ACTIVE";
+        else if (bucket == UsageStatsManager.STANDBY_BUCKET_WORKING_SET) bucketName = "WORKING_SET";
+        else if (bucket == UsageStatsManager.STANDBY_BUCKET_FREQUENT) bucketName = "FREQUENT";
+        else if (bucket == UsageStatsManager.STANDBY_BUCKET_RARE) bucketName = "RARE";
+        else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                && bucket == UsageStatsManager.STANDBY_BUCKET_RESTRICTED) bucketName = "RESTRICTED";
+        else bucketName = "UNKNOWN(" + bucket + ")";
+
+        RemoteLogger.log(this, Const.LOG_INFO,
+                "OemCompat: standbyBucket=" + bucketName + " OEM=" + Build.MANUFACTURER
+                + " hibernationRisk=" + (bucket >= UsageStatsManager.STANDBY_BUCKET_RARE));
+
+        if (bucket >= UsageStatsManager.STANDBY_BUCKET_RARE) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationForegroundService: app in " + bucketName
+                    + " standby — background location may fail."
+                    + " Direct user to battery unrestricted settings.");
+            Intent settingsIntent = OemCompat.getBatterySettingsIntent(this);
+            String message = OemCompat.isSamsung()
+                    ? "Set battery to 'Unrestricted' in App Settings"
+                    : "Battery optimization may block GPS updates — tap to fix";
+            showBatterySettingsNotification(message, settingsIntent);
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                && bucket == UsageStatsManager.STANDBY_BUCKET_RESTRICTED) {
+            RemoteLogger.log(this, Const.LOG_ERROR,
+                    "LocationForegroundService: app HIBERNATED — all background work blocked");
+        }
+    }
+
+    private void showBatterySettingsNotification(String message, Intent settingsIntent) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_SERVICE, Context.MODE_PRIVATE);
+        if (prefs.getBoolean(PREF_STANDBY_NOTIF_SHOWN, false)) return;
+        prefs.edit().putBoolean(PREF_STANDBY_NOTIF_SHOWN, true).apply();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID_ALERT, "Location Alerts", NotificationManager.IMPORTANCE_DEFAULT);
+            channel.setShowBadge(false);
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) nm.createNotificationChannel(channel);
+        }
+
+        PendingIntent pi = null;
+        if (settingsIntent != null) {
+            try {
+                settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                int piFlags = PendingIntent.FLAG_UPDATE_CURRENT
+                        | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                                ? PendingIntent.FLAG_IMMUTABLE : 0);
+                pi = PendingIntent.getActivity(this, 1, settingsIntent, piFlags);
+            } catch (Exception ignored) {}
+        }
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID_ALERT)
+                .setSmallIcon(R.drawable.ic_mqtt_service)
+                .setContentTitle(getString(R.string.white_app_name))
+                .setContentText(message)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+        if (pi != null) builder.setContentIntent(pi);
+
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) nm.notify(NOTIFICATION_ID_STANDBY, builder.build());
+    }
+
+    private class LocationUpdateReceiver extends BroadcastReceiver {
+        @SuppressWarnings("deprecation")
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!intent.hasExtra(LocationManager.KEY_LOCATION_CHANGED)) return;
+
+            Location location;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                location = intent.getParcelableExtra(
+                        LocationManager.KEY_LOCATION_CHANGED, Location.class);
+            } else {
+                location = intent.getParcelableExtra(LocationManager.KEY_LOCATION_CHANGED);
+            }
+
+            if (location == null) return;
+            if (location.getLatitude() == 0.0 && location.getLongitude() == 0.0) return;
+
+            latestContinuousFix = location;
+            writeFixToSharedPrefs(location);
+            considerUpload(location, "pendingIntent");
+
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "LocationForegroundService: PendingIntent fix received provider="
+                    + location.getProvider()
+                    + " accuracy=" + (location.hasAccuracy()
+                            ? location.getAccuracy() + "m" : "unknown")
+                    + " source=pendingIntent");
+        }
     }
 }

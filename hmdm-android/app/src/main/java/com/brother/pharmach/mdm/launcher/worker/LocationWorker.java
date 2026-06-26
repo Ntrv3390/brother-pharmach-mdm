@@ -27,6 +27,9 @@ import com.brother.pharmach.mdm.launcher.db.DatabaseHelper;
 import com.brother.pharmach.mdm.launcher.db.LocationTable;
 import com.brother.pharmach.mdm.launcher.service.LocationForegroundService;
 import com.brother.pharmach.mdm.launcher.util.LocationUploader;
+import android.content.SharedPreferences;
+
+import com.brother.pharmach.mdm.launcher.util.OemCompat;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
 import java.util.concurrent.ArrayBlockingQueue;
@@ -220,6 +223,25 @@ public class LocationWorker extends Worker {
             long maxFixAgeMs = forceFreshFix ? URGENT_MAX_FIX_AGE_MS : PERIODIC_MAX_FIX_AGE_MS;
             long now = System.currentTimeMillis();
 
+            // SharedPrefs cache fast-path: on OEMs with frozen HandlerThread loopers,
+            // LocationForegroundService writes every fix here via its PendingIntent path.
+            // Read it instead of waiting 45 s for a HandlerThread that may never fire.
+            if (OemCompat.requiresPendingIntentLocationUpdates()) {
+                Location cached = readFixFromSharedPrefs(context, maxFixAgeMs);
+                if (cached != null) {
+                    long ageS = (System.currentTimeMillis() - cached.getTime()) / 1000;
+                    RemoteLogger.log(context, Const.LOG_INFO,
+                            "LocationWorker: served from FGS shared prefs cache (age=" + ageS
+                            + "s, accuracy=" + (cached.hasAccuracy()
+                                    ? cached.getAccuracy() + "m" : "unknown")
+                            + ", source=sharedPrefsCache)");
+                    return performUpload(context, cached, forceFreshFix, false);
+                }
+                RemoteLogger.log(context, Const.LOG_INFO,
+                        "LocationWorker: FGS cache miss or stale — falling through to HandlerThread"
+                        + " (source=handlerThreadFallback)");
+            }
+
             Location lastKnownAny = getBestLastKnownLocation(context, locationManager);
             if (lastKnownAny == null) {
                 RemoteLogger.log(context, Const.LOG_INFO,
@@ -295,49 +317,16 @@ public class LocationWorker extends Worker {
                         "LocationWorker: implausibly old fix (" + locationAgeS / 3600
                                 + " h) — possible system clock skew on first boot");
             }
+            String locationSource = usedStaleFallback ? "staleFallback"
+                    : (chosenFresh != null ? "handlerThread" : "lastKnown");
             RemoteLogger.log(context, Const.LOG_INFO, "LocationWorker: success using "
                     + location.getProvider()
                     + " (age=" + locationAgeS + "s"
                     + ", accuracy=" + (location.hasAccuracy() ? location.getAccuracy() + "m" : "unknown")
-                    + ", staleFallback=" + usedStaleFallback + ")");
+                    + ", staleFallback=" + usedStaleFallback
+                    + ", source=" + locationSource + ")");
 
-            synchronized (UPLOAD_LOCK) {
-                DatabaseHelper helper = DatabaseHelper.instance(context);
-                if (helper == null) {
-                    // Transient DB failure — retry so the location capture is not permanently lost.
-                    RemoteLogger.log(context, Const.LOG_WARN,
-                            "LocationWorker: DatabaseHelper unavailable — scheduling retry");
-                    return Result.retry();
-                }
-
-                LocationTable.Location tableLocation = new LocationTable.Location(location);
-
-                if (forceFreshFix && !usedStaleFallback) {
-                    // Only stamp ts=now for genuinely fresh locations so that the server
-                    // timeline correctly distinguishes a new fix from a recycled old one.
-                    tableLocation.setTs(System.currentTimeMillis());
-                }
-
-                if (forceFreshFix && LocationUploader.sendUrgentLocation(context, tableLocation)) {
-                    RemoteLogger.log(context, Const.LOG_INFO,
-                            "LocationWorker: urgent location uploaded successfully"
-                                    + (usedStaleFallback ? " (stale fallback — server will keep polling)" : ""));
-                    return Result.success();
-                }
-
-                try {
-                    LocationTable.insert(helper.getWritableDatabase(), tableLocation);
-                } catch (Exception e) {
-                    RemoteLogger.log(context, Const.LOG_WARN,
-                            "LocationWorker: DB insert failed: " + e.getMessage());
-                    return Result.retry();
-                }
-
-                RemoteLogger.log(context, Const.LOG_INFO,
-                        "LocationWorker: queued location for regular upload path");
-                LocationUploader.sendLocations(context);
-            }
-            return Result.success();
+            return performUpload(context, location, forceFreshFix, usedStaleFallback);
         } catch (SecurityException e) {
             RemoteLogger.log(context, Const.LOG_WARN,
                     "LocationWorker: SecurityException — permission revoked mid-session: "
@@ -411,12 +400,18 @@ public class LocationWorker extends Worker {
             }
 
             if (allowNetwork) {
-                networkFuture = executor.submit(() -> {
+                if (!OemCompat.isGmsAvailable(context)) {
                     RemoteLogger.log(context, Const.LOG_INFO,
-                            "LocationWorker: Network request started");
-                    return tryRequestLiveUpdate(context, locationManager,
-                            LocationManager.NETWORK_PROVIDER, NETWORK_FIX_WAIT_SECONDS);
-                });
+                            "LocationWorker: GMS absent — NETWORK_PROVIDER skipped"
+                                    + " (Google NLP unavailable, would cause 45s dead-wait)");
+                } else {
+                    networkFuture = executor.submit(() -> {
+                        RemoteLogger.log(context, Const.LOG_INFO,
+                                "LocationWorker: Network request started");
+                        return tryRequestLiveUpdate(context, locationManager,
+                                LocationManager.NETWORK_PROVIDER, NETWORK_FIX_WAIT_SECONDS);
+                    });
+                }
             }
 
             // Use max of both timeouts so future increases to GPS_FIX_WAIT_SECONDS
@@ -719,6 +714,79 @@ public class LocationWorker extends Worker {
         }
 
         return candidate.getTime() > currentBest.getTime();
+    }
+
+    // ---------------------------------------------------------------------------
+    // SharedPrefs cache — populated by LocationForegroundService on every fix.
+    // Read here to skip the 45 s HandlerThread wait on OEMs with frozen loopers.
+    // Uses longBitsToDouble for full precision (the writer uses doubleToRawLongBits).
+    // ---------------------------------------------------------------------------
+
+    static Location readFixFromSharedPrefs(Context context, long maxAgeMs) {
+        SharedPreferences prefs = context.getSharedPreferences(
+                "mdm_location_cache", Context.MODE_PRIVATE);
+        long fixTime = prefs.getLong("last_fix_time", 0);
+        if (fixTime == 0) return null;
+
+        long ageMs = System.currentTimeMillis() - fixTime;
+        if (ageMs > maxAgeMs) return null;
+
+        double lat = Double.longBitsToDouble(prefs.getLong("last_fix_lat_bits", 0));
+        double lng = Double.longBitsToDouble(prefs.getLong("last_fix_lng_bits", 0));
+        if (lat == 0.0 && lng == 0.0) return null;
+
+        float accuracy = prefs.getFloat("last_fix_accuracy", -1f);
+        if (accuracy > 0 && accuracy > MAX_FIX_ACCURACY_METERS) return null;
+
+        Location location = new Location(prefs.getString("last_fix_provider", "cache"));
+        location.setLatitude(lat);
+        location.setLongitude(lng);
+        location.setTime(fixTime);
+        if (accuracy > 0) location.setAccuracy(accuracy);
+        return location;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Upload helper — extracted so both the cache fast-path and the normal path
+    // share identical DB + upload logic without duplicating the UPLOAD_LOCK block.
+    // ---------------------------------------------------------------------------
+
+    private static Result performUpload(Context context, Location location,
+                                        boolean forceFreshFix, boolean usedStaleFallback) {
+        synchronized (UPLOAD_LOCK) {
+            DatabaseHelper helper = DatabaseHelper.instance(context);
+            if (helper == null) {
+                RemoteLogger.log(context, Const.LOG_WARN,
+                        "LocationWorker: DatabaseHelper unavailable — scheduling retry");
+                return Result.retry();
+            }
+
+            LocationTable.Location tableLocation = new LocationTable.Location(location);
+
+            if (forceFreshFix && !usedStaleFallback) {
+                tableLocation.setTs(System.currentTimeMillis());
+            }
+
+            if (forceFreshFix && LocationUploader.sendUrgentLocation(context, tableLocation)) {
+                RemoteLogger.log(context, Const.LOG_INFO,
+                        "LocationWorker: urgent location uploaded successfully"
+                        + (usedStaleFallback ? " (stale fallback — server will keep polling)" : ""));
+                return Result.success();
+            }
+
+            try {
+                LocationTable.insert(helper.getWritableDatabase(), tableLocation);
+            } catch (Exception e) {
+                RemoteLogger.log(context, Const.LOG_WARN,
+                        "LocationWorker: DB insert failed: " + e.getMessage());
+                return Result.retry();
+            }
+
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "LocationWorker: queued location for regular upload path");
+            LocationUploader.sendLocations(context);
+        }
+        return Result.success();
     }
 
     private static class ParallelProviderResult {
