@@ -645,20 +645,39 @@ public class LocationForegroundService extends Service {
         ComponentName admin = LegacyUtils.getAdminComponentName(this);
 
         // Approach A: API 35 — setApplicationExemptions() (Device Owner API, Android 15+)
+        // AOSP signature: setApplicationExemptions(ComponentName, List<String>, Set<Integer>)
         if (Build.VERSION.SDK_INT >= 35) {
+            java.util.Set<Integer> exemptions = new java.util.HashSet<>();
+            exemptions.add(1); // DevicePolicyManager.BATTERY_OPTIMIZATION_EXEMPTION
+
+            // Try (ComponentName, List, Set) — the most likely AOSP signature
             try {
-                java.util.Set<Integer> exemptions = new java.util.HashSet<>();
-                exemptions.add(1); // DevicePolicyManager.BATTERY_OPTIMIZATION_EXEMPTION
+                java.util.List<String> packages = java.util.Collections.singletonList(getPackageName());
                 dpm.getClass()
-                   .getMethod("setApplicationExemptions", ComponentName.class, String.class,
-                           java.util.Set.class)
-                   .invoke(dpm, admin, getPackageName(), exemptions);
+                   .getMethod("setApplicationExemptions", ComponentName.class,
+                           java.util.List.class, java.util.Set.class)
+                   .invoke(dpm, admin, packages, exemptions);
                 RemoteLogger.log(this, Const.LOG_INFO,
-                        "LocationForegroundService: setApplicationExemptions() API succeeded (API 35)");
+                        "LocationForegroundService: setApplicationExemptions(ComponentName,List,Set) succeeded");
                 return true;
             } catch (Exception e) {
                 RemoteLogger.log(this, Const.LOG_WARN,
-                        "LocationForegroundService: setApplicationExemptions() failed: "
+                        "LocationForegroundService: setApplicationExemptions(ComponentName,List,Set) failed: "
+                        + e.getClass().getSimpleName() + " — " + e.getMessage());
+            }
+
+            // Try (ComponentName, String, Set) — older signature variant
+            try {
+                dpm.getClass()
+                   .getMethod("setApplicationExemptions", ComponentName.class,
+                           String.class, java.util.Set.class)
+                   .invoke(dpm, admin, getPackageName(), exemptions);
+                RemoteLogger.log(this, Const.LOG_INFO,
+                        "LocationForegroundService: setApplicationExemptions(ComponentName,String,Set) succeeded");
+                return true;
+            } catch (Exception e) {
+                RemoteLogger.log(this, Const.LOG_WARN,
+                        "LocationForegroundService: setApplicationExemptions(ComponentName,String,Set) failed: "
                         + e.getClass().getSimpleName() + " — " + e.getMessage());
             }
         }
