@@ -16,14 +16,12 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
-import android.provider.Settings;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -582,16 +580,18 @@ public class LocationForegroundService extends Service {
     private static final String CHANNEL_ID_ALERT = "location_alert_channel";
 
     /**
-     * Ensures battery optimization is disabled for this package.
+     * Ensures battery optimization is disabled for this package, using only programmatic
+     * (no-dialog) approaches. No user-facing dialogs or intents are launched — on a kiosk/MDM
+     * device there is no user to tap "Allow", so we rely on Device Owner APIs and the
+     * location-capture fix in LocationWorker (getCurrentLocation on API 34+) which bypasses
+     * Realme's callback-suppression layer entirely.
      *
      * Strategy:
      * 1. Already exempt — do nothing.
-     * 2. Device Owner — programmatic exemption via DPM (no user dialog needed).
-     * 3. Realme-specific — open Realme/ColorOS power keeper settings.
-     * 4. Fallback — system dialog without the old one-time gate; retries until actually granted.
+     * 2. Device Owner — setApplicationExemptions (API 35) + cmd deviceidle whitelist via DPM.
      *
      * Called from onCreate() BEFORE startContinuousTracking() so listeners are registered
-     * only after exemption is in effect (Realme suppresses LocationManager dispatch otherwise).
+     * only after exemption is in effect.
      */
     private void ensureBatteryOptimizationExempted() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
@@ -599,87 +599,33 @@ public class LocationForegroundService extends Service {
         if (pm == null) return;
 
         if (pm.isIgnoringBatteryOptimizations(getPackageName())) {
-            RemoteLogger.log(this, Const.LOG_INFO,
-                    "LocationForegroundService: battery optimization already exempt — OK");
             return;
         }
 
         boolean deviceOwner = Utils.isDeviceOwner(this);
         RemoteLogger.log(this, Const.LOG_WARN,
-                "LocationForegroundService: battery optimization active — attempting exemption"
-                + " (deviceOwner=" + deviceOwner + ", OEM=" + Build.MANUFACTURER + ")");
+                "LocationForegroundService: battery optimization active"
+                + " (deviceOwner=" + deviceOwner + ", OEM=" + Build.MANUFACTURER + ")"
+                + " — using programmatic exemption only (no dialogs)");
 
         if (deviceOwner) {
             boolean attempted = tryGrantExemptionAsDeviceOwner();
-            // Re-check after DPM commands had time to propagate.
             try { Thread.sleep(300); } catch (InterruptedException ignored) {}
             if (attempted && pm.isIgnoringBatteryOptimizations(getPackageName())) {
                 RemoteLogger.log(this, Const.LOG_INFO,
-                        "LocationForegroundService: battery optimization exemption granted"
-                        + " via DeviceOwner — GPS callbacks will now be delivered");
+                        "LocationForegroundService: battery optimization exempted"
+                        + " via Device Owner API");
                 return;
-            } else if (attempted) {
-                RemoteLogger.log(this, Const.LOG_WARN,
-                        "LocationForegroundService: DeviceOwner exemption API called"
-                        + " but isIgnoringBatteryOptimizations still false"
-                        + " — Realme may use a separate battery optimization layer"
-                        + " not reflected by isIgnoringBatteryOptimizations()");
             }
         }
 
-        // Realme-specific: Open Power Keeper / AutoStart settings.
-        // These intents are undocumented and change across ColorOS versions, so we
-        // guard with resolveActivity() to avoid crashing on devices without them.
-        if (OemCompat.isRealmeColorOs()) {
-            Intent powerKeeper = new Intent()
-                    .setClassName("com.coloros.oppoguardelf",
-                            "com.coloros.oppoguardelf.ui.GuardElfActivity")
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            if (powerKeeper.resolveActivity(getPackageManager()) != null) {
-                try {
-                    startActivity(powerKeeper);
-                    RemoteLogger.log(this, Const.LOG_INFO,
-                            "LocationForegroundService: launched Realme Power Keeper settings");
-                } catch (Exception e) {
-                    RemoteLogger.log(this, Const.LOG_WARN,
-                            "LocationForegroundService: Realme Power Keeper startActivity failed: "
-                            + e.getMessage());
-                }
-            } else {
-                Intent autoStart = new Intent()
-                        .setClassName("com.coloros.safecenter",
-                                "com.coloros.safecenter.startupapp.StartupAppListActivity")
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                if (autoStart.resolveActivity(getPackageManager()) != null) {
-                    try {
-                        startActivity(autoStart);
-                        RemoteLogger.log(this, Const.LOG_INFO,
-                                "LocationForegroundService: launched Realme AutoStart settings");
-                    } catch (Exception e) {
-                        RemoteLogger.log(this, Const.LOG_WARN,
-                                "LocationForegroundService: Realme AutoStart startActivity failed: "
-                                + e.getMessage());
-                    }
-                } else {
-                    RemoteLogger.log(this, Const.LOG_INFO,
-                            "LocationForegroundService: no Realme battery settings activity found");
-                }
-            }
-        }
-
-        // Fallback: system dialog. No one-time gate — battery optimization exemption is a hard
-        // requirement for GPS delivery, not optional. Retries on every onCreate() until granted.
-        try {
-            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-            intent.setData(Uri.parse("package:" + getPackageName()));
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-            RemoteLogger.log(this, Const.LOG_INFO,
-                    "LocationForegroundService: launched battery optimization exemption dialog");
-        } catch (Exception e) {
-            RemoteLogger.log(this, Const.LOG_WARN,
-                    "LocationForegroundService: could not launch exemption dialog: " + e.getMessage());
-        }
+        // Exemption could not be granted programmatically (Realme/ColorOS uses its own
+        // battery optimization layer that AOSP APIs may not control). The location-capture
+        // fix in LocationWorker.getCurrentLocation() (API 34+) bypasses this by using the
+        // system service's internal thread, so GPS can still be obtained on this device.
+        RemoteLogger.log(this, Const.LOG_WARN,
+                "LocationForegroundService: battery optimization NOT exempted"
+                + " — relying on LocationWorker.getCurrentLocation() fallback");
     }
 
     /**
