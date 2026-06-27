@@ -7,7 +7,10 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
+import android.os.CancellationSignal;
+import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.Looper;
 import android.os.PowerManager;
 
 import androidx.annotation.NonNull;
@@ -272,22 +275,25 @@ public class LocationWorker extends Worker {
                             + " attempting restart");
                     if (!batteryExempt) {
                         RemoteLogger.log(context, Const.LOG_WARN,
-                                "LocationWorker: battery optimization is ACTIVE during restart attempt"
+                                "LocationWorker: battery optimization is ACTIVE"
                                 + " — GPS callbacks will be suppressed after restart too."
-                                + " Starting FGS anyway, exemption will be re-requested in onCreate().");
+                                + " Skipping FGS restart; using direct capture with getCurrentLocation().");
+                        // Skip the futile 2-second restart wait — jump straight to
+                        // getCurrentLocation() / HandlerThread capture below.
+                    } else {
+                        LocationForegroundService.start(context);
+                        try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+                        Location cachedAfterRestart = readFixFromSharedPrefs(context, maxFixAgeMs);
+                        if (cachedAfterRestart != null) {
+                            RemoteLogger.log(context, Const.LOG_INFO,
+                                    "LocationWorker: FGS restart successful"
+                                    + " — cache populated (source=sharedPrefsCache)");
+                            return performUpload(context, cachedAfterRestart, forceFreshFix, false);
+                        }
+                        RemoteLogger.log(context, Const.LOG_WARN,
+                                "LocationWorker: FGS restart did not populate cache in time"
+                                + " — continuing with HandlerThread");
                     }
-                    LocationForegroundService.start(context);
-                    try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
-                    Location cachedAfterRestart = readFixFromSharedPrefs(context, maxFixAgeMs);
-                    if (cachedAfterRestart != null) {
-                        RemoteLogger.log(context, Const.LOG_INFO,
-                                "LocationWorker: FGS restart successful"
-                                + " — cache populated (source=sharedPrefsCache)");
-                        return performUpload(context, cachedAfterRestart, forceFreshFix, false);
-                    }
-                    RemoteLogger.log(context, Const.LOG_WARN,
-                            "LocationWorker: FGS restart did not populate cache in time"
-                            + " — continuing with HandlerThread");
                 }
             }
 
@@ -599,13 +605,147 @@ public class LocationWorker extends Worker {
         return best;
     }
 
+    /**
+     * Uses {@link LocationManager#getCurrentLocation(String, CancellationSignal, Executor, java.util.function.Consumer)}
+     * (API 34+) to request a single fresh fix. This bypasses HandlerThread entirely — the
+     * system service uses its own internal worker thread, so Realme/Xiaomi/Vivo OEM process
+     * managers cannot freeze delivery.
+     *
+     * On API 34+ this is the sole path used by tryRequestLiveUpdate (the HandlerThread
+     * fallback is only for API < 34). The CancellationSignal is auto-cancelled after
+     * timeoutSeconds to avoid leaking the GPS request on the system side.
+     */
+    private static Location tryGetCurrentLocation(
+            Context context,
+            LocationManager locationManager,
+            String provider,
+            long timeoutSeconds) {
+        if (Build.VERSION.SDK_INT < 34) return null;
+        if (!locationManager.isProviderEnabled(provider)) return null;
+
+        try {
+            final CountDownLatch latch = new CountDownLatch(1);
+            final Location[] result = new Location[1];
+            final CancellationSignal cancellationSignal = new CancellationSignal();
+            final Handler cancelHandler = new Handler(Looper.getMainLooper());
+
+            // Auto-cancel after timeout so the system doesn't keep the GPS radio alive
+            // for a stale request if the caller has moved on.
+            cancelHandler.postDelayed(cancellationSignal::cancel,
+                    TimeUnit.SECONDS.toMillis(timeoutSeconds));
+
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "LocationWorker: getCurrentLocation(" + provider + ") started (API 34+)");
+
+            locationManager.getCurrentLocation(
+                    provider,
+                    cancellationSignal,
+                    context.getMainExecutor(),
+                    location -> {
+                        if (location != null
+                                && location.getLatitude() != 0.0
+                                && location.getLongitude() != 0.0) {
+                            result[0] = location;
+                        }
+                        latch.countDown();
+                    }
+            );
+
+            latch.await(timeoutSeconds, TimeUnit.SECONDS);
+
+            // Cancel the request on the system side and remove our safety-net timeout.
+            cancellationSignal.cancel();
+            cancelHandler.removeCallbacksAndMessages(null);
+
+            if (result[0] != null) {
+                RemoteLogger.log(context, Const.LOG_INFO,
+                        "LocationWorker: getCurrentLocation(" + provider + ") success"
+                        + " (age=" + ((System.currentTimeMillis() - result[0].getTime()) / 1000) + "s"
+                        + ", accuracy=" + (result[0].hasAccuracy()
+                                ? result[0].getAccuracy() + "m" : "unknown") + ")");
+            } else {
+                RemoteLogger.log(context, Const.LOG_WARN,
+                        "LocationWorker: getCurrentLocation(" + provider + ") returned no fix"
+                        + " (timeout=" + timeoutSeconds + "s)");
+            }
+
+            return result[0];
+        } catch (Exception e) {
+            RemoteLogger.log(context, Const.LOG_WARN,
+                    "LocationWorker: getCurrentLocation(" + provider + ") failed: "
+                    + e.getClass().getSimpleName() + " — " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Registers a one-shot LocationListener on the MAIN looper as a last-resort fallback
+     * for OEM devices where HandlerThread loopers are frozen by the process manager
+     * (Realme AutoDroid, Xiaomi MIUI, Vivo OriginOS).
+     *
+     * The main thread's looper is the UI-thread looper — the OEM cannot freeze it without
+     * making the entire device unresponsive. This is only used as a rescue path when the
+     * primary getCurrentLocation() / HandlerThread approaches fail.
+     */
+    private static Location tryRequestOnMainLooper(
+            Context context,
+            LocationManager locationManager,
+            String provider,
+            long timeoutSeconds) {
+        if (!locationManager.isProviderEnabled(provider)) return null;
+        if (Looper.myLooper() == Looper.getMainLooper()) return null; // already on main — avoid deadlock
+
+        Handler mainHandler = new Handler(Looper.getMainLooper());
+        final CountDownLatch latch = new CountDownLatch(1);
+        final Location[] result = new Location[1];
+        final LocationListener[] listenerRef = new LocationListener[1];
+
+        try {
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "LocationWorker: main-looper fallback for " + provider + " started");
+
+            LocationListener listener = location -> {
+                if (location == null
+                        || (location.getLatitude() == 0.0 && location.getLongitude() == 0.0)) return;
+                result[0] = location;
+                latch.countDown();
+            };
+            listenerRef[0] = listener;
+
+            // Run requestLocationUpdates on the main thread to attach the listener
+            // to the main looper.
+            mainHandler.post(() -> {
+                try {
+                    locationManager.requestLocationUpdates(
+                            provider, 0L, 0f, listener, Looper.getMainLooper());
+                } catch (Exception ignored) {}
+            });
+
+            latch.await(timeoutSeconds, TimeUnit.SECONDS);
+
+            // Clean up regardless of success.
+            mainHandler.post(() -> {
+                try {
+                    locationManager.removeUpdates(listener);
+                } catch (Exception ignored) {}
+            });
+
+            if (result[0] != null) {
+                RemoteLogger.log(context, Const.LOG_INFO,
+                        "LocationWorker: main-looper fallback success for " + provider);
+            }
+            return result[0];
+        } catch (Exception e) {
+            RemoteLogger.log(context, Const.LOG_WARN,
+                    "LocationWorker: main-looper fallback for " + provider + " failed: " + e.getMessage());
+            return null;
+        }
+    }
+
     private static Location tryRequestLiveUpdate(Context context,
                                                   LocationManager locationManager,
                                                   String provider,
                                                   long timeoutSeconds) {
-        // Check provider availability BEFORE starting a HandlerThread — avoids thread churn
-        // on devices where NETWORK_PROVIDER is disabled (Device-only mode, Google Location
-        // Accuracy toggle off, Huawei non-GMS).
         if (!locationManager.isProviderEnabled(provider)) {
             RemoteLogger.log(context, Const.LOG_WARN,
                     "LocationWorker: provider '" + provider
@@ -613,8 +753,15 @@ public class LocationWorker extends Worker {
             return null;
         }
 
-        // Start HandlerThread AFTER the provider check so we don't waste a thread on OEM
-        // devices with strict background thread limits (Realme AutoDroid, MIUI).
+        // API 34+: use getCurrentLocation() exclusively. It is the modern replacement for
+        // HandlerThread-based requestLocationUpdates in one-shot mode — it uses the system
+        // service's internal worker thread, so OEM process managers (Realme/Xiaomi/Vivo)
+        // cannot freeze delivery. It also works without ACCESS_BACKGROUND_LOCATION.
+        if (Build.VERSION.SDK_INT >= 34) {
+            return tryGetCurrentLocation(context, locationManager, provider, timeoutSeconds);
+        }
+
+        // API < 34: classic HandlerThread-based requestLocationUpdates.
         HandlerThread handlerThread = new HandlerThread("gps-update-" + provider);
         handlerThread.start();
         LocationListener listener = null;
@@ -649,8 +796,6 @@ public class LocationWorker extends Worker {
             try {
                 latch.await(timeoutSeconds, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
-                // Restore interrupt status so the calling executor thread can detect cancellation
-                // (e.g. Future.cancel(true) from requestProvidersInParallel).
                 Thread.currentThread().interrupt();
             }
 
@@ -665,10 +810,15 @@ public class LocationWorker extends Worker {
                 if (bestFresh[0] != null) {
                     return bestFresh[0];
                 }
-                return bestObserved[0];
+                if (bestObserved[0] != null) {
+                    return bestObserved[0];
+                }
             }
+
+            // Last resort: main-looper-based listener. On Realme/Xiaomi/Vivo the HandlerThread
+            // looper may be frozen, but the main thread looper always runs.
+            return tryRequestOnMainLooper(context, locationManager, provider, timeoutSeconds);
         } catch (SecurityException e) {
-            // Permission revoked between isProviderEnabled() check and requestLocationUpdates().
             RemoteLogger.log(context, Const.LOG_WARN,
                     "LocationWorker: SecurityException on " + provider
                             + " — permission revoked mid-session: " + e.getMessage());
@@ -679,17 +829,12 @@ public class LocationWorker extends Worker {
                             + e.getMessage());
             return null;
         } finally {
-            // removeUpdates MUST be in finally so it runs even when latch.await() throws
-            // InterruptedException. Without this, Future.cancel(true) leaves a live listener
-            // registered with LocationManager — GPS radio keeps running and LocationManager
-            // holds a dead HandlerThread reference causing binder NPEs on some OEMs.
             if (listener != null) {
                 try {
                     locationManager.removeUpdates(listener);
                 } catch (Exception ignored) {
                 }
             }
-            // Always shut down the HandlerThread to release resources.
             try {
                 handlerThread.quitSafely();
             } catch (Exception ignored) {

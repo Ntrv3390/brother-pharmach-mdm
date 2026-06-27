@@ -587,7 +587,8 @@ public class LocationForegroundService extends Service {
      * Strategy:
      * 1. Already exempt — do nothing.
      * 2. Device Owner — programmatic exemption via DPM (no user dialog needed).
-     * 3. Fallback — system dialog without the old one-time gate; retries until actually granted.
+     * 3. Realme-specific — open Realme/ColorOS power keeper settings.
+     * 4. Fallback — system dialog without the old one-time gate; retries until actually granted.
      *
      * Called from onCreate() BEFORE startContinuousTracking() so listeners are registered
      * only after exemption is in effect (Realme suppresses LocationManager dispatch otherwise).
@@ -606,10 +607,12 @@ public class LocationForegroundService extends Service {
         boolean deviceOwner = Utils.isDeviceOwner(this);
         RemoteLogger.log(this, Const.LOG_WARN,
                 "LocationForegroundService: battery optimization active — attempting exemption"
-                + " (deviceOwner=" + deviceOwner + ")");
+                + " (deviceOwner=" + deviceOwner + ", OEM=" + Build.MANUFACTURER + ")");
 
         if (deviceOwner) {
             boolean attempted = tryGrantExemptionAsDeviceOwner();
+            // Re-check after DPM commands had time to propagate.
+            try { Thread.sleep(300); } catch (InterruptedException ignored) {}
             if (attempted && pm.isIgnoringBatteryOptimizations(getPackageName())) {
                 RemoteLogger.log(this, Const.LOG_INFO,
                         "LocationForegroundService: battery optimization exemption granted"
@@ -618,7 +621,49 @@ public class LocationForegroundService extends Service {
             } else if (attempted) {
                 RemoteLogger.log(this, Const.LOG_WARN,
                         "LocationForegroundService: DeviceOwner exemption API called"
-                        + " but isIgnoringBatteryOptimizations still false — falling through to dialog");
+                        + " but isIgnoringBatteryOptimizations still false"
+                        + " — Realme may use a separate battery optimization layer"
+                        + " not reflected by isIgnoringBatteryOptimizations()");
+            }
+        }
+
+        // Realme-specific: Open Power Keeper / AutoStart settings.
+        // These intents are undocumented and change across ColorOS versions, so we
+        // guard with resolveActivity() to avoid crashing on devices without them.
+        if (OemCompat.isRealmeColorOs()) {
+            Intent powerKeeper = new Intent()
+                    .setClassName("com.coloros.oppoguardelf",
+                            "com.coloros.oppoguardelf.ui.GuardElfActivity")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (powerKeeper.resolveActivity(getPackageManager()) != null) {
+                try {
+                    startActivity(powerKeeper);
+                    RemoteLogger.log(this, Const.LOG_INFO,
+                            "LocationForegroundService: launched Realme Power Keeper settings");
+                } catch (Exception e) {
+                    RemoteLogger.log(this, Const.LOG_WARN,
+                            "LocationForegroundService: Realme Power Keeper startActivity failed: "
+                            + e.getMessage());
+                }
+            } else {
+                Intent autoStart = new Intent()
+                        .setClassName("com.coloros.safecenter",
+                                "com.coloros.safecenter.startupapp.StartupAppListActivity")
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                if (autoStart.resolveActivity(getPackageManager()) != null) {
+                    try {
+                        startActivity(autoStart);
+                        RemoteLogger.log(this, Const.LOG_INFO,
+                                "LocationForegroundService: launched Realme AutoStart settings");
+                    } catch (Exception e) {
+                        RemoteLogger.log(this, Const.LOG_WARN,
+                                "LocationForegroundService: Realme AutoStart startActivity failed: "
+                                + e.getMessage());
+                    }
+                } else {
+                    RemoteLogger.log(this, Const.LOG_INFO,
+                            "LocationForegroundService: no Realme battery settings activity found");
+                }
             }
         }
 
@@ -642,6 +687,10 @@ public class LocationForegroundService extends Service {
      * Tries approaches in order from most specific to most compatible. Returns true if
      * any approach executed without fatal exception (caller must verify with
      * isIgnoringBatteryOptimizations() after this returns).
+     *
+     * Note: only AOSP-standard approaches are used. OEM-specific shell commands
+     * (appops, settings put global) are not included because they require root or
+     * undocumented permissions that a Device Owner does not have.
      */
     private boolean tryGrantExemptionAsDeviceOwner() {
         DevicePolicyManager dpm =
@@ -659,7 +708,7 @@ public class LocationForegroundService extends Service {
                            java.util.Set.class)
                    .invoke(dpm, admin, getPackageName(), exemptions);
                 RemoteLogger.log(this, Const.LOG_INFO,
-                        "LocationForegroundService: tried setApplicationExemptions() API (API 35)");
+                        "LocationForegroundService: setApplicationExemptions() API succeeded (API 35)");
                 return true;
             } catch (Exception e) {
                 RemoteLogger.log(this, Const.LOG_WARN,
@@ -668,27 +717,30 @@ public class LocationForegroundService extends Service {
             }
         }
 
-        // Approach B: executeShellCommand("cmd deviceidle whitelist +package") via DPM
+        // Approach B: cmd deviceidle whitelist via DPM executeShellCommand.
         // Device Owner can execute shell commands; equivalent to:
         //   adb shell cmd deviceidle whitelist +<package>
+        // This adds the package to the AOSP Doze whitelist, though Realme's
+        // proprietary battery optimization layer may still suppress GPS callbacks.
         try {
+            String shellCmd = "cmd deviceidle whitelist +" + getPackageName();
             android.os.ParcelFileDescriptor[] pipe =
                     android.os.ParcelFileDescriptor.createPipe();
             dpm.getClass()
                .getMethod("executeShellCommand", ComponentName.class, String.class,
                        android.os.ParcelFileDescriptor.class,
                        android.os.ParcelFileDescriptor.class)
-               .invoke(dpm, admin,
-                       "cmd deviceidle whitelist +" + getPackageName(),
-                       pipe[1], null);
+               .invoke(dpm, admin, shellCmd, pipe[1], null);
             pipe[0].close();
             pipe[1].close();
             RemoteLogger.log(this, Const.LOG_INFO,
-                    "LocationForegroundService: executed shell whitelist command via DPM");
+                    "LocationForegroundService: DPM shell succeeded: " + shellCmd);
+            // Give the system a moment to process the whitelist change.
+            try { Thread.sleep(500); } catch (InterruptedException ignored) {}
             return true;
         } catch (Exception e) {
             RemoteLogger.log(this, Const.LOG_WARN,
-                    "LocationForegroundService: DPM shell command failed: "
+                    "LocationForegroundService: DPM shell failed: "
                     + e.getClass().getSimpleName() + " — " + e.getMessage());
         }
 
