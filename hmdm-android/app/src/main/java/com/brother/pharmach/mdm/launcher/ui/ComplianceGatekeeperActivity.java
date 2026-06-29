@@ -12,6 +12,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.util.Log;
 import android.widget.Button;
@@ -21,8 +22,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.brother.pharmach.mdm.launcher.AdminReceiver;
+import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.Constants;
 import com.brother.pharmach.mdm.launcher.R;
+import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
 /**
  * Blocking gatekeeper activity shown when the device is not exempt from battery optimization.
@@ -39,6 +42,10 @@ import com.brother.pharmach.mdm.launcher.R;
 public class ComplianceGatekeeperActivity extends AppCompatActivity {
 
     private static final String TAG = "ComplianceGatekeeper";
+
+    // Set true before opening Settings so focus/leave-hint defenses don't fight it.
+    // Reset to false in onResume() when we return.
+    private boolean mOpeningSettings = false;
 
     // Registered in onResume, unregistered in onPause to avoid leaks
     private final BroadcastReceiver mComplianceReceiver = new BroadcastReceiver() {
@@ -73,16 +80,36 @@ public class ComplianceGatekeeperActivity extends AppCompatActivity {
         Button btnSettings = findViewById(R.id.btn_open_settings);
         btnSettings.setOnClickListener(v -> openBatterySettings());
 
+        RemoteLogger.log(this, Const.LOG_WARN,
+                "Battery optimization compliance gatekeeper displayed — " +
+                "device is not exempt from battery optimization. " +
+                "User interaction required to grant exemption.");
+
         tryStartLockTask();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+
         LocalBroadcastManager.getInstance(this).registerReceiver(
                 mComplianceReceiver,
                 new IntentFilter(Constants.ACTION_COMPLIANCE_RESTORED)
         );
+
+        boolean returningFromSettings = mOpeningSettings;
+        // Clear the flag now so defenses re-arm for the rest of this resume.
+        mOpeningSettings = false;
+
+        if (!isBatteryCompliant()) {
+            // Re-enter LockTask if the user came back from Settings without granting exemption.
+            tryStartLockTask();
+        } else if (returningFromSettings) {
+            // User came back from Settings and the device is now compliant — log the grant.
+            RemoteLogger.log(this, Const.LOG_INFO,
+                    "Battery optimization exemption granted by user via Settings — " +
+                    "device is now exempt. MDM service will resume full monitoring.");
+        }
     }
 
     @Override
@@ -102,6 +129,8 @@ public class ComplianceGatekeeperActivity extends AppCompatActivity {
     @Override
     protected void onUserLeaveHint() {
         super.onUserLeaveHint();
+        // Skip the reopen logic when we intentionally navigated to Settings.
+        if (mOpeningSettings) return;
         // Fires when the Home button is pressed or the app is sent to background.
         // Re-bring the gatekeeper to front so the user cannot escape.
         Intent reopen = new Intent(this, ComplianceGatekeeperActivity.class);
@@ -112,7 +141,10 @@ public class ComplianceGatekeeperActivity extends AppCompatActivity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (!hasFocus && !isFinishing()) {
+        // Skip the reopen logic when we intentionally navigated to Settings —
+        // this callback fires the instant startActivity() is called, which would
+        // immediately cancel the Settings navigation.
+        if (!hasFocus && !isFinishing() && !mOpeningSettings) {
             // Covers: gesture navigation pulling down notification shade,
             // Recents on non-LockTask path, assistant overlay activation
             Intent reopen = new Intent(this, ComplianceGatekeeperActivity.class);
@@ -147,23 +179,60 @@ public class ComplianceGatekeeperActivity extends AppCompatActivity {
     }
 
     private void openBatterySettings() {
+        // Signal defenses to stand down — we are intentionally leaving to open Settings.
+        mOpeningSettings = true;
+        RemoteLogger.log(this, Const.LOG_INFO,
+                "User tapped 'Open Battery Settings' on the compliance gatekeeper — " +
+                "navigating to battery optimization settings.");
+
+        // LockTask mode blocks ALL external apps from launching, including Settings.
+        // Exit LockTask first so the intent can succeed. We re-enter in onResume() if
+        // the user comes back without granting the exemption.
+        ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        if (am != null && am.getLockTaskModeState() != ActivityManager.LOCK_TASK_MODE_NONE) {
+            stopLockTask();
+        }
+
         // ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS + package URI opens the per-app
         // exemption dialog directly — available from API 23.
         // Do NOT use ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS (opens full list).
+        // Note: if REQUEST_IGNORE_BATTERY_OPTIMIZATIONS is absent from the manifest this
+        // throws SecurityException (not ActivityNotFoundException) on some devices.
         Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
         intent.setData(Uri.parse("package:" + getPackageName()));
         try {
             startActivity(intent);
-        } catch (ActivityNotFoundException e) {
+            return;
+        } catch (ActivityNotFoundException | SecurityException e) {
             // OEM-QUIRK: Some heavily modified ROMs (certain EMUI builds) do not
-            // expose this settings screen. Fall back to general battery settings.
-            Log.w(TAG, "Battery exemption dialog not available on this ROM — falling back");
-            try {
-                startActivity(new Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS));
-            } catch (ActivityNotFoundException e2) {
-                Log.e(TAG, "Battery saver settings also unavailable on this ROM");
-            }
+            // expose this settings screen. Fall through to next option.
+            Log.w(TAG, "Battery exemption dialog unavailable (" + e.getClass().getSimpleName() + ") — trying app details");
         }
+
+        // Fallback 1: app details page — the user can tap Battery and set to Unrestricted
+        try {
+            Intent appDetails = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            appDetails.setData(Uri.parse("package:" + getPackageName()));
+            startActivity(appDetails);
+            return;
+        } catch (ActivityNotFoundException | SecurityException e) {
+            Log.w(TAG, "App details settings unavailable — trying battery saver settings");
+        }
+
+        // Fallback 2: general battery saver settings page
+        // OEM-QUIRK: Last resort on EMUI/HarmonyOS builds where both above are restricted.
+        try {
+            startActivity(new Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS));
+        } catch (ActivityNotFoundException | SecurityException e) {
+            Log.e(TAG, "All battery settings paths unavailable on this ROM");
+            // Nothing opened — reset the flag so defenses re-arm immediately.
+            mOpeningSettings = false;
+        }
+    }
+
+    private boolean isBatteryCompliant() {
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        return pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
     }
 
     private boolean isDeviceOwner() {

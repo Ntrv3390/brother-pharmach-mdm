@@ -17,8 +17,10 @@ import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
+import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.Constants;
 import com.brother.pharmach.mdm.launcher.ui.ComplianceGatekeeperActivity;
+import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
 public class BatteryOptimizationMonitor extends Service {
 
@@ -90,12 +92,21 @@ public class BatteryOptimizationMonitor extends Service {
         boolean isCompliant = pm.isIgnoringBatteryOptimizations(getPackageName());
 
         if (!isCompliant) {
+            if (mWasCompliant) {
+                // Transition: compliant → non-compliant. Log once, not on every tick.
+                RemoteLogger.log(this, Const.LOG_WARN,
+                        "Battery optimization exemption removed — device is no longer exempt. " +
+                        "Compliance gatekeeper will be shown until the user re-grants the exemption.");
+            }
             Log.w(TAG, "Battery optimization exemption not active — enforcing compliance");
             startComplianceEnforcement();
             mWasCompliant = false;
         } else {
             if (!mWasCompliant) {
                 Log.i(TAG, "Battery optimization compliance restored");
+                RemoteLogger.log(this, Const.LOG_INFO,
+                        "Battery optimization exemption granted — device is now exempt from " +
+                        "battery optimization. MDM monitoring service will run without OS restrictions.");
                 LocalBroadcastManager.getInstance(this)
                         .sendBroadcast(new Intent(Constants.ACTION_COMPLIANCE_RESTORED));
             }
