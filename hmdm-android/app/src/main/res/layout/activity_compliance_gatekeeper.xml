@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="32dp"
+    android:background="#FF1A1A2E">
+
+    <ImageView
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:src="@android:drawable/ic_lock_power_off"
+        android:tint="#FFCC00"
+        android:layout_marginBottom="24dp"
+        android:contentDescription="Warning icon"/>
+
+    <TextView
+        android:id="@+id/tv_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Battery Optimization Exemption Required"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:id="@+id/tv_description"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="This device management app must be exempt from battery optimization to monitor and protect this device. Tap the button below and select \'Don\'t optimize\' to continue."
+        android:textColor="#CCCCCC"
+        android:textSize="15sp"
+        android:gravity="center"
+        android:lineSpacingMultiplier="1.4"
+        android:layout_marginBottom="32dp"/>
+
+    <Button
+        android:id="@+id/btn_open_settings"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Open Battery Settings"
+        android:textColor="#FFFFFF"
+        android:backgroundTint="#E53935"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"/>
+
+    <TextView
+        android:id="@+id/tv_warning"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="This screen will dismiss automatically once the setting is enabled."
+        android:textColor="#888888"
+        android:textSize="12sp"
+        android:gravity="center"
+        android:layout_marginTop="24dp"/>
+
+</LinearLayout>

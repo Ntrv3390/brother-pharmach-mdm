@@ -338,6 +338,29 @@
                 android:value="Location tracking service"/>
         </service>
 
+        <!-- foregroundServiceType only enforced by OS on API 34+; tools:targetApi avoids lint errors -->
+        <service
+            android:name=".service.BatteryOptimizationMonitor"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            tools:targetApi="34">
+            <!-- MANDATORY for Play Store on API 34+: must be nested inside <service>, not alongside it -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="MDM compliance enforcement — ensures battery optimization exemption is active so the device management service can monitor device state continuously without OS-imposed restrictions."
+                tools:targetApi="34"/>
+        </service>
+
+        <!-- showOnLockScreen + turnScreenOn: ensures gatekeeper appears even on locked devices -->
+        <activity
+            android:name=".ui.ComplianceGatekeeperActivity"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:screenOrientation="portrait"
+            android:exported="false"/>
+
     </application>
 
 </manifest>

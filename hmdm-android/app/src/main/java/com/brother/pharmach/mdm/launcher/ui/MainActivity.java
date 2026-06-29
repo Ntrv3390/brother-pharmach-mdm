@@ -50,6 +50,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.Log;
@@ -595,6 +596,10 @@ public class MainActivity
     @Override
     protected void onResume() {
         super.onResume();
+
+        // Second safety net: synchronous compliance check independent of BatteryOptimizationMonitor.
+        // Catches the case where the service hasn't started yet (e.g. first launch, crash recovery).
+        checkBatteryOptimizationCompliance();
 
         isBackground = false;
 
@@ -3019,12 +3024,23 @@ public class MainActivity
                 .getInstance()
                 .shouldLockSettingsNow();
 
+        // If the device is not exempt from battery optimization, the user must be able to reach
+        // Settings to grant the exemption. Override the worktime lock so Settings stays accessible.
+        if (shouldLockSettings && isBatteryOptimizationComplianceRequired()) {
+            shouldLockSettings = false;
+        }
+
         if (settingsLockedByWorkTime != null && settingsLockedByWorkTime == shouldLockSettings) {
             return;
         }
 
         settingsLockedByWorkTime = shouldLockSettings;
         Utils.lockPackages(this, Const.SETTINGS_PACKAGE_NAME, shouldLockSettings);
+    }
+
+    private boolean isBatteryOptimizationComplianceRequired() {
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        return pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName());
     }
 
     @Override
@@ -3189,5 +3205,20 @@ public class MainActivity
                 .replace("CUSTOM2", config.getCustom2() != null ? config.getCustom2() : "")
                 .replace("CUSTOM3", config.getCustom3() != null ? config.getCustom3() : "");
         FileUtils.writeStringToFile(dstFile, content);
+    }
+
+    /**
+     * Second safety net compliance check, independent of BatteryOptimizationMonitor.
+     * Called every onResume() to catch cases where the service hasn't started yet.
+     */
+    private void checkBatteryOptimizationCompliance() {
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        if (pm == null) return;
+        if (!pm.isIgnoringBatteryOptimizations(getPackageName())) {
+            Log.w(Const.LOG_TAG, "Battery optimization not exempt — redirecting to ComplianceGatekeeperActivity");
+            Intent gatekeeperIntent = new Intent(this, ComplianceGatekeeperActivity.class);
+            gatekeeperIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(gatekeeperIntent);
+        }
     }
 }

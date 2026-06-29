@@ -9,6 +9,7 @@ import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.helper.Initializer;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.pro.ProUtils;
+import com.brother.pharmach.mdm.launcher.service.BatteryOptimizationMonitor;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
 public class BootReceiver extends BroadcastReceiver {
@@ -46,6 +47,11 @@ public class BootReceiver extends BroadcastReceiver {
 
         Initializer.init(context, () -> {
             Initializer.startServicesAndLoadConfig(context);
+
+            // Start the battery optimization compliance monitor.
+            // API-DIFF: Android 8.0 (API 26) — background service start restriction
+            // requires ContextCompat.startForegroundService() (called inside startMonitor()).
+            BatteryOptimizationMonitor.startMonitor(context);
 
             SettingsHelper.getInstance(context).setMainActivityRunning(false);
             if (ProUtils.kioskModeRequired(context)) {
