@@ -35,6 +35,7 @@ import io.swagger.annotations.Authorization;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.DELETE;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -75,6 +76,29 @@ public class AuditResource {
      * @param filter a filter to be used for filtering the records.
      * @return a response with list of audit log records matching the specified filter.
      */
+    @ApiOperation(
+            value = "Purge audit logs",
+            notes = "Hard-deletes all audit log records older than 24 hours across all customers",
+            authorizations = {@Authorization("Bearer Token")}
+    )
+    @DELETE
+    @Path("/private/purge")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response purgeAuditLogs() {
+        if (!SecurityContext.get().hasPermission("plugin_audit_access")) {
+            logger.error("Unauthorized attempt to purge audit log by user " +
+                    SecurityContext.get().getCurrentUserName());
+            return Response.PERMISSION_DENIED();
+        }
+        try {
+            int count = this.auditDAO.purgeOldAuditRecords(24);
+            return Response.OK(count);
+        } catch (Exception e) {
+            logger.error("Failed to purge the audit log records due to unexpected error", e);
+            return Response.INTERNAL_ERROR();
+        }
+    }
+
     @ApiOperation(
             value = "Search logs",
             notes = "Gets the list of audit log records matching the specified filter",

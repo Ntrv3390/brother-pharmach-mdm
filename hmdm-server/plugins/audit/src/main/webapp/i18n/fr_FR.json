@@ -41,5 +41,7 @@
   "table.heading.plugin.audit.ipAddress": "Adresse IP",
   "table.heading.plugin.audit.action": "Action",
   "table.heading.plugin.audit.payload": "Charge utile",
-  "notfound.common.plugin.audit.logs": "Aucun enregistrement du journal d'audit trouvé. Essayez une autre requête."
+  "notfound.common.plugin.audit.logs": "Aucun enregistrement du journal d'audit trouvé. Essayez une autre requête.",
+  "plugin.audit.purge.confirm": "Are you sure?\n\nThis will permanently delete all audit log records older than 24 hours for all users. This action cannot be undone.",
+  "plugin.audit.purging": "Purging audit logs, please wait..."
 }

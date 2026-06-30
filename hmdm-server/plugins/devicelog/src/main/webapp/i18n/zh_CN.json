@@ -54,5 +54,7 @@
 	
 "success.plugin.devicelog.settings.saved": "设置已成功储存",
 "error.plugin.devicelog.date.range.invalid": "无效的日期间隔",
-"notfound.common.plugin.devicelog.logs": "找不到日誌记录。请尝试其他查询。"
+"notfound.common.plugin.devicelog.logs": "找不到日誌记录。请尝试其他查询。",
+  "plugin.devicelog.purge.confirm": "Are you sure?\n\nThis will permanently delete all log records older than 15 hours for all devices. This action cannot be undone.",
+  "plugin.devicelog.purging": "Purging logs, please wait..."
 }	

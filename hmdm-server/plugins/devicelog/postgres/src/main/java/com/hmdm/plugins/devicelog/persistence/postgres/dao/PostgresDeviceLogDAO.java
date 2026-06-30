@@ -232,6 +232,23 @@ public class PostgresDeviceLogDAO extends AbstractDAO<PostgresDeviceLogRecord> i
     }
 
     /**
+     * <p>Hard-deletes all log records across all devices that are older than the specified number of hours.</p>
+     */
+    @Override
+    public int purgeOldLogRecords(int hours) {
+        try {
+            logger.info("Purging device log records older than {} hours...", hours);
+            long thresholdMillis = System.currentTimeMillis() - (long) hours * 3600 * 1000;
+            int count = this.deviceLogMapper.purgeLogRecordsOlderThan(thresholdMillis);
+            logger.info("Purged {} device log records older than {} hours", count, hours);
+            return count;
+        } catch (Exception e) {
+            logger.error("Unexpected error when purging device log records older than {} hours", hours, e);
+            return 0;
+        }
+    }
+
+    /**
      * <p>Deletes the log records which are older than number of days configured in customer's profile.</p>
      */
     public void purgeLogRecords() {

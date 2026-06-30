@@ -19,11 +19,11 @@
  *
  */
 
-package com.hmdm.plugins.devicelog.persistence.postgres.guice.module;
+package com.hmdm.plugins.audit.guice.module;
 
 import com.google.inject.Inject;
 import com.hmdm.plugin.PluginTaskModule;
-import com.hmdm.plugins.devicelog.persistence.postgres.dao.PostgresDeviceLogDAO;
+import com.hmdm.plugins.audit.persistence.AuditDAO;
 import com.hmdm.util.BackgroundTaskRunnerService;
 
 import java.time.LocalDateTime;
@@ -31,34 +31,22 @@ import java.time.temporal.ChronoUnit;
 import java.util.concurrent.TimeUnit;
 
 /**
- * <p>A module used for initializing the tasks to be executed in background.</p>
- *
- * @author isv
+ * <p>A module used for initializing the background tasks for the Audit plugin.</p>
  */
-public class DeviceLogPostgresTaskModule implements PluginTaskModule {
+public class AuditTaskModule implements PluginTaskModule {
 
-    /**
-     * <p>An interface to persistence layer.</p>
-     */
-    private final PostgresDeviceLogDAO deviceLogDAO;
-
-    /**
-     * <p>A runner for the repeatable tasks.</p>
-     */
+    private final AuditDAO auditDAO;
     private final BackgroundTaskRunnerService taskRunner;
 
-    /**
-     * <p>Constructs new <code>DeviceLogPostgresTaskModule</code> instance. This implementation does nothing.</p>
-     */
     @Inject
-    public DeviceLogPostgresTaskModule(PostgresDeviceLogDAO deviceLogDAO, BackgroundTaskRunnerService taskRunner) {
-        this.deviceLogDAO = deviceLogDAO;
+    public AuditTaskModule(AuditDAO auditDAO, BackgroundTaskRunnerService taskRunner) {
+        this.auditDAO = auditDAO;
         this.taskRunner = taskRunner;
     }
 
     /**
-     * <p>Initializes this module. Schedules a task at midnight every day to hard-delete all log records
-     * older than 24 hours across all devices.</p>
+     * <p>Schedules a task at midnight every day to hard-delete all audit log records
+     * older than 48 hours (2 days) across all customers.</p>
      */
     @Override
     public void init() {
@@ -67,7 +55,7 @@ public class DeviceLogPostgresTaskModule implements PluginTaskModule {
         long initialDelaySeconds = ChronoUnit.SECONDS.between(now, nextMidnight);
         long periodSeconds = 24L * 60 * 60;
         taskRunner.submitRepeatableTask(
-                () -> deviceLogDAO.purgeOldLogRecords(24),
+                () -> auditDAO.purgeOldAuditRecords(48),
                 initialDelaySeconds,
                 periodSeconds,
                 TimeUnit.SECONDS

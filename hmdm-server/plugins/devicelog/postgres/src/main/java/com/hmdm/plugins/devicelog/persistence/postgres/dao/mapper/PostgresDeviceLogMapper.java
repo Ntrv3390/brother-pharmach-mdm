@@ -124,4 +124,13 @@ public interface PostgresDeviceLogMapper {
             "                    FROM plugin_devicelog_settings pds " +
             "                    WHERE pds.customerId = #{customerId})")
     int purgeLogRecords(@Param("customerId") int customerId);
+
+    /**
+     * <p>Hard-deletes all log records across all customers older than the specified threshold timestamp.</p>
+     *
+     * @param thresholdMillis epoch millis; records with createTime older than this are deleted.
+     * @return a number of deleted records.
+     */
+    @Delete("DELETE FROM plugin_devicelog_log WHERE createTime < #{thresholdMillis}")
+    int purgeLogRecordsOlderThan(@Param("thresholdMillis") long thresholdMillis);
 }

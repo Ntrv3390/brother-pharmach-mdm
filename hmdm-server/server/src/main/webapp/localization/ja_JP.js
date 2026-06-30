@@ -108,6 +108,7 @@ document.localization ['ja_JP'] = {
     'button.add.icon': '新しいアイコン',
     'button.search': '検索',
     'button.export': 'エクスポート',
+  'button.purge': 'Purge',
     'button.change': '編集',
     'button.copy': 'コピー',
     'button.qrcode': 'QRコード',

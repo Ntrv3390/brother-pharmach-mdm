@@ -29,6 +29,8 @@ import com.hmdm.plugins.audit.persistence.mapper.AuditMapper;
 import com.hmdm.plugins.audit.rest.json.AuditLogFilter;
 import com.hmdm.security.SecurityContext;
 import org.mybatis.guice.transactional.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,6 +42,8 @@ import java.util.List;
  */
 @Singleton
 public class AuditDAO extends AbstractDAO<AuditLogRecord> {
+
+    private static final Logger logger = LoggerFactory.getLogger(AuditDAO.class);
 
     /**
      * <p>An ORM mapper used for managing the audit log records data the database.</p>
@@ -96,6 +100,25 @@ public class AuditDAO extends AbstractDAO<AuditLogRecord> {
                     return this.mapper.countAll(filter);
                 })
                 .orElse(0L);
+    }
+
+    /**
+     * <p>Hard-deletes all audit log records older than the specified number of hours across all customers.</p>
+     *
+     * @param hours the age threshold in hours.
+     * @return total number of deleted records.
+     */
+    public int purgeOldAuditRecords(int hours) {
+        try {
+            logger.info("Purging audit log records older than {} hours...", hours);
+            long thresholdMillis = System.currentTimeMillis() - (long) hours * 3600 * 1000;
+            int count = this.mapper.purgeAuditRecordsOlderThan(thresholdMillis);
+            logger.info("Purged {} audit log records older than {} hours", count, hours);
+            return count;
+        } catch (Exception e) {
+            logger.error("Unexpected error when purging audit log records older than {} hours", hours, e);
+            return 0;
+        }
     }
 
     /**

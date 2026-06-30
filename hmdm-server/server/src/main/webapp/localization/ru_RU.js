@@ -122,6 +122,7 @@ document.localization["ru_RU"] = {
   "button.add.icon": "Новая",
   "button.search": "Поиск",
   "button.export": "Экспорт",
+  'button.purge': 'Purge',
   "button.change": "Изменить",
   "button.copy": "Копировать",
   "button.qrcode": "QR-код",

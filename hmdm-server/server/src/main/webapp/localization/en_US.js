@@ -125,6 +125,7 @@ document.localization["en_US"] = {
   "button.add.icon": "New Icon",
   "button.search": "Search",
   "button.export": "Export",
+  "button.purge": "Purge",
   "button.change": "Edit",
   "button.copy": "Copy",
   "button.qrcode": "QR code",

@@ -41,5 +41,7 @@
   "table.heading.plugin.audit.ipAddress": "Địa chỉ IP",
   "table.heading.plugin.audit.action": "Hành động",
   "table.heading.plugin.audit.payload": "Dữ liệu",
-  "notfound.common.plugin.audit.logs": "Không tìm thấy bản ghi kiểm toán. Thử truy vấn khác."
+  "notfound.common.plugin.audit.logs": "Không tìm thấy bản ghi kiểm toán. Thử truy vấn khác.",
+  "plugin.audit.purge.confirm": "Are you sure?\n\nThis will permanently delete all audit log records older than 24 hours for all users. This action cannot be undone.",
+  "plugin.audit.purging": "Purging audit logs, please wait..."
 }

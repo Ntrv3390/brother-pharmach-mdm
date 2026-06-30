@@ -108,6 +108,7 @@ document.localization ['zh_TW'] = {
     'button.add.icon':"新圖示",
     'button.search' : "搜索",
     'button.export' : "出口",
+  'button.purge': 'Purge',
     'button.change' : "編輯",
     'button.copy' : "複製",
     'button.qrcode' : "二維碼",

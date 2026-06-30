@@ -41,5 +41,7 @@
 	"table.heading.plugin.audit.ipAddress": "Indirizzo IP",
 	"table.heading.plugin.audit.action": "Azione",
 	"table.heading.plugin.audit.payload": "Carico utile",
-	"notfound.common.plugin.audit.logs": "Nessun record di registro di controllo trovato. Prova una query diversa."
+	"notfound.common.plugin.audit.logs": "Nessun record di registro di controllo trovato. Prova una query diversa.",
+  "plugin.audit.purge.confirm": "Are you sure?\n\nThis will permanently delete all audit log records older than 24 hours for all users. This action cannot be undone.",
+  "plugin.audit.purging": "Purging audit logs, please wait..."
 }

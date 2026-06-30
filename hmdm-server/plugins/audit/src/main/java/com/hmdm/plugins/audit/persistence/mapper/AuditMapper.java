@@ -23,7 +23,9 @@ package com.hmdm.plugins.audit.persistence.mapper;
 
 import com.hmdm.plugins.audit.persistence.domain.AuditLogRecord;
 import com.hmdm.plugins.audit.rest.json.AuditLogFilter;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -59,4 +61,13 @@ public interface AuditMapper {
     List<AuditLogRecord> findAllLogRecordsByCustomerId(AuditLogFilter filter);
 
     long countAll(AuditLogFilter filter);
+
+    /**
+     * <p>Hard-deletes all audit log records older than the specified threshold timestamp.</p>
+     *
+     * @param thresholdMillis epoch millis; records with createTime older than this are deleted.
+     * @return a number of deleted records.
+     */
+    @Delete("DELETE FROM plugin_audit_log WHERE createTime < #{thresholdMillis}")
+    int purgeAuditRecordsOlderThan(@Param("thresholdMillis") long thresholdMillis);
 }

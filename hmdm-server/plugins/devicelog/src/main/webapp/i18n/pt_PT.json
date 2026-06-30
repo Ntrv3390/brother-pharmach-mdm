@@ -54,5 +54,7 @@
 
   "success.plugin.devicelog.settings.saved": "Configurações salvas com sucesso",
   "error.plugin.devicelog.date.range.invalid": "Intervalo de datas inválido",
-  "notfound.common.plugin.devicelog.logs": "Nenhum registro encontrado. Tente uma busca diferente."
+  "notfound.common.plugin.devicelog.logs": "Nenhum registro encontrado. Tente uma busca diferente.",
+  "plugin.devicelog.purge.confirm": "Are you sure?\n\nThis will permanently delete all log records older than 15 hours for all devices. This action cannot be undone.",
+  "plugin.devicelog.purging": "Purging logs, please wait..."
 }

@@ -68,4 +68,12 @@ public interface DeviceLogDAO {
      * @return a list of applicable log rules for device.
      */
     List<AppliedDeviceLogRule> getDeviceLogRules(String deviceNumber);
+
+    /**
+     * <p>Hard-deletes all log records across all devices that are older than the specified number of hours.</p>
+     *
+     * @param hours the age threshold in hours.
+     * @return total number of deleted records.
+     */
+    int purgeOldLogRecords(int hours);
 }

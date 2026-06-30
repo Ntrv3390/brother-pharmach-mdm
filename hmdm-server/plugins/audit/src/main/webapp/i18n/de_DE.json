@@ -41,5 +41,7 @@
   "table.heading.plugin.audit.ipAddress": "IP-Adresse",
   "table.heading.plugin.audit.action": "Aktion",
   "table.heading.plugin.audit.payload": "Payload",
-  "notfound.common.plugin.audit.logs": "Keine Überwachungsprotokolldatensätze gefunden. Versuchen Sie eine andere Abfrage."
+  "notfound.common.plugin.audit.logs": "Keine Überwachungsprotokolldatensätze gefunden. Versuchen Sie eine andere Abfrage.",
+  "plugin.audit.purge.confirm": "Are you sure?\n\nThis will permanently delete all audit log records older than 24 hours for all users. This action cannot be undone.",
+  "plugin.audit.purging": "Purging audit logs, please wait..."
 }

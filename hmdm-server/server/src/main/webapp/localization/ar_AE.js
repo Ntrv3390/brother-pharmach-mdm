@@ -108,6 +108,7 @@ document.localization ['ar_AE'] = {
     "button.add.icon": 'أيقونة جديدة',
     "button.search": 'بحث',
     "button.export": 'تصدير',
+  'button.purge': 'Purge',
     "button.change": 'تعديل',
     'button.copy': 'نسخ',
     "button.qrcode": 'QR رمز',

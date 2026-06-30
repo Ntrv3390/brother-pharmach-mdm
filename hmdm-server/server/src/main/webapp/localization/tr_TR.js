@@ -108,6 +108,7 @@ document.localization ['tr_TR'] = {
 	'button.add.icon': 'Yeni Simge',
 	'button.search': 'Ara',
 	'button.export': 'Dışa Aktar',
+  'button.purge': 'Purge',
 	'button.change': 'Düzenle',
 	'button.copy': 'Kopyala',
 	'button.qrcode': 'QR kodu',

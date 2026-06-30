@@ -54,5 +54,7 @@
 
   "success.plugin.devicelog.settings.saved": "設定が正常に保存されました",
   "error.plugin.devicelog.date.range.invalid": "日付間隔が無効です",
-  "notfound.common.plugin.devicelog.logs": "ログレコードが見つかりません。別のクエリを試してください。"
+  "notfound.common.plugin.devicelog.logs": "ログレコードが見つかりません。別のクエリを試してください。",
+  "plugin.devicelog.purge.confirm": "Are you sure?\n\nThis will permanently delete all log records older than 15 hours for all devices. This action cannot be undone.",
+  "plugin.devicelog.purging": "Purging logs, please wait..."
 }

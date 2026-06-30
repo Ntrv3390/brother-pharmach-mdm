@@ -103,6 +103,7 @@ document.localization ['vi_VN'] = {
     'button.add.icon': 'Biểu tượng mới',
     'button.search': 'Tìm kiếm',
     'button.export': 'Xuất',
+  'button.purge': 'Purge',
     'button.change': 'Sửa',
     'button.copy': 'Sao chép',
     'button.qrcode': 'Mã QR',

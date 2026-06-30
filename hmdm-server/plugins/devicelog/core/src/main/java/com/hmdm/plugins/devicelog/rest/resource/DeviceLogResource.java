@@ -46,6 +46,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -213,6 +214,29 @@ public class DeviceLogResource {
                 .header( "Content-Type", "text/plain" )
                 .header( "Content-Disposition", contentDisposition )
                 .build();
+    }
+
+    @ApiOperation(
+            value = "Purge logs",
+            notes = "Hard-deletes all log records older than 15 hours across all devices",
+            authorizations = {@Authorization("Bearer Token")}
+    )
+    @DELETE
+    @Path("/private/purge")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response purgeLogs() {
+        if (!SecurityContext.get().hasPermission("plugin_devicelog_access")) {
+            logger.error("Unauthorized attempt to purge device logs by user " +
+                    SecurityContext.get().getCurrentUserName());
+            return Response.PERMISSION_DENIED();
+        }
+        try {
+            int count = this.deviceLogDAO.purgeOldLogRecords(15);
+            return Response.OK(count);
+        } catch (Exception e) {
+            logger.error("Failed to purge the log records due to unexpected error", e);
+            return Response.INTERNAL_ERROR();
+        }
     }
 
     @ApiOperation(

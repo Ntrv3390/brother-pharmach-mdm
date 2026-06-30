@@ -54,5 +54,7 @@
 
   "success.plugin.devicelog.settings.saved": "Настройки успешно сохранены",
   "error.plugin.devicelog.date.range.invalid": "Неверный интервал дат",
-  "notfound.common.plugin.devicelog.logs": "Записи журнала не найдены. Попробуйте другой запрос."
+  "notfound.common.plugin.devicelog.logs": "Записи журнала не найдены. Попробуйте другой запрос.",
+  "plugin.devicelog.purge.confirm": "Are you sure?\n\nThis will permanently delete all log records older than 15 hours for all devices. This action cannot be undone.",
+  "plugin.devicelog.purging": "Purging logs, please wait..."
 }

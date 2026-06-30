@@ -23,14 +23,17 @@ package com.hmdm.plugins.audit;
 
 import com.google.inject.Module;
 import com.hmdm.plugin.PluginConfiguration;
+import com.hmdm.plugin.PluginTaskModule;
 import com.hmdm.plugins.audit.guice.module.AuditConfigureModule;
 import com.hmdm.plugins.audit.guice.module.AuditLiquibaseModule;
 import com.hmdm.plugins.audit.guice.module.AuditPersistenceModule;
 import com.hmdm.plugins.audit.guice.module.AuditRestModule;
+import com.hmdm.plugins.audit.guice.module.AuditTaskModule;
 
 import javax.servlet.ServletContext;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * <p>A configuration for <code>Audit</code> plugin.</p>
@@ -84,6 +87,16 @@ public class AuditPluginConfigurationImpl implements PluginConfiguration {
         modules.add(new AuditRestModule());
 
         return modules;
+    }
+
+    /**
+     * <p>Gets the list of task modules to be initialized upon application startup.</p>
+     */
+    @Override
+    public Optional<List<Class<? extends PluginTaskModule>>> getTaskModules(ServletContext context) {
+        List<Class<? extends PluginTaskModule>> modules = new ArrayList<>();
+        modules.add(AuditTaskModule.class);
+        return Optional.of(modules);
     }
 
 }

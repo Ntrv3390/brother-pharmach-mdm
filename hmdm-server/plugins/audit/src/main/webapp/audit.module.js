@@ -44,6 +44,7 @@ angular.module('plugin-audit', ['ngResource', 'ui.bootstrap', 'ui.router', 'ngTa
         return $resource('', {}, {
             lookupUsers: {url: 'rest/private/users/all', method: 'GET'},
             getLogs: {url: 'rest/plugins/audit/private/log/search', method: 'POST'},
+            purgeAuditLogs: {url: 'rest/plugins/audit/private/purge', method: 'DELETE'},
         });
     })
     .controller('PluginAuditTabController', function ($scope, $rootScope, $window, $location, $interval, $http, $modal,
@@ -113,6 +114,26 @@ angular.module('plugin-audit', ['ngResource', 'ui.bootstrap', 'ui.router', 'ngTa
 
         $scope.errorMessage = undefined;
         $scope.successMessage = undefined;
+        $scope.purging = false;
+
+        $scope.purgeAuditLogs = function () {
+            var confirmMsg = localization.localize('plugin.audit.purge.confirm');
+            confirmModal.getUserConfirmation(confirmMsg, function () {
+                $scope.purging = true;
+                pluginAuditService.purgeAuditLogs({}, function (response) {
+                    $scope.purging = false;
+                    if (response.status === 'OK') {
+                        $scope.paging.pageNum = 1;
+                        loadData();
+                    } else {
+                        $scope.errorMessage = localization.localizeServerResponse(response);
+                    }
+                }, function () {
+                    $scope.purging = false;
+                    $scope.errorMessage = localization.localize('error.request.failure');
+                });
+            });
+        };
 
         $scope.openDateCalendar = function( $event, isStartDate ) {
             $event.preventDefault();

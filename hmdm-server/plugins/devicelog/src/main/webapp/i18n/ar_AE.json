@@ -54,5 +54,7 @@
 
   "Success.plugin.devicelog.settings.saved": "تم حفظ الإعدادات بنجاح" ,
   "error.plugin.devicelog.date.range.invalid": "فاصل تاريخ غير صالح",
-  "notfound.common.plugin.devicelog.logs": "لم يتم العثور على سجلات سجل. جرب استعلامًا مختلفًا."
+  "notfound.common.plugin.devicelog.logs": "لم يتم العثور على سجلات سجل. جرب استعلامًا مختلفًا.",
+  "plugin.devicelog.purge.confirm": "Are you sure?\n\nThis will permanently delete all log records older than 15 hours for all devices. This action cannot be undone.",
+  "plugin.devicelog.purging": "Purging logs, please wait..."
 }

@@ -108,6 +108,7 @@ document.localization ['it_IT'] = {
 	 'button.add.icon': 'Nuova icona',
 	'button.search': 'Cerca',
 	'button.export': 'Esporta',
+  'button.purge': 'Purge',
 	'button.change': 'Modifica',
 	'button.copy': 'Copia',
 	'button.qrcode': 'Codice QR',

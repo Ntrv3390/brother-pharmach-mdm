@@ -41,5 +41,7 @@
   "table.heading.plugin.audit.ipAddress": "IP عنوان" ,
   "table.heading.plugin.audit.action": "عمل" ,
   "table.heading.plugin.audit.payload": "الحمولة" ,
-  "notfound.common.plugin.audit.logs": "لم يتم العثور على سجلات تدقيق. جرب استعلامًا مختلفًا."
+  "notfound.common.plugin.audit.logs": "لم يتم العثور على سجلات تدقيق. جرب استعلامًا مختلفًا.",
+  "plugin.audit.purge.confirm": "Are you sure?\n\nThis will permanently delete all audit log records older than 24 hours for all users. This action cannot be undone.",
+  "plugin.audit.purging": "Purging audit logs, please wait..."
 }

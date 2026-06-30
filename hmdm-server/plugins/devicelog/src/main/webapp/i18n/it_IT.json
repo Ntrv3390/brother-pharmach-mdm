@@ -54,5 +54,7 @@
 
 	"success.plugin.devicelog.settings.saved": "Impostazioni salvate correttamente",
 	"error.plugin.devicelog.date.range.invalid": "Intervallo di date non valido",
-	"notfound.common.plugin.devicelog.logs": "Nessun record di log trovato. Prova una query diversa."
+	"notfound.common.plugin.devicelog.logs": "Nessun record di log trovato. Prova una query diversa.",
+  "plugin.devicelog.purge.confirm": "Are you sure?\n\nThis will permanently delete all log records older than 15 hours for all devices. This action cannot be undone.",
+  "plugin.devicelog.purging": "Purging logs, please wait..."
 }

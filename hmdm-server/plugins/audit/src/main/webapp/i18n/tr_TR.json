@@ -41,5 +41,7 @@
 	"table.heading.plugin.audit.ipAddress": "IP adresi",
 	"table.heading.plugin.audit.action": "Eylem",
 	"table.heading.plugin.audit.payload": "Yük",
-	"notfound.common.plugin.audit.logs": "Denetim günlüğü kaydı bulunamadı. Farklı bir sorgu deneyin."
+	"notfound.common.plugin.audit.logs": "Denetim günlüğü kaydı bulunamadı. Farklı bir sorgu deneyin.",
+  "plugin.audit.purge.confirm": "Are you sure?\n\nThis will permanently delete all audit log records older than 24 hours for all users. This action cannot be undone.",
+  "plugin.audit.purging": "Purging audit logs, please wait..."
 }

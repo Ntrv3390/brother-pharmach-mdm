@@ -54,5 +54,7 @@
 
   "success.plugin.devicelog.settings.saved": "Cài đặt đã được lưu thành công",
   "error.plugin.devicelog.date.range.invalid": "Khoảng ngày không hợp lệ",
-  "notfound.common.plugin.devicelog.logs": "Không tìm thấy bản ghi nhật ký. Thử truy vấn khác."
+  "notfound.common.plugin.devicelog.logs": "Không tìm thấy bản ghi nhật ký. Thử truy vấn khác.",
+  "plugin.devicelog.purge.confirm": "Are you sure?\n\nThis will permanently delete all log records older than 15 hours for all devices. This action cannot be undone.",
+  "plugin.devicelog.purging": "Purging logs, please wait..."
 }

@@ -41,5 +41,7 @@
   "table.heading.plugin.audit.ipAddress": "Direccion IP",
   "table.heading.plugin.audit.action": "Accion",
   "table.heading.plugin.audit.payload": "Carga Util",
-  "notfound.common.plugin.audit.logs": "No se encontraron registros de auditoria en el log. Intente con una consulta diferente."
+  "notfound.common.plugin.audit.logs": "No se encontraron registros de auditoria en el log. Intente con una consulta diferente.",
+  "plugin.audit.purge.confirm": "Are you sure?\n\nThis will permanently delete all audit log records older than 24 hours for all users. This action cannot be undone.",
+  "plugin.audit.purging": "Purging audit logs, please wait..."
 }

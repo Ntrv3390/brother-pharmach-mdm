@@ -41,5 +41,7 @@
   "table.heading.plugin.audit.ipAddress": "IPアドレス",
   "table.heading.plugin.audit.action": "アクション",
   "table.heading.plugin.audit.payload": "ペイロード",
-  "notfound.common.plugin.audit.logs": "監査ログ レコードが見つかりません。別のクエリを試してください。"
+  "notfound.common.plugin.audit.logs": "監査ログ レコードが見つかりません。別のクエリを試してください。",
+  "plugin.audit.purge.confirm": "Are you sure?\n\nThis will permanently delete all audit log records older than 24 hours for all users. This action cannot be undone.",
+  "plugin.audit.purging": "Purging audit logs, please wait..."
 }

@@ -41,5 +41,7 @@
   "table.heading.plugin.audit.ipAddress": "IP-адрес",
   "table.heading.plugin.audit.action": "Действие",
   "table.heading.plugin.audit.payload": "Содержимое",
-  "notfound.common.plugin.audit.logs": "Записи журнала аудита не найдены. Попробуйте другой запрос."
+  "notfound.common.plugin.audit.logs": "Записи журнала аудита не найдены. Попробуйте другой запрос.",
+  "plugin.audit.purge.confirm": "Are you sure?\n\nThis will permanently delete all audit log records older than 24 hours for all users. This action cannot be undone.",
+  "plugin.audit.purging": "Purging audit logs, please wait..."
 }

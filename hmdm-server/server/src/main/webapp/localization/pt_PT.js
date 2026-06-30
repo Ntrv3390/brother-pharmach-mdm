@@ -108,6 +108,7 @@ document.localization ['pt_PT'] = {
     'button.add.icon': 'Novo ícone',
     'button.search': 'Buscar',
     'button.export': 'Exportar',
+  'button.purge': 'Purge',
     'button.change': 'Editar',
     'button.copy': 'Copiar',
     'button.qrcode': 'QR code',

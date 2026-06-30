@@ -21,6 +21,20 @@
 
 <!-- Localization completed -->
 <div class="width-1000" ng-controller="PluginAuditTabController">
+
+    <!-- Full-screen loader overlay shown while purge is in progress -->
+    <div ng-show="purging"
+         style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:9999;">
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+                    background:#fff;padding:36px 48px;border-radius:8px;text-align:center;min-width:260px;">
+            <span class="glyphicon glyphicon-refresh"
+                  style="font-size:28px;display:block;margin-bottom:12px;animation:spin 1s linear infinite;"></span>
+            <span localized>plugin.audit.purging</span>
+        </div>
+    </div>
+    <style>
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
     <div class="text-center">
         <h4 localized>plugin.audit.tab.title</h4>
     </div>
@@ -77,6 +91,7 @@
 
             <div class='col-sm-2 text-right'>
                 <button type='button' class='btn btn-default' ng-click='search()' localized>button.search</button>
+                <button type='button' class='btn btn-danger' ng-click='purgeAuditLogs()' localized>button.purge</button>
             </div>
         </div>
 

@@ -58,6 +58,7 @@ angular.module('plugin-devicelog', ['ngResource', 'ui.bootstrap', 'ui.router', '
                     };
                 }
             },
+            purgeLogs: {url: 'rest/plugins/devicelog/log/private/purge', method: 'DELETE'},
             lookupDevices: {url: 'rest/private/devices/autocomplete', method: 'POST'},
             lookupApplications: {url: 'rest/private/applications/autocomplete', method: 'POST'},
             lookupGroups: {url: 'rest/private/groups/autocomplete', method: 'POST'},
@@ -222,6 +223,27 @@ angular.module('plugin-devicelog', ['ngResource', 'ui.bootstrap', 'ui.router', '
                 document.body.removeChild(link);
             }, function () {
                 $scope.errorMessage = localization.localize('error.request.failure');
+            });
+        };
+
+        $scope.purging = false;
+
+        $scope.purgeLogs = function () {
+            var confirmMsg = localization.localize('plugin.devicelog.purge.confirm');
+            confirmModal.getUserConfirmation(confirmMsg, function () {
+                $scope.purging = true;
+                pluginDeviceLogService.purgeLogs({}, function (response) {
+                    $scope.purging = false;
+                    if (response.status === 'OK') {
+                        $scope.paging.pageNum = 1;
+                        loadData();
+                    } else {
+                        $scope.errorMessage = localization.localizeServerResponse(response);
+                    }
+                }, function () {
+                    $scope.purging = false;
+                    $scope.errorMessage = localization.localize('error.request.failure');
+                });
             });
         };
 

@@ -99,6 +99,10 @@ COPY hmdm-server/server/pom.xml                     server/
 # Pre-download dependencies (cached as a layer unless POMs change)
 RUN mvn dependency:go-offline -B --fail-never || true
 
+# Pass --build-arg CACHE_BUST=$(date +%s) to force a source-only rebuild
+# without re-downloading Maven dependencies.
+ARG CACHE_BUST=1
+
 # Copy full server source
 COPY hmdm-server/ .
 
