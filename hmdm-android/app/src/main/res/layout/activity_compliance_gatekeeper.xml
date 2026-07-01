@@ -75,7 +75,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Step 3  —  Turn off any battery saving or power saving restriction for this app"
+                android:text="Step 3  —  Turn off any battery saving or power saving restriction for this app. If you see a selection instead of a switch, choose the option that allows the app to run freely in both foreground and background (such as No Restriction or Always allowed)"
                 android:textColor="#FFFFFF"
                 android:textSize="14sp"
                 android:lineSpacingMultiplier="1.4"
