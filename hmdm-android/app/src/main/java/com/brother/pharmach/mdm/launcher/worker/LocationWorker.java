@@ -32,9 +32,11 @@ import com.brother.pharmach.mdm.launcher.service.LocationForegroundService;
 import com.brother.pharmach.mdm.launcher.util.LocationUploader;
 import android.content.SharedPreferences;
 
+import com.brother.pharmach.mdm.launcher.util.LocationDiag;
 import com.brother.pharmach.mdm.launcher.util.OemCompat;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
+import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.Priority;
@@ -142,17 +144,20 @@ public class LocationWorker extends Worker {
     // Executes an urgent GPS refresh immediately in the current process.
     // This bypasses WorkManager scheduling latency and is used by push-triggered refreshes.
     public static Result runUrgentNow(Context context) {
+        LocationDiag.timeline(context, "runUrgentNow:entered");
         return captureAndUpload(context, true, () -> false);
     }
 
     public static void enqueueUrgentNow(Context context) {
         final Context appContext = context.getApplicationContext();
+        LocationDiag.timeline(appContext, "enqueueUrgentNow:queued");
         if (URGENT_EXECUTOR.getQueue().size() >= 1) {
             RemoteLogger.log(appContext, Const.LOG_WARN,
                     "LocationWorker: urgent queue saturated — oldest queued request replaced by new push");
         }
         URGENT_EXECUTOR.execute(() -> {
             try {
+                LocationDiag.timeline(appContext, "enqueueUrgentNow:threadStarted");
                 runUrgentNow(appContext);
             } catch (Exception e) {
                 RemoteLogger.log(appContext, Const.LOG_WARN,
@@ -218,6 +223,10 @@ public class LocationWorker extends Worker {
                     "LocationWorker: started (urgent=" + forceFreshFix
                             + ", api=" + Build.VERSION.SDK_INT
                             + ", device=" + Build.MANUFACTURER + "/" + Build.MODEL + ")");
+
+            LocationDiag.timeline(context, "captureAndUpload:entered");
+            LocationDiag.logProcessAndPowerState(context, "captureAndUpload:entered");
+            LocationDiag.logDeviceMetadata(context);
 
             // Acquire wake lock for EVERY capture, not just urgent ones.
             // During the 45 s CountDownLatch.await() in tryRequestLiveUpdate, the CPU can enter
@@ -314,14 +323,25 @@ public class LocationWorker extends Worker {
 
             RemoteLogger.log(context, Const.LOG_INFO, "LocationWorker: requesting fresh location updates");
 
+            LocationDiag.logProcessAndPowerState(context, "beforeProvidersRequested");
+            LocationDiag.timeline(context, "providersRequested");
+            LocationDiag.GnssWatch gnssWatch = LocationDiag.GnssWatch.start(
+                    context, locationManager, forceFreshFix ? "urgent" : "periodic");
+
             boolean allowNetwork = fineGranted || coarseGranted;
-            ParallelProviderResult parallelResult = requestProvidersInParallel(
-                    context,
-                    locationManager,
-                    fineGranted,
-                    allowNetwork,
-                    maxFixAgeMs,
-                    stopChecker);
+            ParallelProviderResult parallelResult;
+            try {
+                parallelResult = requestProvidersInParallel(
+                        context,
+                        locationManager,
+                        fineGranted,
+                        allowNetwork,
+                        maxFixAgeMs,
+                        stopChecker);
+            } finally {
+                gnssWatch.stopAndSummarize();
+                LocationDiag.timeline(context, "providersResolved");
+            }
 
             if (stopChecker.isStopped()) return Result.success();
 
@@ -397,6 +417,7 @@ public class LocationWorker extends Worker {
             return Result.success();
         } finally {
             releaseWakeLock(wakeLock);
+            LocationDiag.timeline(context, "captureAndUpload:complete");
         }
     }
 
@@ -487,6 +508,7 @@ public class LocationWorker extends Worker {
                 if (gpsPending && gpsFuture.isDone()) {
                     result.rawGps = getFutureResult(context, gpsFuture, 0);
                     gpsPending = false;
+                    LocationDiag.timeline(context, "fallback:gpsResolved(fix=" + (result.rawGps != null) + ")");
                     if (isLocationFresh(result.rawGps, maxFixAgeMs) && result.firstFresh == null) {
                         result.firstFresh = result.rawGps;
                     }
@@ -495,6 +517,7 @@ public class LocationWorker extends Worker {
                 if (networkPending && networkFuture.isDone()) {
                     result.rawNetwork = getFutureResult(context, networkFuture, 0);
                     networkPending = false;
+                    LocationDiag.timeline(context, "fallback:networkResolved(fix=" + (result.rawNetwork != null) + ")");
                     if (isLocationFresh(result.rawNetwork, maxFixAgeMs) && result.firstFresh == null) {
                         result.firstFresh = result.rawNetwork;
                     }
@@ -516,6 +539,10 @@ public class LocationWorker extends Worker {
                 }
             }
 
+            if (gpsPending || networkPending) {
+                LocationDiag.timeline(context, "fallback:outerWaitDeadlineHit(gpsPending="
+                        + gpsPending + ",networkPending=" + networkPending + ")");
+            }
             if (result.rawGps == null && gpsFuture != null) {
                 result.rawGps = getFutureResult(context, gpsFuture, 0);
             }
@@ -636,7 +663,8 @@ public class LocationWorker extends Worker {
 
         final CountDownLatch latch = new CountDownLatch(1);
         final Location[] result = new Location[1];
-        final CancellationSignal cancellationSignal = new CancellationSignal();
+        final CancellationSignal cancellationSignal =
+                LocationDiag.wrapWithCancelLogging(context, "getCurrentLocation:" + provider);
         final Handler cancelHandler = new Handler(Looper.getMainLooper());
 
         // Auto-cancel after timeout so the system doesn't keep the GPS radio alive
@@ -656,12 +684,23 @@ public class LocationWorker extends Worker {
                     cancellationSignal,
                     context.getMainExecutor(),
                     location -> {
-                        if (location != null
-                                && location.getLatitude() != 0.0
-                                && location.getLongitude() != 0.0) {
-                            result[0] = location;
-                            latch.countDown();
+                        if (location == null) {
+                            RemoteLogger.log(context, Const.LOG_INFO,
+                                    "LocationDiag: getCurrentLocation(" + provider
+                                            + ") consumer invoked with NULL (callback fired, no fix)");
+                            return;
                         }
+                        if (location.getLatitude() == 0.0 && location.getLongitude() == 0.0) {
+                            RemoteLogger.log(context, Const.LOG_INFO,
+                                    "LocationDiag: getCurrentLocation(" + provider
+                                            + ") consumer invoked with 0,0 (uninitialized fix)");
+                            return;
+                        }
+                        RemoteLogger.log(context, Const.LOG_INFO,
+                                "LocationDiag: getCurrentLocation(" + provider
+                                        + ") consumer invoked with VALID fix");
+                        result[0] = location;
+                        latch.countDown();
                     }
             );
 
@@ -670,12 +709,15 @@ public class LocationWorker extends Worker {
             // through a live requestLocationUpdates() listener on the UI thread.
             Handler mainHandler = new Handler(Looper.getMainLooper());
             LocationListener backupListener = location -> {
-                if (location != null
-                        && location.getLatitude() != 0.0
-                        && location.getLongitude() != 0.0) {
-                    result[0] = location;
-                    latch.countDown();
+                if (location == null
+                        || (location.getLatitude() == 0.0 && location.getLongitude() == 0.0)) {
+                    return;
                 }
+                RemoteLogger.log(context, Const.LOG_INFO,
+                        "LocationDiag: backupListener(" + provider + ") fired with VALID fix"
+                                + " (main-looper rescue path, not getCurrentLocation)");
+                result[0] = location;
+                latch.countDown();
             };
             mainHandler.post(() -> {
                 try {
@@ -823,9 +865,19 @@ public class LocationWorker extends Worker {
                     + " (timeout=" + timeoutSeconds + "s)");
             return null;
         } catch (Exception e) {
-            RemoteLogger.log(context, Const.LOG_WARN,
-                    "LocationWorker: FusedLocationProvider failed: "
-                    + e.getClass().getSimpleName() + " — " + e.getMessage());
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            StringBuilder sb = new StringBuilder("LocationDiag: FusedLocationProvider failed: ")
+                    .append(e.getClass().getName()).append(" — ").append(e.getMessage());
+            if (cause instanceof ApiException) {
+                ApiException apiEx = (ApiException) cause;
+                sb.append(" | ApiException statusCode=").append(apiEx.getStatusCode())
+                        .append(" status=").append(apiEx.getStatus());
+            } else if (cause != e) {
+                sb.append(" | cause=").append(cause.getClass().getName())
+                        .append(" — ").append(cause.getMessage());
+            }
+            sb.append(" | stackTrace=").append(android.util.Log.getStackTraceString(e));
+            RemoteLogger.log(context, Const.LOG_WARN, sb.toString());
             return null;
         }
     }
@@ -858,6 +910,9 @@ public class LocationWorker extends Worker {
         // API < 34: classic HandlerThread-based requestLocationUpdates.
         HandlerThread handlerThread = new HandlerThread("gps-update-" + provider);
         handlerThread.start();
+        RemoteLogger.log(context, Const.LOG_INFO,
+                "LocationDiag: HandlerThread(" + provider + ") stage=requestStart isAlive="
+                        + handlerThread.isAlive());
         LocationListener listener = null;
 
         try {
@@ -892,6 +947,18 @@ public class LocationWorker extends Worker {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+
+            boolean queueIdle = false;
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && handlerThread.isAlive()) {
+                    queueIdle = handlerThread.getLooper().getQueue().isIdle();
+                }
+            } catch (Exception ignored) {
+            }
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "LocationDiag: HandlerThread(" + provider + ") stage=timeoutOrFired isAlive="
+                            + handlerThread.isAlive() + " queueIdle=" + queueIdle
+                            + " fixReceived=" + (bestFresh[0] != null || bestObserved[0] != null));
 
             if (!handlerThread.isAlive()) {
                 RemoteLogger.log(context, Const.LOG_WARN,

@@ -45,6 +45,7 @@ import android.content.ComponentName;
 import android.content.IntentFilter;
 
 import com.brother.pharmach.mdm.launcher.util.LegacyUtils;
+import com.brother.pharmach.mdm.launcher.util.LocationDiag;
 import com.brother.pharmach.mdm.launcher.util.OemCompat;
 
 import java.util.concurrent.ExecutorService;
@@ -167,11 +168,13 @@ public class LocationForegroundService extends Service {
     }
 
     public static void triggerUrgent(Context context) {
+        LocationDiag.timeline(context, "triggerUrgent:entered");
         Intent intent = new Intent(context, LocationForegroundService.class);
         intent.setAction(ACTION_URGENT_GPS);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
                 context.startForegroundService(intent);
+                LocationDiag.timeline(context, "triggerUrgent:startForegroundServiceReturned");
             } catch (Exception e) {
                 // ForegroundServiceStartNotAllowedException (API 31+) is thrown on Android 12+
                 // when startForegroundService() is called from a background context — tightened
@@ -180,10 +183,13 @@ public class LocationForegroundService extends Service {
                 RemoteLogger.log(context, Const.LOG_WARN,
                         "LocationForegroundService: startForegroundService blocked ("
                         + e.getClass().getSimpleName() + "), falling back to direct capture");
+                LocationDiag.timeline(context, "triggerUrgent:startForegroundServiceBlocked:"
+                        + e.getClass().getSimpleName());
                 LocationWorker.enqueueUrgentNow(context);
             }
         } else {
             context.startService(intent);
+            LocationDiag.timeline(context, "triggerUrgent:startServiceReturned(legacy)");
         }
     }
 
@@ -194,6 +200,7 @@ public class LocationForegroundService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        LocationDiag.timeline(this, "onCreate:entered");
 
         // Call startForeground() IMMEDIATELY — before executors, OemCompat checks, or any I/O.
         // AutoDroid kills services that don't call startForeground() within ~5s of
@@ -202,6 +209,10 @@ public class LocationForegroundService extends Service {
         Utils.startStableForegroundService(this, NOTIFICATION_ID, buildPlaceholderNotification());
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService: startForeground() called immediately (Realme fast-path)");
+        LocationDiag.timeline(this, "onCreate:placeholderForegroundReturned");
+        LocationDiag.logFgsRegistration(this, LocationForegroundService.class,
+                "onCreate:afterPlaceholderForeground");
+        LocationDiag.logDeviceMetadata(this);
 
         long onCreateStart = System.currentTimeMillis();
 
@@ -229,6 +240,9 @@ public class LocationForegroundService extends Service {
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService: onCreate timing — notificationMs="
                 + (System.currentTimeMillis() - onCreateStart));
+        LocationDiag.timeline(this, "onCreate:fullNotificationReturned");
+        LocationDiag.logFgsRegistration(this, LocationForegroundService.class,
+                "onCreate:afterFullNotification");
 
         // Mark FGS as alive so LocationWorker can detect if we get killed mid-session.
         getSharedPreferences(PREFS_FGS_ALIVE, Context.MODE_PRIVATE).edit()
@@ -244,6 +258,8 @@ public class LocationForegroundService extends Service {
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService: onCreate timing — trackingStartMs="
                 + (System.currentTimeMillis() - onCreateStart));
+        LocationDiag.timeline(this, "onCreate:listenersRegistered");
+        LocationDiag.logProcessAndPowerState(this, "onCreate:listenersRegistered");
 
         registerNetworkCallback();
 
@@ -261,11 +277,15 @@ public class LocationForegroundService extends Service {
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService: onCreate complete — totalMs="
                 + (System.currentTimeMillis() - onCreateStart));
+        LocationDiag.timeline(this, "onCreate:complete");
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_URGENT_GPS.equals(intent.getAction())) {
+            LocationDiag.timeline(this, "onStartCommand:urgentActionReceived");
+            LocationDiag.logFgsRegistration(this, LocationForegroundService.class,
+                    "onStartCommand:urgentActionReceived");
             handleUrgentRequest();
         }
         // START_STICKY: OS automatically restarts this service if killed.
@@ -475,10 +495,13 @@ public class LocationForegroundService extends Service {
         }
 
         final Context appContext = getApplicationContext();
+        LocationDiag.timeline(appContext, "handleUrgentRequest:submittedToExecutor");
         currentUrgentTask = urgentExecutor.submit(() -> {
             // Explicit re-set — thread factory sets MAX_PRIORITY but re-applying after
             // executor internals guarantees it survives any wrapping.
             Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
+            LocationDiag.timeline(appContext, "handleUrgentRequest:threadStarted");
+            LocationDiag.logProcessAndPowerState(appContext, "handleUrgentRequest:threadStarted");
 
             Location recent = latestContinuousFix;
             long fixAge = recent != null
@@ -489,6 +512,7 @@ public class LocationForegroundService extends Service {
                 RemoteLogger.log(appContext, Const.LOG_INFO,
                         "LocationForegroundService: urgent served from stream (fix age=" + fixAge
                         + "ms, source=fgsMemoryCache)");
+                LocationDiag.timeline(appContext, "handleUrgentRequest:servedFromMemoryCache");
                 uploadFix(new Location(recent), true, "fgsMemoryCache");
                 return;
             }
@@ -499,11 +523,14 @@ public class LocationForegroundService extends Service {
                     "LocationForegroundService: no recent fix (age="
                     + (fixAge == Long.MAX_VALUE ? "none" : fixAge + "ms")
                     + ") — falling back to cold-start capture");
+            LocationDiag.timeline(appContext, "handleUrgentRequest:coldStartBegin");
             try {
                 LocationWorker.captureAndUpload(appContext, true, () -> false);
             } catch (Exception e) {
                 RemoteLogger.log(appContext, Const.LOG_WARN,
                         "LocationForegroundService: urgent cold-start failed: " + e.getMessage());
+            } finally {
+                LocationDiag.timeline(appContext, "handleUrgentRequest:coldStartEnd");
             }
         });
     }

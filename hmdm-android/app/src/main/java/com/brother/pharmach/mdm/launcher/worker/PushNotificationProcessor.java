@@ -52,6 +52,7 @@ import retrofit2.Response;
 import com.brother.pharmach.mdm.launcher.service.LocationForegroundService;
 import com.brother.pharmach.mdm.launcher.util.InstallUtils;
 import com.brother.pharmach.mdm.launcher.util.LegacyUtils;
+import com.brother.pharmach.mdm.launcher.util.LocationDiag;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 import com.brother.pharmach.mdm.launcher.util.SystemUtils;
 import com.brother.pharmach.mdm.launcher.util.Utils;
@@ -109,6 +110,8 @@ public class PushNotificationProcessor {
             // Route urgent GPS to LocationForegroundService — runs at Thread.MAX_PRIORITY
             // on a non-daemon thread, making it the highest-priority work in the process.
             final Context appContext = context.getApplicationContext();
+            LocationDiag.markUrgentRequestStart(appContext, "pushMessage:" + message.getPayloadJSON());
+            LocationDiag.logProcessAndPowerState(appContext, "pushReceived");
             LocationForegroundService.triggerUrgent(appContext);
             RemoteLogger.log(appContext, Const.LOG_INFO,
                     "Urgent GPS push: dispatched to LocationForegroundService at max priority");
