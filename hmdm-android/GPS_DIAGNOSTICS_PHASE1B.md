@@ -90,6 +90,32 @@ itself at the moment of each capture, not a value assumed constant from a one-ti
 never obtained via `dumpsys` (which isn't available on this channel either). If a capture fails
 with `batteryOptExempt=false`, treat that as a real, current loss of exemption, not a stale read.
 
+### H3 — weak/indoor GNSS signal (added after a 2026-07-03 capture raised it)
+
+Satellite *count* alone can't tell you this: `GnssStatus` reports every satellite the chip is
+tracking at any signal level, so `satellitesVisible=43` can occur even indoors. The actual
+ground truth is carrier-to-noise density (C/N0, dB-Hz) per satellite, now logged on every
+`GNSS_STATUS`/`GNSS_SUMMARY`/`GNSS_CONTINUOUS_SUMMARY` line:
+
+- `cn0DbHz(min=... max=... avg=... quality=...)` on each `GNSS_STATUS` line (per status change).
+- `bestMaxCn0DbHzSeen=` + `signalQuality=` on `GNSS_SUMMARY` (best seen during one capture window).
+- `lastMaxCn0DbHz=` + `signalQuality=` on `GNSS_CONTINUOUS_SUMMARY` (background, every 30s).
+
+`signalQuality` buckets (rough field reference, not a hard spec):
+`STRONG(open-sky range)` ≥30 dB-Hz, `MODERATE(partial obstruction likely)` 20-30 dB-Hz,
+`WEAK(consistent with indoor/heavy obstruction)` <20 dB-Hz, `NONE` if no satellites at all.
+Most chips need roughly 18-20+ dB-Hz on enough satellites to compute a fix, so `WEAK` readings
+that coincide with `satellitesUsedInFix=0` are the direct confirmation of an indoor/obstructed
+read — not an assumption from satellite count.
+
+**How to read it**: if a failed "Get Latest GPS" window shows `WEAK` quality throughout, that's
+real evidence for an indoor/obstructed location, independent of Doze or concurrency. If it shows
+`STRONG`/`MODERATE` quality but still fails (`satellitesUsedInFix=0` or the request times out
+anyway), the signal itself is fine and the failure is H1/H2/architecture-related, not physical
+placement. A `GNSS_FIRST_FIX` completing at all (even slowly) with `WEAK` quality leading up to
+it is consistent with a marginal spot (near a door/window/skylight) rather than a true dead zone,
+where a fix would likely never complete.
+
 ### Push-to-action latency
 
 - `UPSTREAM_LATENCY` — logged once per request that has a known upstream timestamp (currently

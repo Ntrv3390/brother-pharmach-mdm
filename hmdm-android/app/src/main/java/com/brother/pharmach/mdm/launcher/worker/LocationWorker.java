@@ -41,6 +41,8 @@ import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.Priority;
+import com.google.android.gms.tasks.CancellationToken;
+import com.google.android.gms.tasks.CancellationTokenSource;
 import com.google.android.gms.tasks.Tasks;
 
 import java.util.concurrent.ArrayBlockingQueue;
@@ -900,6 +902,11 @@ public class LocationWorker extends Worker {
      * the case on any device that passes {@link OemCompat#isGmsAvailable(Context)}.
      */
     private static Location tryFusedLocation(Context context, long timeoutSeconds, String reqId) {
+        return tryFusedLocation(context, timeoutSeconds, reqId, null);
+    }
+
+    private static Location tryFusedLocation(Context context, long timeoutSeconds, String reqId,
+                                              CancellationToken cancellationToken) {
         if (!OemCompat.isGmsAvailable(context)) return null;
 
         try {
@@ -910,7 +917,7 @@ public class LocationWorker extends Worker {
                     "LocationWorker: FusedLocationProvider started reqId=" + reqId);
 
             com.google.android.gms.tasks.Task<Location> task = fusedClient.getCurrentLocation(
-                    Priority.PRIORITY_HIGH_ACCURACY, null);
+                    Priority.PRIORITY_HIGH_ACCURACY, cancellationToken);
 
             Location location = Tasks.await(task, timeoutSeconds, TimeUnit.SECONDS);
 
@@ -951,6 +958,111 @@ public class LocationWorker extends Worker {
         }
     }
 
+    /**
+     * Races {@link #tryGetCurrentLocation} against {@link #tryFusedLocation} instead of running
+     * them sequentially, and returns whichever produces a valid fix first.
+     *
+     * Evidence from field logs (Realme RMX3998, Android 15/ColorOS 15): raw LocationManager
+     * behaves in a strictly bimodal way on this device class — it either rejects a request
+     * within milliseconds, or delivers absolutely nothing (not even a null callback) for the
+     * ENTIRE timeout, especially while the device is in Doze. FusedLocationProvider, in
+     * contrast, has consistently resolved (success or failure) in under ~5 seconds in every
+     * capture observed. Under the old sequential order (raw for the full timeout, THEN try
+     * Fused), a request that only Fused could ever satisfy paid the full raw timeout — up to
+     * 45s — before even attempting the one thing that worked, turning a sub-5-second answer
+     * into a 45-90+ second one.
+     *
+     * No extra "grace window" is used when Fused wins first: every capture analyzed so far
+     * shows raw LocationManager either failing near-instantly or staying completely silent for
+     * the whole timeout — never a case of "raw would have delivered a better fix a few seconds
+     * after Fused already answered". If that pattern is ever observed, this is the place to add
+     * a bounded grace wait (re-checking {@link #isBetterLocation}) before finalizing — but doing
+     * that unconditionally today would tax every fast Fused success for a benefit never seen in
+     * practice, working against "efficient" for no proven gain in "accurate".
+     *
+     * If raw DOES win the race with a genuine fix, it is taken immediately and preferred — real
+     * GPS is at least as accurate as, usually more accurate than, a Fused/network-derived fix.
+     */
+    private static Location tryGetCurrentLocationRacingFused(
+            Context context, LocationManager locationManager, String provider,
+            long timeoutSeconds, String reqId) {
+        ExecutorService racer = Executors.newFixedThreadPool(2);
+        CancellationTokenSource fusedCancelSource = new CancellationTokenSource();
+        Future<Location> rawFuture = null;
+        Future<Location> fusedFuture = null;
+        try {
+            rawFuture = racer.submit(() ->
+                    tryGetCurrentLocation(context, locationManager, provider, timeoutSeconds, reqId));
+            fusedFuture = racer.submit(() ->
+                    tryFusedLocation(context, timeoutSeconds, reqId, fusedCancelSource.getToken()));
+
+            long deadlineNs = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds);
+            boolean rawPending = true;
+            boolean fusedPending = true;
+            Location rawResult = null;
+            Location fusedResult = null;
+
+            while ((rawPending || fusedPending) && System.nanoTime() < deadlineNs) {
+                if (LocationDiag.checkInterruptGate(context, reqId, "race:" + provider)) {
+                    return null;
+                }
+
+                if (rawPending && rawFuture.isDone()) {
+                    rawResult = getFutureResult(context, rawFuture, 0);
+                    rawPending = false;
+                    if (rawResult != null) {
+                        LocationDiag.timeline(context, reqId, "race:" + provider + ":rawWon");
+                        break;
+                    }
+                }
+                if (fusedPending && fusedFuture.isDone()) {
+                    fusedResult = getFutureResult(context, fusedFuture, 0);
+                    fusedPending = false;
+                    if (fusedResult != null) {
+                        LocationDiag.timeline(context, reqId, "race:" + provider + ":fusedWon");
+                        break;
+                    }
+                }
+                if (!rawPending && !fusedPending) {
+                    break;
+                }
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+
+            // Neither loop-exit branch above re-checked a future that finished during the last
+            // sleep — pick up any last-moment result non-blockingly before giving up.
+            if (rawResult == null && rawFuture.isDone()) {
+                rawResult = getFutureResult(context, rawFuture, 0);
+            }
+            if (fusedResult == null && fusedFuture.isDone()) {
+                fusedResult = getFutureResult(context, fusedFuture, 0);
+            }
+
+            Location winner = rawResult != null ? rawResult : fusedResult;
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "LocationDiag: race:" + provider + " reqId=" + reqId
+                            + " rawResult=" + (rawResult != null) + " fusedResult=" + (fusedResult != null)
+                            + " winner=" + (winner == rawResult ? "raw" : winner == fusedResult ? "fused" : "none"));
+            return winner;
+        } finally {
+            if (rawFuture != null && !rawFuture.isDone()) {
+                rawFuture.cancel(true);
+            }
+            if (fusedFuture != null && !fusedFuture.isDone()) {
+                // Cancel via GMS's own token (stops the underlying request), not just Thread
+                // interruption — Tasks.await() alone doesn't stop the Play Services side.
+                fusedCancelSource.cancel();
+                fusedFuture.cancel(true);
+            }
+            racer.shutdownNow();
+        }
+    }
+
     private static Location tryRequestLiveUpdate(Context context,
                                                   LocationManager locationManager,
                                                   String provider,
@@ -964,20 +1076,16 @@ public class LocationWorker extends Worker {
         }
 
         // API 34+: use getCurrentLocation() as the primary path (system service internal
-        // thread, no HandlerThread freezing). Falls back to FusedLocationProvider if GMS
-        // is available and native LocationManager is suppressed by the OEM.
-        // FusedLocationProvider already combines GPS + Network internally, so we only
-        // fall back on the GPS provider path to avoid parallel duplicate calls.
+        // thread, no HandlerThread freezing). On the GPS provider, RACE it against
+        // FusedLocationProvider instead of waiting out the full raw timeout first — see
+        // tryGetCurrentLocationRacingFused() for why. FusedLocationProvider already combines
+        // GPS + Network internally, so we only race/fall back on the GPS provider path to
+        // avoid parallel duplicate calls against NETWORK_PROVIDER too.
         if (Build.VERSION.SDK_INT >= 34) {
-            Location loc = tryGetCurrentLocation(context, locationManager, provider, timeoutSeconds, reqId);
-            if (loc != null) return loc;
-            if (LocationDiag.checkInterruptGate(context, reqId, "beforeFusedFallback:" + provider)) {
-                return null;
+            if (LocationManager.GPS_PROVIDER.equals(provider) && OemCompat.isGmsAvailable(context)) {
+                return tryGetCurrentLocationRacingFused(context, locationManager, provider, timeoutSeconds, reqId);
             }
-            if (LocationManager.GPS_PROVIDER.equals(provider)) {
-                return tryFusedLocation(context, timeoutSeconds, reqId);
-            }
-            return null;
+            return tryGetCurrentLocation(context, locationManager, provider, timeoutSeconds, reqId);
         }
 
         // API < 34: classic HandlerThread-based requestLocationUpdates.

@@ -362,6 +362,63 @@ public final class LocationDiag {
         return used;
     }
 
+    /**
+     * Carrier-to-noise density (C/N0, dB-Hz) across all currently-tracked satellites — the
+     * actual signal-strength ground truth. "Satellites visible" alone (used elsewhere in this
+     * class) can stay high even indoors, since GnssStatus reports satellites the chip is
+     * tracking at ANY signal level, not just ones strong enough to use in a fix. C/N0 is what
+     * distinguishes "43 satellites, all weak (indoor/obstructed)" from "43 satellites, strong
+     * (open sky, something else is blocking the fix)".
+     *
+     * Rough field reference: >=30 dB-Hz is typical open-sky signal strength; 20-30 dB-Hz is
+     * partial obstruction (near windows/doors, light roofing); <20 dB-Hz is consistent with
+     * being indoors or under heavy obstruction — most chips need roughly 18-20+ dB-Hz on enough
+     * satellites to compute a fix at all.
+     */
+    private static final class Cn0Stats {
+        final float min;
+        final float max;
+        final float avg;
+
+        Cn0Stats(float min, float max, float avg) {
+            this.min = min;
+            this.max = max;
+            this.avg = avg;
+        }
+
+        static Cn0Stats compute(GnssStatus status) {
+            int total = status.getSatelliteCount();
+            if (total == 0) return new Cn0Stats(0f, 0f, 0f);
+            float min = Float.MAX_VALUE;
+            float max = 0f;
+            float sum = 0f;
+            for (int i = 0; i < total; i++) {
+                float cn0 = status.getCn0DbHz(i);
+                if (cn0 < min) min = cn0;
+                if (cn0 > max) max = cn0;
+                sum += cn0;
+            }
+            return new Cn0Stats(min, max, sum / total);
+        }
+
+        String qualityLabel() {
+            return qualityLabelForMax(max);
+        }
+
+        static String qualityLabelForMax(float maxCn0) {
+            if (maxCn0 <= 0f) return "NONE";
+            if (maxCn0 >= 30f) return "STRONG(open-sky range)";
+            if (maxCn0 >= 20f) return "MODERATE(partial obstruction likely)";
+            return "WEAK(consistent with indoor/heavy obstruction)";
+        }
+
+        @Override
+        public String toString() {
+            return "min=" + min + " max=" + max + " avg=" + String.format(java.util.Locale.US, "%.1f", avg)
+                    + " quality=" + qualityLabel();
+        }
+    }
+
     public static final class GnssWatch {
         private final Context context;
         private final String stage;
@@ -370,6 +427,7 @@ public final class LocationDiag {
         private final AtomicInteger statusChangeCount = new AtomicInteger(0);
         private volatile int lastSatelliteCount = -1;
         private volatile int lastUsedInFixCount = -1;
+        private volatile float bestMaxCn0Seen = 0f;
         private HandlerThread gnssThread;
 
         private GnssWatch(Context context, String stage, LocationManager locationManager) {
@@ -390,13 +448,16 @@ public final class LocationDiag {
                     public void onSatelliteStatusChanged(GnssStatus status) {
                         int total = status.getSatelliteCount();
                         int usedInFix = countUsedInFix(status);
+                        Cn0Stats cn0 = Cn0Stats.compute(status);
                         watch.lastSatelliteCount = total;
                         watch.lastUsedInFixCount = usedInFix;
+                        if (cn0.max > watch.bestMaxCn0Seen) watch.bestMaxCn0Seen = cn0.max;
                         watch.statusChangeCount.incrementAndGet();
                         RemoteLogger.log(context, Const.LOG_INFO,
                                 TAG + ": GNSS_STATUS stage=" + stage
                                         + " satellitesVisible=" + total
-                                        + " satellitesUsedInFix=" + usedInFix);
+                                        + " satellitesUsedInFix=" + usedInFix
+                                        + " cn0DbHz(" + cn0 + ")");
                     }
 
                     @Override
@@ -441,6 +502,8 @@ public final class LocationDiag {
                             + " statusUpdates=" + statusChangeCount.get()
                             + " lastSatellitesVisible=" + lastSatelliteCount
                             + " lastSatellitesUsedInFix=" + lastUsedInFixCount
+                            + " bestMaxCn0DbHzSeen=" + bestMaxCn0Seen
+                            + " signalQuality=" + Cn0Stats.qualityLabelForMax(bestMaxCn0Seen)
                             + (statusChangeCount.get() == 0
                                     ? " (NO GnssStatus callback fired during this window"
                                             + " — chip visibility unknown to the app)"
@@ -462,6 +525,7 @@ public final class LocationDiag {
         private final AtomicInteger statusChangeCount = new AtomicInteger(0);
         private volatile int lastSatelliteCount = -1;
         private volatile int lastUsedInFixCount = -1;
+        private volatile float lastMaxCn0 = 0f;
         private volatile long lastCallbackNs = 0;
 
         private ContinuousGnssMonitor(Context context, LocationManager locationManager) {
@@ -480,6 +544,7 @@ public final class LocationDiag {
                     public void onSatelliteStatusChanged(GnssStatus status) {
                         monitor.lastSatelliteCount = status.getSatelliteCount();
                         monitor.lastUsedInFixCount = countUsedInFix(status);
+                        monitor.lastMaxCn0 = Cn0Stats.compute(status).max;
                         monitor.statusChangeCount.incrementAndGet();
                         monitor.lastCallbackNs = System.nanoTime();
                     }
@@ -512,6 +577,8 @@ public final class LocationDiag {
                     + " statusUpdatesTotal=" + statusChangeCount.get()
                     + " lastSatellitesVisible=" + lastSatelliteCount
                     + " lastSatellitesUsedInFix=" + lastUsedInFixCount
+                    + " lastMaxCn0DbHz=" + lastMaxCn0
+                    + " signalQuality=" + Cn0Stats.qualityLabelForMax(lastMaxCn0)
                     + " msSinceLastCallback=" + (msSinceLastCallback < 0 ? "never" : msSinceLastCallback)
                     + " concurrentUrgentRequestsInFlight=" + ACTIVE_REQUESTS.size());
         }
