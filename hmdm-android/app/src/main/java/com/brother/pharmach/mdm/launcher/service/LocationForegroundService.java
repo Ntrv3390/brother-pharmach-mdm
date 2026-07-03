@@ -111,6 +111,11 @@ public class LocationForegroundService extends Service {
     // cancelling it. Sized to the full cold-start capture (parallel provider wait ~47s + upload).
     private static final long URGENT_COALESCE_WINDOW_MS = 60_000L;
 
+    // Heartbeat re-checks all caches (incl. the GMS Fused cache fed by other apps) once the
+    // in-memory fix is older than this, so a newer external fix is picked up while our own
+    // location callbacks are suppressed.
+    private static final long HEARTBEAT_CACHE_RECHECK_AGE_MS = 60_000L;
+
     // ---------------------------------------------------------------------------
     // State
     // ---------------------------------------------------------------------------
@@ -561,23 +566,28 @@ public class LocationForegroundService extends Service {
         try {
             Location location = latestContinuousFix;
             boolean usedLastKnownFallback = false;
-            if (location == null) {
-                // Widest possible fallback: LocationManager last-known, GMS Fused cache,
-                // FGS prefs cache, offline SQLite queue — any age. Runs on the heartbeat
-                // thread, so the blocking Fused lookup is safe here.
-                location = LocationWorker.getBestCachedLocationAnyAge(
+            long inMemoryAgeMs = location != null
+                    ? System.currentTimeMillis() - location.getTime() : Long.MAX_VALUE;
+            if (location == null || inMemoryAgeMs > HEARTBEAT_CACHE_RECHECK_AGE_MS) {
+                // In-memory fix missing or aging — re-check every cache: LocationManager
+                // last-known, GMS Fused cache, FGS prefs cache, offline SQLite queue. The GMS
+                // Fused cache is fed by other apps, so it can hold a NEWER fix than ours even
+                // while our own callbacks are suppressed (Doze/ColorOS). Take whichever is
+                // newest. Runs on the heartbeat thread, so the blocking Fused lookup is safe.
+                Location cached = LocationWorker.getBestCachedLocationAnyAge(
                         getApplicationContext(), locationManager);
-                usedLastKnownFallback = true;
+                if (cached != null && (location == null || cached.getTime() > location.getTime())) {
+                    location = cached;
+                    usedLastKnownFallback = true;
+                    // Seed the in-memory fix so the next urgent request serves instantly.
+                    latestContinuousFix = cached;
+                }
             }
             if (location == null) {
                 RemoteLogger.log(this, Const.LOG_WARN,
                         "LocationForegroundService: 30s heartbeat — no continuous fix and no"
                         + " cached location in any source, skipping this cycle");
                 return;
-            }
-            if (usedLastKnownFallback) {
-                // Seed the in-memory fix so the next urgent request can serve instantly.
-                latestContinuousFix = location;
             }
 
             long ageS = (System.currentTimeMillis() - location.getTime()) / 1000;
