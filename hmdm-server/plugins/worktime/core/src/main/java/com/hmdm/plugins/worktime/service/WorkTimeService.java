@@ -3,10 +3,13 @@ package com.hmdm.plugins.worktime.service;
 import com.hmdm.plugins.worktime.WorkTimeZone;
 import com.hmdm.plugins.worktime.model.WorkTimeDevicePolicy;
 import com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride;
+import com.hmdm.plugins.worktime.model.WorkTimeGeneralHoliday;
 import com.hmdm.plugins.worktime.persistence.WorkTimeDAO;
 
 import javax.inject.Inject;
+import java.sql.Date;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -39,6 +42,13 @@ public class WorkTimeService {
         Set<String> during = parseAllowed(base != null ? base.getAllowedAppsDuringWork() : "");
         Set<String> outside = parseAllowed(base != null ? base.getAllowedAppsOutsideWork() : "*");
         boolean enforcementEnabled = base == null || base.getEnabled() == null || base.getEnabled();
+
+        // General (organization-wide) holidays: on a holiday date, clear the work-day bits for the
+        // holiday days so every device of the customer is evaluated as "outside working hours" all
+        // day. This keeps the Android client completely holiday-unaware — it simply receives a policy
+        // whose current day is not a work day and therefore serves the "After Work" / "24 Hours"
+        // (allowedOutside) set. Normal enforcement resumes automatically once the holiday ends.
+        days = applyHolidayMask(customerId, days, now);
 
         List<EffectiveWorkTimePolicy.ExceptionWindow> exceptionWindows = mergeExceptionWindows(
                 dao.getDeviceOverridesForDevice(customerId, deviceId),
@@ -149,6 +159,56 @@ public class WorkTimeService {
         LocalDateTime getEnd() {
             return end;
         }
+    }
+
+    /**
+     * Clears the day-of-week bits corresponding to the dates of any general holiday that is active
+     * for the customer on {@code now}'s date. Only the current-and-future holiday days (up to seven
+     * distinct week days) are cleared, so that a device which syncs once at the holiday start remains
+     * correct for the whole holiday while minimizing staleness after it ends. Holidays are inclusive
+     * of both start and end dates.
+     *
+     * @param customerId customer id
+     * @param days       the base policy days-of-week bitmask (bit0=Mon .. bit6=Sun)
+     * @param now        current date/time in {@link WorkTimeZone}
+     * @return the effective days-of-week bitmask with holiday days cleared
+     */
+    private int applyHolidayMask(int customerId, int days, LocalDateTime now) {
+        LocalDate today = now.toLocalDate();
+        List<WorkTimeGeneralHoliday> holidays;
+        try {
+            holidays = dao.getActiveHolidays(customerId, Date.valueOf(today));
+        } catch (Exception e) {
+            // Never let holiday resolution break normal policy delivery.
+            return days;
+        }
+        if (holidays == null || holidays.isEmpty()) {
+            return days;
+        }
+
+        int mask = days;
+        for (WorkTimeGeneralHoliday holiday : holidays) {
+            if (holiday.getStartDate() == null || holiday.getEndDate() == null) {
+                continue;
+            }
+            LocalDate start = holiday.getStartDate().toLocalDate();
+            LocalDate end = holiday.getEndDate().toLocalDate();
+            LocalDate cursor = start.isBefore(today) ? today : start;
+
+            // A window of seven consecutive days already covers every weekday bit; cap the loop so a
+            // very long holiday can't iterate excessively.
+            int guard = 0;
+            while (!cursor.isAfter(end) && guard < 7) {
+                int bit = 1 << (cursor.getDayOfWeek().getValue() - 1);
+                mask &= ~bit;
+                cursor = cursor.plusDays(1);
+                guard++;
+            }
+            if (mask == 0) {
+                break;
+            }
+        }
+        return mask;
     }
 
     private Set<String> parseAllowed(String raw) {

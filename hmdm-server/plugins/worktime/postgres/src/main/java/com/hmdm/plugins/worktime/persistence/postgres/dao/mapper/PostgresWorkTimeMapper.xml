@@ -265,4 +265,107 @@
         ORDER BY uo.customer_id, uo.priority DESC NULLS LAST, uo.id
     </select>
 
+    <!-- ========================================================= -->
+    <!-- General (organization-wide) holidays                      -->
+    <!-- ========================================================= -->
+
+    <resultMap id="generalHolidayResult"
+               type="com.hmdm.plugins.worktime.model.WorkTimeGeneralHoliday">
+        <id property="id" column="id"/>
+        <result property="customerId" column="customer_id"/>
+        <result property="name" column="name"/>
+        <result property="startDate" column="start_date"/>
+        <result property="endDate" column="end_date"/>
+        <result property="startPushSent" column="start_push_sent"/>
+        <result property="endPushSent" column="end_push_sent"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="getHolidays" resultMap="generalHolidayResult">
+        SELECT *
+        FROM worktime_general_holiday
+        WHERE customer_id = #{customerId}
+        ORDER BY start_date, end_date, id
+    </select>
+
+    <select id="getHolidayById" resultMap="generalHolidayResult">
+        SELECT *
+        FROM worktime_general_holiday
+        WHERE customer_id = #{customerId} AND id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="getActiveHolidays" resultMap="generalHolidayResult">
+        SELECT *
+        FROM worktime_general_holiday
+        WHERE customer_id = #{customerId}
+          AND start_date &lt;= #{date}
+          AND end_date &gt;= #{date}
+        ORDER BY start_date, end_date, id
+    </select>
+
+    <insert id="insertHoliday" parameterType="com.hmdm.plugins.worktime.model.WorkTimeGeneralHoliday" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO worktime_general_holiday (
+            customer_id,
+            name,
+            start_date,
+            end_date,
+            start_push_sent,
+            end_push_sent,
+            created_at,
+            updated_at
+        ) VALUES (
+            #{customerId},
+            #{name},
+            #{startDate},
+            #{endDate},
+            COALESCE(#{startPushSent}, FALSE),
+            COALESCE(#{endPushSent}, FALSE),
+            now(),
+            now()
+        )
+    </insert>
+
+    <update id="updateHoliday" parameterType="com.hmdm.plugins.worktime.model.WorkTimeGeneralHoliday">
+        UPDATE worktime_general_holiday
+        SET
+            name = #{name},
+            start_date = #{startDate},
+            end_date = #{endDate},
+            start_push_sent = COALESCE(#{startPushSent}, FALSE),
+            end_push_sent = COALESCE(#{endPushSent}, FALSE),
+            updated_at = now()
+        WHERE customer_id = #{customerId} AND id = #{id}
+    </update>
+
+    <delete id="deleteHolidayById">
+        DELETE FROM worktime_general_holiday
+        WHERE customer_id = #{customerId} AND id = #{id}
+    </delete>
+
+    <select id="getAllHolidaysForMaintenance" resultMap="generalHolidayResult">
+        SELECT *
+        FROM worktime_general_holiday
+        WHERE end_date &gt;= (CURRENT_DATE - INTERVAL '2 day')
+        ORDER BY customer_id, start_date, end_date, id
+    </select>
+
+    <update id="markHolidayStartPushSent">
+        UPDATE worktime_general_holiday
+        SET start_push_sent = TRUE, updated_at = now()
+        WHERE id = #{id}
+    </update>
+
+    <update id="markHolidayEndPushSent">
+        UPDATE worktime_general_holiday
+        SET end_push_sent = TRUE, updated_at = now()
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteHolidayByIdAnyCustomer">
+        DELETE FROM worktime_general_holiday
+        WHERE id = #{id}
+    </delete>
+
 </mapper>

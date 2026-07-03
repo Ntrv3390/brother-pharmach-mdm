@@ -676,4 +676,80 @@
         </sql>
     </changeSet>
 
+    <!-- ========================================================= -->
+    <!-- General (organization-wide) holidays                     -->
+    <!-- When today falls within an active general holiday, all   -->
+    <!-- devices of the customer behave as if outside work hours. -->
+    <!-- ========================================================= -->
+    <changeSet id="worktime-create-general-holiday-2026-07-03" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="worktime_general_holiday"/>
+            </not>
+        </preConditions>
+
+        <createTable tableName="worktime_general_holiday">
+            <column name="id" type="SERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="customer_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="start_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="end_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="start_push_sent" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="end_push_sent" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="worktime-general-holiday-index-customer-2026-07-03" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_general_holiday"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM pg_indexes
+                WHERE tablename = 'worktime_general_holiday'
+                  AND indexname = 'idx_worktime_general_holiday_customer'
+            </sqlCheck>
+        </preConditions>
+        <createIndex indexName="idx_worktime_general_holiday_customer" tableName="worktime_general_holiday">
+            <column name="customer_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="worktime-general-holiday-index-dates-2026-07-03" author="worktime-plugin">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="worktime_general_holiday"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM pg_indexes
+                WHERE tablename = 'worktime_general_holiday'
+                  AND indexname = 'idx_worktime_general_holiday_dates'
+            </sqlCheck>
+        </preConditions>
+        <createIndex indexName="idx_worktime_general_holiday_dates" tableName="worktime_general_holiday">
+            <column name="customer_id"/>
+            <column name="start_date"/>
+            <column name="end_date"/>
+        </createIndex>
+    </changeSet>
+
 </databaseChangeLog>

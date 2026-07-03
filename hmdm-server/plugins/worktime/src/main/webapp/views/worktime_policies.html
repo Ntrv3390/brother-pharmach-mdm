@@ -273,23 +273,23 @@
     }
 
     .worktime-btn-primary {
-      background: #2f78b8;
+      background: #7a9ab9;
       color: #ffffff;
     }
 
     .worktime-btn-primary:hover {
-      background: #27689f;
+      background: #688ba9;
       color: #ffffff;
     }
 
     .worktime-btn-secondary {
-      background: #eef4fb;
-      color: #2d5279;
+      background: #eaf0f6;
+      color: #45617f;
     }
 
     .worktime-btn-secondary:hover {
-      background: #dde9f8;
-      color: #1f476f;
+      background: #dbe6f0;
+      color: #37536f;
     }
 
     .worktime-btn-danger {
@@ -313,7 +313,7 @@
 
     .worktime-modal-header {
       padding: 14px 18px;
-      background: linear-gradient(135deg, #2f78b8 0%, #3f96d8 100%);
+      background: linear-gradient(135deg, #7a9ab9 0%, #9bb4cc 100%);
       color: #ffffff;
       border: 0;
     }
@@ -436,7 +436,7 @@
     }
 
     .worktime-day-btn.active {
-      background: #2f78b8;
+      background: #7a9ab9;
       color: #ffffff;
     }
 
@@ -543,6 +543,278 @@
       font-weight: 600;
     }
 
+    .worktime-header-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .worktime-holiday-banner {
+      margin-bottom: 18px;
+      border-radius: 18px;
+      padding: 22px 26px;
+      color: #ffffff;
+      background: linear-gradient(135deg, #7a9ab9 0%, #6a8aab 55%, #5f7fa1 100%);
+      box-shadow: 0 16px 34px rgba(122, 154, 185, 0.32);
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      flex-wrap: wrap;
+    }
+
+    .worktime-holiday-banner-icon {
+      font-size: 34px;
+      line-height: 1;
+    }
+
+    .worktime-holiday-banner-main {
+      flex: 1 1 260px;
+      min-width: 200px;
+    }
+
+    .worktime-holiday-banner-kicker {
+      margin: 0 0 4px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.9;
+    }
+
+    .worktime-holiday-banner-name {
+      margin: 0 0 6px;
+      font-size: 24px;
+      font-weight: 800;
+    }
+
+    .worktime-holiday-banner-range {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      opacity: 0.95;
+    }
+
+    .worktime-holiday-banner-note {
+      flex: 1 1 240px;
+      min-width: 200px;
+      font-size: 13px;
+      line-height: 1.5;
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+
+    .worktime-holiday-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .worktime-holiday-card {
+      border: 1px solid #e3ecf6;
+      border-radius: 14px;
+      padding: 16px 18px;
+      background: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .worktime-holiday-card-name {
+      margin: 0 0 4px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #22354b;
+    }
+
+    .worktime-holiday-card-range {
+      color: #6a7d97;
+      font-size: 13px;
+    }
+
+    .worktime-holiday-card-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .worktime-csv-section {
+      margin-top: 14px;
+    }
+
+    .worktime-csv-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .worktime-csv-sample-btn {
+      border: 1px solid #cdd9e8;
+      background: #ffffff;
+      color: #45617f;
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .worktime-csv-sample-btn:hover {
+      background: #f1f5fa;
+      color: #37536f;
+    }
+
+    .worktime-csv-drop {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border: 1.5px dashed #b9cbe4;
+      border-radius: 14px;
+      padding: 18px 20px;
+      background: #f6f9fd;
+      cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease;
+      margin: 0;
+    }
+
+    .worktime-csv-drop:hover {
+      border-color: #7a9ab9;
+      background: #eef4fb;
+    }
+
+    .worktime-csv-drop.is-busy {
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    .worktime-csv-drop input[type="file"] {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .worktime-csv-drop-icon {
+      font-size: 26px;
+      line-height: 1;
+    }
+
+    .worktime-csv-choose {
+      display: inline-flex;
+      align-items: center;
+      background: #7a9ab9;
+      color: #ffffff;
+      border-radius: 10px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .worktime-csv-filename {
+      font-size: 13px;
+      color: #33475f;
+      font-weight: 600;
+      word-break: break-all;
+    }
+
+    .worktime-csv-filename.muted {
+      color: #91a4bc;
+      font-weight: 500;
+    }
+
+    .worktime-csv-importing {
+      margin-left: auto;
+      font-size: 12px;
+      font-weight: 700;
+      color: #45617f;
+      white-space: nowrap;
+    }
+
+    .worktime-csv-hint {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #55677f;
+      background: #f2f6fb;
+      border: 1px solid #e2eaf3;
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+
+    .worktime-csv-hint-row {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+
+    .worktime-csv-hint-label {
+      min-width: 120px;
+      font-weight: 700;
+      color: #7a8ea7;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 11px;
+    }
+
+    .worktime-csv-hint code {
+      background: #e4edf7;
+      color: #2d5279;
+      border-radius: 5px;
+      padding: 1px 6px;
+      font-size: 12px;
+    }
+
+    .worktime-csv-example {
+      margin: 10px 0 0;
+      background: #ffffff;
+      border: 1px solid #e2eaf3;
+      border-radius: 10px;
+      padding: 10px 12px;
+      color: #33475f;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre;
+      overflow-x: auto;
+    }
+
+    .worktime-csv-result {
+      margin-top: 12px;
+      font-size: 13px;
+    }
+
+    .worktime-csv-failed {
+      margin-top: 8px;
+      border-radius: 10px;
+      border: 1px solid #f1d3d3;
+      background: #fff7f7;
+      padding: 10px 12px;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+
+    .worktime-csv-failed-row {
+      color: #8a4444;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .worktime-holiday-empty {
+      padding: 26px 16px;
+      text-align: center;
+      color: #7b8ea6;
+    }
+
     @media (max-width: 767px) {
       .worktime-policy-modal .modal-dialog,
       .worktime-exception-modal .modal-dialog {
@@ -595,6 +867,42 @@
             to devices immediately.
           </p>
         </div>
+        <div class="worktime-header-actions">
+          <button
+            type="button"
+            class="worktime-btn-primary"
+            ng-click="openAddHolidayModal()"
+            ng-disabled="!canEdit"
+          >
+            <i class="glyphicon glyphicon-plus"></i>
+            Add General Holidays
+          </button>
+          <button
+            type="button"
+            class="worktime-btn-secondary"
+            ng-click="openViewHolidaysModal()"
+          >
+            <i class="glyphicon glyphicon-calendar"></i>
+            View General Holidays
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="worktime-holiday-banner" ng-if="activeHoliday()">
+      <div class="worktime-holiday-banner-main">
+        <p class="worktime-holiday-banner-kicker">Active General Holiday</p>
+        <h3 class="worktime-holiday-banner-name">{{activeHoliday().name}}</h3>
+        <div class="worktime-holiday-banner-range">
+          <span>{{holidayDate(activeHoliday().startDate) | date:'dd/MM/yyyy'}}</span>
+          <span>→</span>
+          <span>{{holidayDate(activeHoliday().endDate) | date:'dd/MM/yyyy'}}</span>
+        </div>
+      </div>
+      <div class="worktime-holiday-banner-note">
+        Applications configured for <strong>After Work</strong> and
+        <strong>24 Hours</strong> are currently available all day across all
+        devices.
       </div>
     </div>
 
@@ -976,6 +1284,148 @@
         <span ng-if="!policySaving">Save Policy</span>
         <span ng-if="policySaving">Saving...</span>
       </button>
+    </div>
+  </script>
+
+  <script type="text/ng-template" id="worktimeAddHolidayModal.html">
+    <div class="worktime-modal-header">
+      <button type="button" class="close" ng-click="closeHolidayModal()" style="color:#fff; opacity:0.92; text-shadow:none;">&times;</button>
+      <h4 class="worktime-modal-title">{{isEditingHoliday() ? 'Edit General Holiday' : 'Add General Holidays'}}</h4>
+    </div>
+
+    <div class="worktime-modal-body">
+      <div class="alert alert-danger" ng-if="holidayError">{{holidayError}}</div>
+
+      <div class="worktime-form-card">
+        <h5 class="worktime-form-title">Holiday Details</h5>
+        <div class="worktime-field" style="margin-bottom:12px;">
+          <label>Holiday Name</label>
+          <input type="text" class="form-control" ng-model="holidayForm.name" placeholder="e.g. Diwali" maxlength="255" />
+        </div>
+        <div class="worktime-inline-grid">
+          <div class="worktime-field">
+            <label>From</label>
+            <input type="date" class="form-control" ng-model="holidayForm.dateFrom" min="{{todayStr}}" />
+          </div>
+          <div class="worktime-field">
+            <label>To</label>
+            <input type="date" class="form-control" ng-model="holidayForm.dateTo" min="{{todayStr}}" />
+          </div>
+        </div>
+        <div class="worktime-note-box" style="margin-top:12px;">
+          The holiday period is inclusive of both dates. On these days every
+          device behaves as if outside working hours — apps configured for After
+          Work and 24 Hours are available all day.
+        </div>
+      </div>
+
+      <div class="worktime-form-card worktime-csv-section" ng-if="!isEditingHoliday()" style="margin-bottom:0;">
+        <div class="worktime-csv-head">
+          <h5 class="worktime-form-title" style="margin:0;">Or import holidays using CSV</h5>
+          <button type="button" class="worktime-csv-sample-btn" ng-click="downloadSampleCsv()">
+            <i class="glyphicon glyphicon-download-alt"></i> Download sample
+          </button>
+        </div>
+
+        <label class="worktime-csv-drop" ng-class="{'is-busy': csvImporting}">
+          <span class="worktime-csv-drop-icon">📄</span>
+          <span class="worktime-csv-choose">Choose CSV file</span>
+          <span class="worktime-csv-filename" ng-if="csvFileName">{{csvFileName}}</span>
+          <span class="worktime-csv-filename muted" ng-if="!csvFileName">or drag your file here — no file selected</span>
+          <input type="file" accept=".csv,text/csv" worktime-csv-file="handleCsvFile(content, filename)" ng-disabled="csvImporting" />
+          <span class="worktime-csv-importing" ng-if="csvImporting"><i class="glyphicon glyphicon-refresh"></i> Importing…</span>
+        </label>
+
+        <div class="worktime-csv-hint">
+          <div class="worktime-csv-hint-row">
+            <span class="worktime-csv-hint-label">Required headers</span>
+            <span><code>name</code>, <code>from</code>, <code>to</code></span>
+          </div>
+          <div class="worktime-csv-hint-row">
+            <span class="worktime-csv-hint-label">Date format</span>
+            <span><code>DD/MM/YYYY</code></span>
+          </div>
+          <pre class="worktime-csv-example">name,from,to
+Diwali,03/11/2026,05/11/2026
+Christmas,25/12/2026,25/12/2026</pre>
+        </div>
+
+        <div class="alert alert-danger worktime-csv-result" ng-if="csvError">{{csvError}}</div>
+
+        <div class="worktime-csv-result" ng-if="csvResult">
+          <div class="alert alert-success" ng-if="csvResult.imported > 0" style="margin-bottom:8px;">
+            <i class="glyphicon glyphicon-ok-circle"></i>
+            {{csvResult.imported}} holiday(s) imported successfully.
+          </div>
+          <div class="worktime-csv-failed" ng-if="csvResult.failed && csvResult.failed.length">
+            <strong>{{csvResult.failed.length}} row(s) could not be imported:</strong>
+            <div class="worktime-csv-failed-row" ng-repeat="fail in csvResult.failed">
+              Row {{fail.row}}<span ng-if="fail.name"> ("{{fail.name}}")</span>: {{fail.reason}}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="worktime-modal-footer">
+      <button type="button" class="worktime-btn-secondary" ng-click="closeHolidayModal()">Close</button>
+      <button type="button" class="worktime-btn-primary" ng-click="saveHoliday()" ng-disabled="holidaySaving">
+        <span ng-if="!holidaySaving">{{isEditingHoliday() ? 'Save Changes' : 'Add Holiday'}}</span>
+        <span ng-if="holidaySaving">Saving...</span>
+      </button>
+    </div>
+  </script>
+
+  <script type="text/ng-template" id="worktimeViewHolidaysModal.html">
+    <div class="worktime-modal-header">
+      <button type="button" class="close" ng-click="closeViewHolidaysModal()" style="color:#fff; opacity:0.92; text-shadow:none;">&times;</button>
+      <h4 class="worktime-modal-title">General Holidays</h4>
+    </div>
+
+    <div class="worktime-modal-body">
+      <div class="worktime-holiday-empty" ng-if="holidaysLoading">Loading holidays...</div>
+
+      <div class="worktime-holiday-empty" ng-if="!holidaysLoading && (!holidays || holidays.length === 0)">
+        <strong>No general holidays configured.</strong>
+        <div style="margin-top:6px;">Use "Add General Holidays" to create one.</div>
+      </div>
+
+      <div class="worktime-holiday-list" ng-if="!holidaysLoading && holidays.length > 0">
+        <div class="worktime-holiday-card" ng-repeat="holiday in holidays track by (holiday.id || $index)">
+          <div>
+            <h5 class="worktime-holiday-card-name">{{holiday.name}}</h5>
+            <div class="worktime-holiday-card-range">
+              {{holidayDate(holiday.startDate) | date:'dd/MM/yyyy'}} &ndash;
+              {{holidayDate(holiday.endDate) | date:'dd/MM/yyyy'}}
+            </div>
+          </div>
+          <div class="worktime-holiday-card-actions">
+            <span class="worktime-badge" ng-class="holidayStatusClass(holiday)">{{holidayStatusLabel(holiday)}}</span>
+            <button
+              type="button"
+              class="worktime-btn-secondary"
+              ng-click="editHoliday(holiday)"
+              ng-disabled="!canEdit || !holiday.editable"
+              title="{{holiday.editable ? 'Edit holiday' : 'This holiday has ended and can no longer be edited'}}"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              class="worktime-btn-danger"
+              ng-click="deleteHoliday(holiday)"
+              ng-disabled="!canEdit"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="worktime-modal-footer">
+      <button type="button" class="worktime-btn-secondary" ng-click="closeViewHolidaysModal()">Close</button>
+      <button type="button" class="worktime-btn-primary" ng-click="closeViewHolidaysModal(); openAddHolidayModal()" ng-disabled="!canEdit">Add Holiday</button>
     </div>
   </script>
 </div>

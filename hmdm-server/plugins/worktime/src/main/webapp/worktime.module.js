@@ -107,6 +107,74 @@ angular
       },
     );
   })
+  .factory("WorkTimeHoliday", function ($resource) {
+    var unwrapList = function (data) {
+      var response = angular.fromJson(data);
+      if (response && response.data) {
+        return response.data;
+      }
+      return response || [];
+    };
+
+    return $resource(
+      "/rest/plugins/worktime/private/holiday/:id",
+      { id: "@id" },
+      {
+        list: {
+          method: "GET",
+          url: "/rest/plugins/worktime/private/holidays",
+          isArray: true,
+          transformResponse: unwrapList,
+        },
+        active: {
+          method: "GET",
+          url: "/rest/plugins/worktime/private/holidays/active",
+          isArray: true,
+          transformResponse: unwrapList,
+        },
+        save: {
+          method: "POST",
+          url: "/rest/plugins/worktime/private/holiday",
+        },
+        remove: { method: "DELETE" },
+        importCsv: {
+          method: "POST",
+          url: "/rest/plugins/worktime/private/holidays/import",
+        },
+      },
+    );
+  })
+  .directive("worktimeCsvFile", function () {
+    return {
+      restrict: "A",
+      scope: { onFile: "&worktimeCsvFile" },
+      link: function (scope, element) {
+        element.on("change", function (event) {
+          var file =
+            event.target.files && event.target.files.length
+              ? event.target.files[0]
+              : null;
+          if (!file) {
+            return;
+          }
+          var reader = new FileReader();
+          reader.onload = function () {
+            scope.$apply(function () {
+              scope.onFile({ content: reader.result, filename: file.name });
+            });
+          };
+          reader.onerror = function () {
+            scope.$apply(function () {
+              scope.onFile({ content: null, filename: file.name });
+            });
+          };
+          reader.readAsText(file);
+          // Reset so selecting the same file again re-triggers change.
+          event.target.value = "";
+        });
+      },
+    };
+  })
   .controller(
     "WorkTimeAdminController",
     function (
@@ -117,6 +185,7 @@ angular
       WorkTimePolicy,
       WorkTimeDevice,
       WorkTimeApplications,
+      WorkTimeHoliday,
       localization,
       authService,
     ) {
@@ -155,7 +224,21 @@ angular
       $scope.policyTime = null;
       $scope.exceptionTime = null;
 
+      // General (organization-wide) holidays
+      $scope.holidays = [];
+      $scope.activeHolidays = [];
+      $scope.holidayForm = null;
+      $scope.holidayError = null;
+      $scope.holidaySaving = false;
+      $scope.holidaysLoading = false;
+      $scope.csvError = null;
+      $scope.csvResult = null;
+      $scope.csvFileName = null;
+      $scope.csvImporting = false;
+
       var modalInstance = null;
+      var holidayModalInstance = null;
+      var viewHolidaysModalInstance = null;
       var refreshPromise = null;
 
       function padTimePart(value) {
@@ -276,6 +359,13 @@ angular
       }
 
       function syncAllAppsFlags() {
+        // Applications are loaded asynchronously. Until the list is available we cannot know whether
+        // "all" apps are selected, so do nothing here — otherwise an explicit wildcard ("*") selection
+        // parsed from a saved policy would be wrongly downgraded to false before the apps arrive,
+        // and the "All" state would be lost when re-opening the editor.
+        if (!$scope.applications || $scope.applications.length === 0) {
+          return;
+        }
         $scope.selectedAppsDuringWork["*"] = areAllAppsSelected(
           $scope.selectedAppsDuringWork,
         );
@@ -1216,9 +1306,348 @@ angular
         return device.displayException ? "state-alert" : "state-ok";
       };
 
+      // ================================================================
+      // General (organization-wide) holidays
+      // ================================================================
+
+      $scope.holidayDate = function (value) {
+        return parseLocalDate(value);
+      };
+
+      $scope.activeHoliday = function () {
+        return $scope.activeHolidays && $scope.activeHolidays.length
+          ? $scope.activeHolidays[0]
+          : null;
+      };
+
+      $scope.loadActiveHolidays = function () {
+        WorkTimeHoliday.active(
+          function (list) {
+            $scope.activeHolidays = angular.isArray(list) ? list : [];
+          },
+          function () {
+            // Non-fatal: keep the page usable even if the active holiday lookup fails.
+          },
+        );
+      };
+
+      $scope.loadHolidays = function () {
+        $scope.holidaysLoading = true;
+        WorkTimeHoliday.list(
+          function (list) {
+            $scope.holidays = angular.isArray(list) ? list : [];
+            $scope.holidaysLoading = false;
+          },
+          function (error) {
+            $scope.holidaysLoading = false;
+            $scope.error =
+              (error && error.data && error.data.message) ||
+              "Failed to load holidays";
+          },
+        );
+      };
+
+      function createHolidayDraft() {
+        var today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return { id: null, name: "", dateFrom: today, dateTo: today };
+      }
+
+      function validateHolidayForm(form) {
+        if (!form) {
+          return "Holiday details are required";
+        }
+        var name = (form.name || "").trim();
+        if (!name) {
+          return "Holiday name is required";
+        }
+        var fromStr = toDatePart(form.dateFrom);
+        var toStr = toDatePart(form.dateTo);
+        if (!fromStr) {
+          return "From date is required";
+        }
+        if (!toStr) {
+          return "To date is required";
+        }
+        // yyyy-MM-dd strings compare correctly lexicographically.
+        var todayStr = toDatePart(new Date());
+        if (fromStr < todayStr) {
+          return "From date cannot be before today";
+        }
+        if (toStr < todayStr) {
+          return "To date cannot be before today";
+        }
+        if (toStr < fromStr) {
+          return "To date cannot be earlier than From date";
+        }
+        return null;
+      }
+
+      function openHolidayFormModal(form) {
+        $scope.holidayForm = form;
+        $scope.holidayError = null;
+        $scope.holidaySaving = false;
+        $scope.csvError = null;
+        $scope.csvResult = null;
+        $scope.csvFileName = null;
+        $scope.csvImporting = false;
+        $scope.todayStr = toDatePart(new Date());
+
+        holidayModalInstance = $uibModal.open({
+          templateUrl: "worktimeAddHolidayModal.html",
+          scope: $scope,
+          windowClass: "worktime-policy-modal",
+          backdrop: "static",
+          keyboard: true,
+        });
+
+        holidayModalInstance.result.finally(function () {
+          holidayModalInstance = null;
+          $scope.holidayForm = null;
+          $scope.holidayError = null;
+          $scope.csvError = null;
+          $scope.csvResult = null;
+        });
+      }
+
+      $scope.openAddHolidayModal = function () {
+        if (!$scope.canEdit) {
+          return;
+        }
+        openHolidayFormModal(createHolidayDraft());
+      };
+
+      $scope.closeHolidayModal = function () {
+        if (holidayModalInstance) {
+          holidayModalInstance.close();
+        }
+      };
+
+      $scope.isEditingHoliday = function () {
+        return !!($scope.holidayForm && $scope.holidayForm.id);
+      };
+
+      $scope.saveHoliday = function () {
+        if ($scope.holidaySaving) {
+          return;
+        }
+        var err = validateHolidayForm($scope.holidayForm);
+        if (err) {
+          $scope.holidayError = err;
+          return;
+        }
+        $scope.holidayError = null;
+        $scope.holidaySaving = true;
+
+        var payload = {
+          id: $scope.holidayForm.id || null,
+          name: ($scope.holidayForm.name || "").trim(),
+          startDate: toDatePart($scope.holidayForm.dateFrom),
+          endDate: toDatePart($scope.holidayForm.dateTo),
+        };
+
+        WorkTimeHoliday.save(
+          payload,
+          function (response) {
+            $scope.holidaySaving = false;
+            if (response && response.status === "OK") {
+              if (holidayModalInstance) {
+                holidayModalInstance.close();
+              }
+              showSuccess(payload.id ? "Holiday updated" : "Holiday added");
+              $scope.loadHolidays();
+              $scope.loadActiveHolidays();
+            } else {
+              $scope.holidayError =
+                (response && response.message) || "Failed to save holiday";
+            }
+          },
+          function (error) {
+            $scope.holidaySaving = false;
+            $scope.holidayError =
+              (error && error.data && error.data.message) ||
+              "Failed to save holiday";
+          },
+        );
+      };
+
+      $scope.downloadSampleCsv = function () {
+        var sample =
+          "name,from,to\n" +
+          "Diwali,03/11/2026,05/11/2026\n" +
+          "Christmas,25/12/2026,25/12/2026\n";
+        try {
+          var blob = new Blob([sample], { type: "text/csv;charset=utf-8" });
+          var url = URL.createObjectURL(blob);
+          var link = document.createElement("a");
+          link.href = url;
+          link.download = "holidays-sample.csv";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          console.error("Failed to generate sample CSV", e);
+        }
+      };
+
+      $scope.handleCsvFile = function (content, filename) {
+        $scope.csvError = null;
+        $scope.csvResult = null;
+        $scope.csvFileName = filename || null;
+
+        if (content == null) {
+          $scope.csvError = "Could not read the file '" + (filename || "") + "'";
+          return;
+        }
+        if (!String(content).trim()) {
+          $scope.csvError = "The CSV file is empty";
+          return;
+        }
+
+        // Client-side header validation (the server validates again).
+        var lines = String(content)
+          .replace(/\r\n/g, "\n")
+          .replace(/\r/g, "\n")
+          .split("\n")
+          .filter(function (line) {
+            return line.trim() !== "";
+          });
+        var firstLine = lines.length ? lines[0] : "";
+        var headers = firstLine.split(",").map(function (header) {
+          return header
+            .replace(/^\uFEFF/, "")
+            .trim()
+            .replace(/^"|"$/g, "")
+            .toLowerCase();
+        });
+        if (
+          headers.length !== 3 ||
+          headers[0] !== "name" ||
+          headers[1] !== "from" ||
+          headers[2] !== "to"
+        ) {
+          $scope.csvError = "CSV headers must be exactly: name, from, to";
+          return;
+        }
+
+        $scope.csvImporting = true;
+        WorkTimeHoliday.importCsv(
+          { content: content },
+          function (response) {
+            $scope.csvImporting = false;
+            if (response && response.status === "OK" && response.data) {
+              $scope.csvResult = response.data;
+              if (response.data.imported > 0) {
+                showSuccess(response.data.imported + " holiday(s) imported");
+                $scope.loadHolidays();
+                $scope.loadActiveHolidays();
+              } else if (
+                !response.data.failed ||
+                !response.data.failed.length
+              ) {
+                $scope.csvError = "No holiday rows found in the CSV";
+              }
+            } else {
+              $scope.csvError =
+                (response && response.message) || "Failed to import CSV";
+            }
+          },
+          function (error) {
+            $scope.csvImporting = false;
+            $scope.csvError =
+              (error && error.data && error.data.message) ||
+              "Failed to import CSV";
+          },
+        );
+      };
+
+      $scope.openViewHolidaysModal = function () {
+        $scope.loadHolidays();
+        viewHolidaysModalInstance = $uibModal.open({
+          templateUrl: "worktimeViewHolidaysModal.html",
+          scope: $scope,
+          windowClass: "worktime-policy-modal",
+          backdrop: "static",
+          keyboard: true,
+        });
+        viewHolidaysModalInstance.result.finally(function () {
+          viewHolidaysModalInstance = null;
+        });
+      };
+
+      $scope.closeViewHolidaysModal = function () {
+        if (viewHolidaysModalInstance) {
+          viewHolidaysModalInstance.close();
+        }
+      };
+
+      $scope.editHoliday = function (holiday) {
+        if (!$scope.canEdit || !holiday || !holiday.editable) {
+          return;
+        }
+        if (viewHolidaysModalInstance) {
+          viewHolidaysModalInstance.close();
+        }
+        openHolidayFormModal({
+          id: holiday.id,
+          name: holiday.name,
+          dateFrom: parseLocalDate(holiday.startDate),
+          dateTo: parseLocalDate(holiday.endDate),
+        });
+      };
+
+      $scope.deleteHoliday = function (holiday) {
+        if (!$scope.canEdit || !holiday || !holiday.id) {
+          return;
+        }
+        if (!confirm("Delete holiday '" + holiday.name + "'?")) {
+          return;
+        }
+        WorkTimeHoliday.remove(
+          { id: holiday.id },
+          function () {
+            showSuccess("Holiday deleted");
+            $scope.loadHolidays();
+            $scope.loadActiveHolidays();
+          },
+          function (error) {
+            $scope.error =
+              (error && error.data && error.data.message) ||
+              "Failed to delete holiday";
+          },
+        );
+      };
+
+      $scope.holidayStatusLabel = function (holiday) {
+        if (!holiday) {
+          return "";
+        }
+        if (holiday.status === "active") {
+          return "Active";
+        }
+        if (holiday.status === "upcoming") {
+          return "Upcoming";
+        }
+        if (holiday.status === "expired") {
+          return "Expired";
+        }
+        return holiday.status || "";
+      };
+
+      $scope.holidayStatusClass = function (holiday) {
+        if (holiday && holiday.status === "active") {
+          return "state-alert";
+        }
+        return "state-ok";
+      };
+
       refreshPromise = $interval(function () {
-        if (modalInstance) { return; } // don't clobber modal scope during auto-refresh
+        if (modalInstance || holidayModalInstance || viewHolidaysModalInstance) {
+          return;
+        } // don't clobber modal scope during auto-refresh
         $scope.refresh(true);
+        $scope.loadActiveHolidays();
       }, 15000);
 
       $scope.$on("$destroy", function () {
@@ -1228,6 +1657,7 @@ angular
       });
 
       $scope.refresh();
+      $scope.loadActiveHolidays();
     },
   )
   .controller("WorkTimePoliciesController", function ($controller, $scope) {

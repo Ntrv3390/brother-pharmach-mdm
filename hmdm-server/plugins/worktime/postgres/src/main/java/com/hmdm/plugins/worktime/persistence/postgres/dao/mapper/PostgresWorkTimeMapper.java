@@ -2,6 +2,7 @@ package com.hmdm.plugins.worktime.persistence.postgres.dao.mapper;
 
 import com.hmdm.plugins.worktime.model.WorkTimeDevicePolicy;
 import com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride;
+import com.hmdm.plugins.worktime.model.WorkTimeGeneralHoliday;
 import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
@@ -47,4 +48,26 @@ public interface PostgresWorkTimeMapper {
 
     // Get all device overrides across all customers (for cleanup task)
     List<WorkTimeDeviceOverride> getAllDeviceOverrides();
+
+    // General holidays
+    List<WorkTimeGeneralHoliday> getHolidays(@Param("customerId") int customerId);
+
+    WorkTimeGeneralHoliday getHolidayById(@Param("customerId") int customerId, @Param("id") int id);
+
+    List<WorkTimeGeneralHoliday> getActiveHolidays(@Param("customerId") int customerId,
+                                                   @Param("date") java.sql.Date date);
+
+    void insertHoliday(WorkTimeGeneralHoliday holiday);
+
+    void updateHoliday(WorkTimeGeneralHoliday holiday);
+
+    void deleteHolidayById(@Param("customerId") int customerId, @Param("id") int id);
+
+    List<WorkTimeGeneralHoliday> getAllHolidaysForMaintenance();
+
+    void markHolidayStartPushSent(@Param("id") int id);
+
+    void markHolidayEndPushSent(@Param("id") int id);
+
+    void deleteHolidayByIdAnyCustomer(@Param("id") int id);
 }

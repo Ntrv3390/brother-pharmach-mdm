@@ -2,14 +2,18 @@ package com.hmdm.plugins.worktime.task;
 
 import com.hmdm.plugins.worktime.WorkTimeZone;
 import com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride;
+import com.hmdm.plugins.worktime.model.WorkTimeGeneralHoliday;
 import com.hmdm.plugins.worktime.persistence.WorkTimeDAO;
 import com.hmdm.notification.PushService;
 import com.hmdm.notification.persistence.domain.PushMessage;
+import com.hmdm.persistence.UnsecureDAO;
+import com.hmdm.persistence.domain.Device;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -26,11 +30,13 @@ public class ExpiredExceptionCleanupTask {
     
     private final WorkTimeDAO workTimeDAO;
     private final PushService pushService;
+    private final UnsecureDAO unsecureDAO;
 
     @Inject
-    public ExpiredExceptionCleanupTask(WorkTimeDAO workTimeDAO, PushService pushService) {
+    public ExpiredExceptionCleanupTask(WorkTimeDAO workTimeDAO, PushService pushService, UnsecureDAO unsecureDAO) {
         this.workTimeDAO = workTimeDAO;
         this.pushService = pushService;
+        this.unsecureDAO = unsecureDAO;
     }
 
     /**
@@ -86,6 +92,71 @@ public class ExpiredExceptionCleanupTask {
             }
         } catch (Exception e) {
             log.error("Error during expired exception cleanup", e);
+        }
+
+        // General (organization-wide) holiday boundaries and cleanup.
+        cleanupExpiredHolidays();
+    }
+
+    /**
+     * Handles general-holiday start boundaries and automatic removal of ended holidays.
+     * <ul>
+     *   <li>When a holiday first becomes active, pushes a config-updated notification to all of the
+     *       customer's devices so the "outside working hours" behavior takes effect immediately.</li>
+     *   <li>Once a holiday has fully ended (the day after its inclusive end date), pushes a final
+     *       config-updated notification so normal enforcement resumes, then deletes the holiday.</li>
+     * </ul>
+     */
+    private void cleanupExpiredHolidays() {
+        try {
+            LocalDate today = LocalDate.now(WORKTIME_ZONE);
+            List<WorkTimeGeneralHoliday> holidays = workTimeDAO.getAllHolidaysForMaintenance();
+
+            int startPushes = 0;
+            int deleted = 0;
+            for (WorkTimeGeneralHoliday holiday : holidays) {
+                if (holiday.getStartDate() == null || holiday.getEndDate() == null) {
+                    continue;
+                }
+                LocalDate start = holiday.getStartDate().toLocalDate();
+                LocalDate end = holiday.getEndDate().toLocalDate();
+
+                if (today.isAfter(end)) {
+                    // Holiday fully ended: restore normal policy on all devices, then remove it.
+                    pushToCustomerDevices(holiday.getCustomerId());
+                    workTimeDAO.deleteHolidayByIdAnyCustomer(holiday.getId());
+                    deleted++;
+                    log.info("Deleted expired general holiday '{}' (id={}, customer={})",
+                            holiday.getName(), holiday.getId(), holiday.getCustomerId());
+                    continue;
+                }
+
+                if (!Boolean.TRUE.equals(holiday.getStartPushSent()) && !today.isBefore(start)) {
+                    // Holiday just became active: push so devices pick up the holiday policy.
+                    pushToCustomerDevices(holiday.getCustomerId());
+                    workTimeDAO.markHolidayStartPushSent(holiday.getId());
+                    startPushes++;
+                    log.info("Sent start boundary push for general holiday '{}' (id={}, customer={})",
+                            holiday.getName(), holiday.getId(), holiday.getCustomerId());
+                }
+            }
+
+            if (startPushes > 0 || deleted > 0) {
+                log.info("Worktime holiday task summary: startPushes={}, cleanedExpired={}", startPushes, deleted);
+            }
+        } catch (Exception e) {
+            log.error("Error during expired holiday cleanup", e);
+        }
+    }
+
+    private void pushToCustomerDevices(int customerId) {
+        try {
+            List<Device> devices = unsecureDAO.getAllCustomerDevices(customerId);
+            for (Device device : devices) {
+                sendConfigUpdated(device.getId());
+            }
+        } catch (Exception e) {
+            log.error("Failed to push holiday update to devices of customer {}", customerId, e);
         }
     }
 

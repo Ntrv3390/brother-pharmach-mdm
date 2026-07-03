@@ -4,6 +4,7 @@ import javax.inject.Inject;
 
 import com.hmdm.plugins.worktime.model.WorkTimeDevicePolicy;
 import com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride;
+import com.hmdm.plugins.worktime.model.WorkTimeGeneralHoliday;
 import com.hmdm.plugins.worktime.persistence.WorkTimeDAO;
 import com.hmdm.plugins.worktime.persistence.postgres.dao.mapper.PostgresWorkTimeMapper;
 import org.mybatis.guice.transactional.Transactional;
@@ -155,5 +156,65 @@ public class PostgresWorkTimeDAO implements WorkTimeDAO {
     @Override
     public List<WorkTimeDeviceOverride> getAllDeviceOverrides() {
         return mapper.getAllDeviceOverrides();
+    }
+
+    // ------------------------------------------------------------------
+    // General holidays
+    // ------------------------------------------------------------------
+
+    @Override
+    public List<WorkTimeGeneralHoliday> getHolidays(int customerId) {
+        return mapper.getHolidays(customerId);
+    }
+
+    @Override
+    public WorkTimeGeneralHoliday getHolidayById(int customerId, int id) {
+        return mapper.getHolidayById(customerId, id);
+    }
+
+    @Override
+    public List<WorkTimeGeneralHoliday> getActiveHolidays(int customerId, java.sql.Date date) {
+        return mapper.getActiveHolidays(customerId, date);
+    }
+
+    @Override
+    @Transactional
+    public void insertHoliday(WorkTimeGeneralHoliday holiday) {
+        mapper.insertHoliday(holiday);
+    }
+
+    @Override
+    @Transactional
+    public void updateHoliday(WorkTimeGeneralHoliday holiday) {
+        mapper.updateHoliday(holiday);
+    }
+
+    @Override
+    @Transactional
+    public void deleteHolidayById(int customerId, int id) {
+        mapper.deleteHolidayById(customerId, id);
+    }
+
+    @Override
+    public List<WorkTimeGeneralHoliday> getAllHolidaysForMaintenance() {
+        return mapper.getAllHolidaysForMaintenance();
+    }
+
+    @Override
+    @Transactional
+    public void markHolidayStartPushSent(int id) {
+        mapper.markHolidayStartPushSent(id);
+    }
+
+    @Override
+    @Transactional
+    public void markHolidayEndPushSent(int id) {
+        mapper.markHolidayEndPushSent(id);
+    }
+
+    @Override
+    @Transactional
+    public void deleteHolidayByIdAnyCustomer(int id) {
+        mapper.deleteHolidayByIdAnyCustomer(id);
     }
 }

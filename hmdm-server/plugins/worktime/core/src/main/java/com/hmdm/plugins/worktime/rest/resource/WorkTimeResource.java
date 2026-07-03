@@ -7,11 +7,14 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import com.hmdm.plugins.worktime.WorkTimeZone;
+import java.sql.Date;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -20,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.hmdm.plugins.worktime.model.WorkTimeDevicePolicy;
 import com.hmdm.plugins.worktime.model.WorkTimeDeviceOverride;
+import com.hmdm.plugins.worktime.model.WorkTimeGeneralHoliday;
 import com.hmdm.plugins.worktime.persistence.WorkTimeDAO;
 import com.hmdm.persistence.domain.DeviceApplication;
 import com.hmdm.persistence.UserDAO;
@@ -488,5 +492,362 @@ public class WorkTimeResource {
         sendConfigUpdatedTwice(existing.getDeviceId());
 
         return Response.OK();
+    }
+
+    // ==================================================================================
+    // General (organization-wide) holidays
+    // ==================================================================================
+
+    private boolean isAdmin() {
+        User current = SecurityContext.get().getCurrentUser().orElse(null);
+        if (current == null) {
+            return false;
+        }
+        return SecurityContext.get().isSuperAdmin() || this.userDAO.isOrgAdmin(current);
+    }
+
+    /**
+     * Pushes a config-updated notification to every device of the current customer so that a general
+     * holiday change (create/update/delete/import) is applied immediately across all devices.
+     */
+    private void pushToAllCustomerDevices() {
+        try {
+            List<Device> devices = deviceDAO.getAllDevices();
+            for (Device device : devices) {
+                sendConfigUpdatedTwice(device.getId());
+            }
+            log.info("Pushed worktime holiday update to {} device(s)", devices.size());
+        } catch (Exception e) {
+            log.error("Failed to push holiday update to devices", e);
+        }
+    }
+
+    private String holidayStatus(WorkTimeGeneralHoliday holiday, LocalDate today) {
+        LocalDate start = holiday.getStartDate().toLocalDate();
+        LocalDate end = holiday.getEndDate().toLocalDate();
+        if (today.isBefore(start)) {
+            return "upcoming";
+        }
+        if (today.isAfter(end)) {
+            return "expired";
+        }
+        return "active";
+    }
+
+    private Map<String, Object> toHolidayMap(WorkTimeGeneralHoliday holiday, LocalDate today) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        String status = holidayStatus(holiday, today);
+        map.put("id", holiday.getId());
+        map.put("name", holiday.getName());
+        map.put("startDate", holiday.getStartDate().toString());
+        map.put("endDate", holiday.getEndDate().toString());
+        map.put("status", status);
+        map.put("active", "active".equals(status));
+        // Editing is allowed only while the holiday has not fully ended.
+        map.put("editable", !today.isAfter(holiday.getEndDate().toLocalDate()));
+        return map;
+    }
+
+    /**
+     * Validates the fields of a holiday. Returns an error message, or {@code null} if valid.
+     */
+    private String validateHoliday(String name, Date startDate, Date endDate, LocalDate today) {
+        if (name == null || name.trim().isEmpty()) {
+            return "Holiday name is required";
+        }
+        if (name.trim().length() > 255) {
+            return "Holiday name is too long (max 255 characters)";
+        }
+        if (startDate == null) {
+            return "Start date is required";
+        }
+        if (endDate == null) {
+            return "End date is required";
+        }
+        LocalDate start = startDate.toLocalDate();
+        LocalDate end = endDate.toLocalDate();
+        if (start.isBefore(today)) {
+            return "Start date cannot be before today";
+        }
+        if (end.isBefore(today)) {
+            return "End date cannot be before today";
+        }
+        if (end.isBefore(start)) {
+            return "End date cannot be earlier than start date";
+        }
+        return null;
+    }
+
+    @GET
+    @Path("/holidays")
+    public Response getHolidays() {
+        if (!isAdmin()) {
+            return Response.PERMISSION_DENIED();
+        }
+        int customerId = getCustomerId();
+        LocalDate today = LocalDate.now(WORKTIME_ZONE);
+        List<WorkTimeGeneralHoliday> holidays = workTimeDAO.getHolidays(customerId);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (WorkTimeGeneralHoliday holiday : holidays) {
+            result.add(toHolidayMap(holiday, today));
+        }
+        return Response.OK(result);
+    }
+
+    @GET
+    @Path("/holidays/active")
+    public Response getActiveHoliday() {
+        if (!isAdmin()) {
+            return Response.PERMISSION_DENIED();
+        }
+        int customerId = getCustomerId();
+        LocalDate today = LocalDate.now(WORKTIME_ZONE);
+        List<WorkTimeGeneralHoliday> active = workTimeDAO.getActiveHolidays(customerId, Date.valueOf(today));
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (WorkTimeGeneralHoliday holiday : active) {
+            result.add(toHolidayMap(holiday, today));
+        }
+        return Response.OK(result);
+    }
+
+    @POST
+    @Path("/holiday")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response saveHoliday(WorkTimeGeneralHoliday holiday) {
+        if (!isAdmin()) {
+            return Response.PERMISSION_DENIED();
+        }
+        if (holiday == null) {
+            return Response.ERROR("Holiday payload is required");
+        }
+
+        int customerId = getCustomerId();
+        LocalDate today = LocalDate.now(WORKTIME_ZONE);
+
+        String error = validateHoliday(holiday.getName(), holiday.getStartDate(), holiday.getEndDate(), today);
+        if (error != null) {
+            return Response.ERROR(error);
+        }
+
+        holiday.setCustomerId(customerId);
+        holiday.setName(holiday.getName().trim());
+
+        if (holiday.getId() != null && holiday.getId() > 0) {
+            WorkTimeGeneralHoliday existing = workTimeDAO.getHolidayById(customerId, holiday.getId());
+            if (existing == null) {
+                return Response.ERROR("Holiday not found");
+            }
+            // Editing is only allowed while the holiday has not fully ended.
+            if (today.isAfter(existing.getEndDate().toLocalDate())) {
+                return Response.ERROR("Cannot edit a holiday that has already ended");
+            }
+            workTimeDAO.updateHoliday(holiday);
+        } else {
+            holiday.setId(null);
+            workTimeDAO.insertHoliday(holiday);
+        }
+
+        pushToAllCustomerDevices();
+
+        log.info("Saved general holiday '{}' for customer {} ({} to {})",
+                holiday.getName(), customerId, holiday.getStartDate(), holiday.getEndDate());
+
+        return Response.OK(toHolidayMap(holiday, today));
+    }
+
+    @DELETE
+    @Path("/holiday/{id}")
+    public Response deleteHoliday(@PathParam("id") int id) {
+        if (!isAdmin()) {
+            return Response.PERMISSION_DENIED();
+        }
+        int customerId = getCustomerId();
+        WorkTimeGeneralHoliday existing = workTimeDAO.getHolidayById(customerId, id);
+        if (existing == null) {
+            return Response.ERROR("Holiday not found");
+        }
+        workTimeDAO.deleteHolidayById(customerId, id);
+        pushToAllCustomerDevices();
+        return Response.OK();
+    }
+
+    public static class HolidayImportRequest {
+        private String content;
+
+        public String getContent() {
+            return content;
+        }
+
+        public void setContent(String content) {
+            this.content = content;
+        }
+    }
+
+    @POST
+    @Path("/holidays/import")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response importHolidays(HolidayImportRequest request) {
+        if (!isAdmin()) {
+            return Response.PERMISSION_DENIED();
+        }
+        if (request == null || request.getContent() == null || request.getContent().trim().isEmpty()) {
+            return Response.ERROR("CSV content is empty");
+        }
+
+        int customerId = getCustomerId();
+        LocalDate today = LocalDate.now(WORKTIME_ZONE);
+
+        String[] rawLines = request.getContent().replace("\r\n", "\n").replace("\r", "\n").split("\n");
+
+        // Find the header line (first non-empty line).
+        int headerIndex = -1;
+        for (int i = 0; i < rawLines.length; i++) {
+            if (!rawLines[i].trim().isEmpty()) {
+                headerIndex = i;
+                break;
+            }
+        }
+        if (headerIndex < 0) {
+            return Response.ERROR("CSV is empty");
+        }
+
+        List<String> header = parseCsvLine(rawLines[headerIndex]);
+        if (header.size() != 3
+                || !"name".equalsIgnoreCase(header.get(0).trim())
+                || !"from".equalsIgnoreCase(header.get(1).trim())
+                || !"to".equalsIgnoreCase(header.get(2).trim())) {
+            return Response.ERROR("CSV headers must be exactly: name, from, to");
+        }
+
+        int imported = 0;
+        List<Map<String, Object>> failed = new ArrayList<>();
+        int dataRowNumber = 0;
+
+        for (int i = headerIndex + 1; i < rawLines.length; i++) {
+            String line = rawLines[i];
+            if (line.trim().isEmpty()) {
+                continue; // skip blank lines
+            }
+            dataRowNumber++;
+
+            List<String> cols = parseCsvLine(line);
+            String name = cols.size() > 0 ? cols.get(0).trim() : "";
+            String fromStr = cols.size() > 1 ? cols.get(1).trim() : "";
+            String toStr = cols.size() > 2 ? cols.get(2).trim() : "";
+
+            Date fromDate = parseCsvDate(fromStr);
+            Date toDate = parseCsvDate(toStr);
+
+            String rowError = null;
+            if (cols.size() < 3) {
+                rowError = "Row must have 3 columns (name, from, to)";
+            } else if (fromDate == null) {
+                rowError = "Invalid 'from' date (expected DD/MM/YYYY): '" + fromStr + "'";
+            } else if (toDate == null) {
+                rowError = "Invalid 'to' date (expected DD/MM/YYYY): '" + toStr + "'";
+            } else {
+                rowError = validateHoliday(name, fromDate, toDate, today);
+            }
+
+            if (rowError != null) {
+                Map<String, Object> fail = new LinkedHashMap<>();
+                fail.put("row", dataRowNumber);
+                fail.put("name", name);
+                fail.put("reason", rowError);
+                failed.add(fail);
+                continue;
+            }
+
+            try {
+                WorkTimeGeneralHoliday holiday = new WorkTimeGeneralHoliday();
+                holiday.setCustomerId(customerId);
+                holiday.setName(name);
+                holiday.setStartDate(fromDate);
+                holiday.setEndDate(toDate);
+                workTimeDAO.insertHoliday(holiday);
+                imported++;
+            } catch (Exception e) {
+                log.error("Failed to import holiday row {}", dataRowNumber, e);
+                Map<String, Object> fail = new LinkedHashMap<>();
+                fail.put("row", dataRowNumber);
+                fail.put("name", name);
+                fail.put("reason", "Database error while saving");
+                failed.add(fail);
+            }
+        }
+
+        if (imported > 0) {
+            pushToAllCustomerDevices();
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("imported", imported);
+        result.put("failed", failed);
+        result.put("total", dataRowNumber);
+        return Response.OK(result);
+    }
+
+    /**
+     * Minimal CSV line parser supporting double-quoted fields (with escaped "" quotes).
+     */
+    private List<String> parseCsvLine(String line) {
+        List<String> fields = new ArrayList<>();
+        if (line == null) {
+            return fields;
+        }
+        // Strip a leading UTF-8 BOM if present.
+        if (!line.isEmpty() && line.charAt(0) == '\uFEFF') {
+            line = line.substring(1);
+        }
+        StringBuilder sb = new StringBuilder();
+        boolean inQuotes = false;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (inQuotes) {
+                if (c == '"') {
+                    if (i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                        sb.append('"');
+                        i++;
+                    } else {
+                        inQuotes = false;
+                    }
+                } else {
+                    sb.append(c);
+                }
+            } else {
+                if (c == '"') {
+                    inQuotes = true;
+                } else if (c == ',') {
+                    fields.add(sb.toString());
+                    sb.setLength(0);
+                } else {
+                    sb.append(c);
+                }
+            }
+        }
+        fields.add(sb.toString());
+        return fields;
+    }
+
+    // CSV dates are entered in the Indian standard DD/MM/YYYY format; ISO yyyy-MM-dd is also accepted
+    // as a convenience/back-compat fallback.
+    private static final DateTimeFormatter[] CSV_DATE_FORMATS = {
+            DateTimeFormatter.ofPattern("d/M/uuuu"),
+            DateTimeFormatter.ofPattern("uuuu-M-d"),
+    };
+
+    private Date parseCsvDate(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        String trimmed = value.trim();
+        for (DateTimeFormatter format : CSV_DATE_FORMATS) {
+            try {
+                return Date.valueOf(LocalDate.parse(trimmed, format));
+            } catch (Exception ignored) {
+                // try next format
+            }
+        }
+        return null;
     }
 }
