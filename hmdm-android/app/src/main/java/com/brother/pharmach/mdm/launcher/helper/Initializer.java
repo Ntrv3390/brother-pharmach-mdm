@@ -82,12 +82,10 @@ public class Initializer {
 
             ConnectionWaiter.waitForConnect(context, () -> {
                 DetailedInfoWorker.schedule(context);
-                // Trying out LocationService in place of LocationForegroundService — see
-                // LocationService.java. Not deleted, just disabled:
-                // LocationForegroundService.start(context);
-                // Kiosk app is always running, so start it once here and it stays alive
-                // (once-a-minute periodic capture is scheduled internally from its onCreate()).
-                LocationService.start(context);
+                // Reverted from the LocationService experiment back to LocationForegroundService —
+                // see LocationService.java for why the simplified version was rolled back.
+                // LocationService.start(context);
+                LocationForegroundService.start(context);
                 // Cancel any periodic/one-shot LocationWorker WorkManager jobs left over from a
                 // previous build — LocationWorker.schedule()/scheduleOneShot() are no longer
                 // called anywhere in current code, but WorkManager persists periodic work across
@@ -286,10 +284,10 @@ public class Initializer {
                 DeviceInfo deviceInfo = DeviceInfoProvider.getDeviceInfo(context, true, true);
                 sendDeviceInfoTask.execute(deviceInfo);
                 SendDeviceInfoWorker.scheduleDeviceInfoSending(context);
-                // Trying out the simplified LocationService in place of LocationForegroundService's
-                // urgent path — see LocationService.java. Not deleted, just swapped:
-                // LocationForegroundService.triggerUrgent(context, "initializerConfigComplete");
-                LocationService.triggerUrgent(context, "initializerConfigComplete");
+                // Reverted from the LocationService experiment back to LocationForegroundService —
+                // see LocationService.java for why the simplified version was rolled back.
+                // LocationService.triggerUrgent(context, "initializerConfigComplete");
+                LocationForegroundService.triggerUrgent(context, "initializerConfigComplete");
             }
 
             @Override

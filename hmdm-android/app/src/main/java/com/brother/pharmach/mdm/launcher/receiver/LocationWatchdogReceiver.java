@@ -33,18 +33,17 @@ public class LocationWatchdogReceiver extends BroadcastReceiver {
         if (!ACTION.equals(intent.getAction())) return;
 
         RemoteLogger.log(context, Const.LOG_INFO,
-                "LocationWatchdog: heartbeat — ensuring LocationService is alive");
+                "LocationWatchdog: heartbeat — ensuring LocationForegroundService is alive");
 
-        // Always reschedule next alarm first so the chain survives even if start fails.
+        // Always reschedule next alarm first so the chain survives even if FGS start fails.
         schedule(context);
 
-        // Trying out LocationService in place of LocationForegroundService — see
-        // LocationService.java. Not deleted, just disabled:
-        // LocationForegroundService.start(context.getApplicationContext());
-        // start() is idempotent: if already running, onStartCommand fires with no action and
-        // returns immediately. If it was killed, it restarts from scratch (periodic capture
-        // resumes from onCreate()).
-        LocationService.start(context.getApplicationContext());
+        // Reverted from the LocationService experiment back to LocationForegroundService —
+        // see LocationService.java for why the simplified version was rolled back.
+        // LocationService.start(context.getApplicationContext());
+        // start() is idempotent: if FGS is already running, onStartCommand fires with no
+        // action and returns immediately. If it was killed, it restarts from scratch.
+        LocationForegroundService.start(context.getApplicationContext());
     }
 
     /** Arms the next watchdog alarm. Safe to call multiple times — UPDATE_CURRENT deduplicates. */

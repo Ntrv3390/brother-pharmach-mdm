@@ -96,6 +96,13 @@ public class LocationForegroundService extends Service {
     private static final float MIN_UPLOAD_DISTANCE_M = 100f;    // upload when device moved >= 100m
     private static final long MAX_UPLOAD_INTERVAL_MS = 60_000L; // force upload every 60s regardless of movement
 
+    // Guaranteed heartbeat: uploads a location every 30s regardless of whether the continuous
+    // listener has delivered any callback at all. considerUpload()'s MAX_UPLOAD_INTERVAL_MS above
+    // only fires from WITHIN onLocationChanged() — if the listener gets zero callbacks (OEM
+    // suppression, Doze, etc.), that logic never runs at all. This is an independent timer so
+    // there's always a periodic upload attempt even during a total callback blackout.
+    private static final long HEARTBEAT_INTERVAL_SECONDS = 30L;
+
     // Urgent: use the streaming in-memory fix if it's < 20s old (GPS is warm, instant response).
     private static final long URGENT_FIX_MAX_AGE_MS = 20_000L;
 
@@ -119,6 +126,7 @@ public class LocationForegroundService extends Service {
     private ExecutorService urgentExecutor;    // Thread.MAX_PRIORITY, non-daemon
     private ExecutorService uploadExecutor;    // background HTTP uploads from continuous stream
     private ScheduledExecutorService flushScheduler; // periodic queue-flush cycle
+    private ScheduledExecutorService heartbeatScheduler; // guaranteed every-30s upload
 
     // Track in-flight urgent task so a new push cancels any pending one.
     private volatile Future<?> currentUrgentTask;
@@ -269,6 +277,12 @@ public class LocationForegroundService extends Service {
             return t;
         });
 
+        heartbeatScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "location-heartbeat-fg");
+            t.setDaemon(true);
+            return t;
+        });
+
         // Replace placeholder with the proper OEM-specific notification.
         startForegroundWithNotification();
         RemoteLogger.log(this, Const.LOG_INFO,
@@ -305,6 +319,15 @@ public class LocationForegroundService extends Service {
                 LocationWorker.FIRE_PERIOD_MINS,
                 LocationWorker.FIRE_PERIOD_MINS,
                 TimeUnit.MINUTES);
+
+        // Guaranteed upload every 30s regardless of whether the continuous listener has
+        // delivered any callback — see HEARTBEAT_INTERVAL_SECONDS for why this is independent
+        // of considerUpload()'s own MAX_UPLOAD_INTERVAL_MS throttle.
+        heartbeatScheduler.scheduleAtFixedRate(
+                this::runHeartbeatUpload,
+                HEARTBEAT_INTERVAL_SECONDS,
+                HEARTBEAT_INTERVAL_SECONDS,
+                TimeUnit.SECONDS);
 
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService started — continuous GPS active");
@@ -343,6 +366,7 @@ public class LocationForegroundService extends Service {
         stopContinuousTracking();
         unregisterNetworkCallback();
         flushScheduler.shutdownNow();
+        heartbeatScheduler.shutdownNow();
         urgentExecutor.shutdownNow();
         uploadExecutor.shutdownNow();
         RemoteLogger.log(this, Const.LOG_INFO, "LocationForegroundService stopped");
@@ -441,7 +465,19 @@ public class LocationForegroundService extends Service {
     }
 
     private void seedLastKnownFix() {
-        if (locationManager == null) return;
+        Location best = getBestLastKnownLocation();
+        if (best != null) {
+            latestContinuousFix = best;
+            RemoteLogger.log(this, Const.LOG_INFO,
+                    "LocationForegroundService: seeded last known fix ("
+                    + ((System.currentTimeMillis() - best.getTime()) / 1000) + "s old)");
+        }
+    }
+
+    /** Best available getLastKnownLocation() across GPS/Network/Passive, or null if none. */
+    @Nullable
+    private Location getBestLastKnownLocation() {
+        if (locationManager == null) return null;
         Location best = null;
         for (String provider : new String[]{
                 LocationManager.GPS_PROVIDER,
@@ -454,11 +490,45 @@ public class LocationForegroundService extends Service {
                 }
             } catch (Exception ignored) {}
         }
-        if (best != null && best.getLatitude() != 0 && best.getLongitude() != 0) {
-            latestContinuousFix = best;
+        if (best != null && best.getLatitude() == 0 && best.getLongitude() == 0) {
+            return null;
+        }
+        return best;
+    }
+
+    /**
+     * Guaranteed periodic upload, independent of whether the continuous listener has delivered
+     * any callback. Prefers the live in-memory fix; falls back to the device's best last-known
+     * location (across GPS/Network/Passive) if nothing fresh has arrived — this is the "if fresh
+     * fails, send the last known location instead" behavior, applied every 30s rather than only
+     * on-demand.
+     */
+    private void runHeartbeatUpload() {
+        try {
+            Location location = latestContinuousFix;
+            boolean usedLastKnownFallback = false;
+            if (location == null) {
+                location = getBestLastKnownLocation();
+                usedLastKnownFallback = true;
+            }
+            if (location == null) {
+                RemoteLogger.log(this, Const.LOG_WARN,
+                        "LocationForegroundService: 30s heartbeat — no continuous fix and no"
+                        + " last-known location available, skipping this cycle");
+                return;
+            }
+
+            long ageS = (System.currentTimeMillis() - location.getTime()) / 1000;
             RemoteLogger.log(this, Const.LOG_INFO,
-                    "LocationForegroundService: seeded last known fix ("
-                    + ((System.currentTimeMillis() - best.getTime()) / 1000) + "s old)");
+                    "LocationForegroundService: 30s heartbeat uploading ("
+                    + (usedLastKnownFallback ? "lastKnownFallback" : "continuousFix")
+                    + ", age=" + ageS + "s"
+                    + ", accuracy=" + (location.hasAccuracy() ? location.getAccuracy() + "m" : "unknown") + ")");
+            uploadFix(new Location(location), false,
+                    usedLastKnownFallback ? "heartbeat30sLastKnown" : "heartbeat30sContinuous");
+        } catch (Exception e) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationForegroundService: 30s heartbeat failed: " + e.getMessage());
         }
     }
 

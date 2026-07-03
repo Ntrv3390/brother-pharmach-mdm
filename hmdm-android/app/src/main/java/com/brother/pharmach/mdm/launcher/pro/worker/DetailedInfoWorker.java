@@ -52,10 +52,10 @@ public class DetailedInfoWorker {
             // (see DeviceInfoResource.refreshDevice(), which sends TYPE_FETCH_GPS_URGENT AND
             // calls notifyDeviceOnSettingUpdate(), whose TYPE_CONFIG_UPDATED push lands here).
             // Tagged distinctly so CONCURRENT_REQUESTS logging can prove this overlap directly.
-            // Trying out the simplified LocationService in place of LocationForegroundService's
-            // urgent path — see LocationService.java. Not deleted, just swapped:
-            // LocationForegroundService.triggerUrgent(context, "pushMessage:configUpdatedSideEffect");
-            LocationService.triggerUrgent(context, "pushMessage:configUpdatedSideEffect");
+            // Reverted from the LocationService experiment back to LocationForegroundService —
+            // see LocationService.java for why the simplified version was rolled back.
+            // LocationService.triggerUrgent(context, "pushMessage:configUpdatedSideEffect");
+            LocationForegroundService.triggerUrgent(context, "pushMessage:configUpdatedSideEffect");
         } catch (Exception e) {
             RemoteLogger.log(context, Const.LOG_WARN,
                     "Failed to trigger location service for DeviceInfo refresh: " + e.getMessage());
