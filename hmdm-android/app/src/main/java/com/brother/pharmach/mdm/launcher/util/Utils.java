@@ -45,6 +45,8 @@ import android.net.ProxyInfo;
 import android.os.Build;
 import android.os.UserManager;
 import android.provider.Settings;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.WindowManager;
@@ -458,50 +460,123 @@ public class Utils {
     }
 
     public static boolean isMobileDataEnabled(Context context) {
-        ConnectivityManager cm = (ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        // A hack: use private API
-        // https://stackoverflow.com/questions/12686899/test-if-background-data-and-packet-data-is-enabled-or-not?rq=1
-        try {
-            Class clazz = Class.forName(cm.getClass().getName());
-            Method method = clazz.getDeclaredMethod("getMobileDataEnabled");
-            method.setAccessible(true); // Make the method callable
-            // get the setting for "mobile data"
-            return (Boolean) method.invoke(cm);
-        } catch (Exception e) {
-            // Let it will be true by default
-            return true;
+        // Public API, works up to Android 16. The old reflection hack
+        // (ConnectivityManager.getMobileDataEnabled) is blocked by hidden-API enforcement
+        // since Android 9 and silently reported "enabled" on every modern device,
+        // which killed the mobile data policy enforcement on Android 15.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+                if (tm != null) {
+                    int dataSubId = SubscriptionManager.getDefaultDataSubscriptionId();
+                    if (dataSubId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                        return tm.createForSubscriptionId(dataSubId).isDataEnabled();
+                    }
+                    return tm.isDataEnabled();
+                }
+            } catch (Exception e) {
+                // Fall through to the settings-based check
+            }
         }
 
+        // Settings fallback: single-SIM stores "mobile_data", multi-SIM capable devices
+        // store "mobile_data<subId>"
+        try {
+            int dataSubId = SubscriptionManager.getDefaultDataSubscriptionId();
+            String perSubKey = "mobile_data" + dataSubId;
+            String value = Settings.Global.getString(context.getContentResolver(), perSubKey);
+            if (value == null) {
+                value = Settings.Global.getString(context.getContentResolver(), "mobile_data");
+            }
+            if (value != null) {
+                return "1".equals(value);
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+
+        // Legacy reflection for pre-Oreo devices
+        try {
+            ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            Class clazz = Class.forName(cm.getClass().getName());
+            Method method = clazz.getDeclaredMethod("getMobileDataEnabled");
+            method.setAccessible(true);
+            return (Boolean) method.invoke(cm);
+        } catch (Exception e) {
+            // Let it be true by default
+            return true;
+        }
     }
 
     /**
-     * Programmatically enable or disable mobile data.
+     * Programmatically enable or disable mobile data, per active SIM subscription.
      *
-     * Tries three methods in order of reliability:
-     *  1. DevicePolicyManager.setMobileNetworksEnabled (Android 13+, device owner)
-     *  2. TelephonyManager.setDataEnabled          (hidden API via reflection; needs MODIFY_PHONE_STATE)
-     *  3. ConnectivityManager.setMobileDataEnabled  (hidden API via reflection; OEM fallback)
+     * Tries, in order (all require MODIFY_PHONE_STATE or carrier privileges — granted when the
+     * launcher is installed as priv-app / signed with the platform key; stock device owner has
+     * no direct toggle API up to and including Android 16):
+     *  1. TelephonyManager.setDataEnabledForReason(DATA_ENABLED_REASON_USER)  (API 31+)
+     *  2. TelephonyManager.setDataEnabled                                     (API 26-30, public)
+     *  3. TelephonyManager.setDataEnabled / ConnectivityManager.setMobileDataEnabled (reflection,
+     *     legacy ROMs)
      *
-     * Returns true if at least one method executed without throwing.
-     * Used by StatusControlService to enforce the server's mobileData=true policy
-     * by reverting any user toggle instantly (read-only behaviour).
+     * Returns true if at least one method executed without throwing. Callers must verify the
+     * actual state afterwards via isMobileDataEnabled() — an accepted call can still be a no-op.
      */
     public static boolean setMobileDataEnabled(Context context, boolean enabled) {
-        // Method 1: TelephonyManager.setDataEnabled (hidden API; works on most Android 5+ ROMs
-        //           when MODIFY_PHONE_STATE is held by a device-owner / system-privilege app)
-        try {
-            TelephonyManager tm = (TelephonyManager)
-                    context.getSystemService(Context.TELEPHONY_SERVICE);
-            if (tm != null) {
-                Method method = TelephonyManager.class
-                        .getDeclaredMethod("setDataEnabled", boolean.class);
-                method.setAccessible(true);
-                method.invoke(tm, enabled);
+        TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+        if (tm == null) {
+            return false;
+        }
+
+        boolean invoked = false;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Apply to every active subscription so multi-SIM / eSIM devices are covered
+            List<TelephonyManager> targets = new ArrayList<>();
+            try {
+                SubscriptionManager sm = (SubscriptionManager)
+                        context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+                List<SubscriptionInfo> subs = sm != null ? sm.getActiveSubscriptionInfoList() : null;
+                if (subs != null) {
+                    for (SubscriptionInfo sub : subs) {
+                        targets.add(tm.createForSubscriptionId(sub.getSubscriptionId()));
+                    }
+                }
+            } catch (Exception ignored) {
+                // No READ_PHONE_STATE or subscription info unavailable — use the default manager
+            }
+            if (targets.isEmpty()) {
+                targets.add(tm);
+            }
+
+            for (TelephonyManager target : targets) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    try {
+                        target.setDataEnabledForReason(
+                                TelephonyManager.DATA_ENABLED_REASON_USER, enabled);
+                        invoked = true;
+                        continue;
+                    } catch (Exception ignored) {}
+                }
+                try {
+                    target.setDataEnabled(enabled);
+                    invoked = true;
+                } catch (Exception ignored) {}
+            }
+            if (invoked) {
                 return true;
             }
+        }
+
+        // Legacy fallbacks for old ROMs
+        try {
+            Method method = TelephonyManager.class
+                    .getDeclaredMethod("setDataEnabled", boolean.class);
+            method.setAccessible(true);
+            method.invoke(tm, enabled);
+            return true;
         } catch (Exception ignored) {}
 
-        // Method 2: ConnectivityManager.setMobileDataEnabled (hidden API; preserved on some OEM builds)
         try {
             ConnectivityManager cm = (ConnectivityManager)
                     context.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -528,8 +603,12 @@ public class Utils {
 
     /**
      * Locks or unlocks the mobile data toggle for the user.
-     * When locked=true the toggle is greyed out in Settings and Quick Settings —
-     * the user cannot tap it. Device owner only; no-op on non-owner builds.
+     * When locked=true:
+     *  - DISALLOW_CONFIG_MOBILE_NETWORKS hides/disables the mobile data switch in the
+     *    Settings app and in the Quick Settings internet panel (read-only for the user);
+     *  - DISALLOW_AIRPLANE_MODE (Android 9+) closes the airplane-mode bypass that would
+     *    otherwise kill mobile data without touching the mobile data toggle.
+     * Device owner only; no-op on non-owner builds.
      */
     public static boolean setMobileDataLocked(boolean locked, Context context) {
         if (!isDeviceOwner(context)) {
@@ -543,8 +622,14 @@ public class Utils {
         try {
             if (locked) {
                 dpm.addUserRestriction(admin, UserManager.DISALLOW_CONFIG_MOBILE_NETWORKS);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    dpm.addUserRestriction(admin, UserManager.DISALLOW_AIRPLANE_MODE);
+                }
             } else {
                 dpm.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_MOBILE_NETWORKS);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    dpm.clearUserRestriction(admin, UserManager.DISALLOW_AIRPLANE_MODE);
+                }
             }
             return true;
         } catch (Exception e) {

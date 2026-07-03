@@ -59,12 +59,23 @@ public class StatusControlService extends Service {
     private final long STATUS_CHECK_INTERVAL_MS = 10000;
     private final long SMS_TRIGGER_MIN_INTERVAL_MS = 4000;
 
+    // Mobile data policy watchdog: guarantees data is switched back on within ~1 second
+    // even if the user finds an OS path around the device-owner restrictions
+    // (seen on Android 15: QS internet dialog / Settings toggle miss the restriction check).
+    private final long MOBILE_DATA_WATCHDOG_INTERVAL_MS = 1000;
+    private final long MOBILE_DATA_ESCALATE_INTERVAL_MS = 30000;
+    // Give the platform a few watchdog ticks to apply an accepted re-enable call
+    // before bothering the user with the blocking dialog.
+    private final int MOBILE_DATA_ESCALATE_AFTER_TICKS = 3;
+
     public static final int MOBILE_DATA_NOTIFICATION_ID = 2001;
     private static final String MOBILE_DATA_CHANNEL_ID = "mdm_mobile_data_channel";
 
     private long lastSmsTriggerMs = 0;
     private ContentObserver smsObserver;
     private ContentObserver mobileDataObserver;
+    private int mobileDataViolationTicks = 0;
+    private long lastMobileDataEscalationMs = 0;
 
     private static class PackageInfo {
         public String packageName;
@@ -125,6 +136,11 @@ public class StatusControlService extends Service {
                 STATUS_CHECK_INTERVAL_MS,
                 STATUS_CHECK_INTERVAL_MS,
                 TimeUnit.MILLISECONDS);
+        threadPoolExecutor.scheduleWithFixedDelay(
+                () -> enforceMobileDataPolicy(),
+                MOBILE_DATA_WATCHDOG_INTERVAL_MS,
+                MOBILE_DATA_WATCHDOG_INTERVAL_MS,
+                TimeUnit.MILLISECONDS);
 
         registerSmsObserverIfNeeded();
         registerMobileDataObserver();
@@ -139,27 +155,86 @@ public class StatusControlService extends Service {
         mobileDataObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
             @Override
             public void onChange(boolean selfChange) {
-                ServerConfig config = settingsHelper.getConfig();
-                if (config == null || !Boolean.TRUE.equals(config.getMobileData())) {
-                    return;
-                }
-                if (Utils.isSimAbsent(StatusControlService.this)) {
-                    return;
+                onChange(selfChange, null);
+            }
+
+            @Override
+            public void onChange(boolean selfChange, android.net.Uri uri) {
+                // Only react to the settings we care about. On multi-SIM / eSIM-capable
+                // devices (most modern phones) the state is stored per subscription as
+                // "mobile_data<subId>", not "mobile_data" — that is why the old observer
+                // on the exact "mobile_data" URI never fired on Android 15.
+                if (uri != null) {
+                    String key = uri.getLastPathSegment();
+                    if (key == null
+                            || (!key.startsWith("mobile_data")
+                            && !key.startsWith("airplane_mode_on"))) {
+                        return;
+                    }
                 }
                 try {
-                    if (!Utils.isMobileDataEnabled(StatusControlService.this)) {
-                        enforceMobileDataAndBringToFront();
-                    }
+                    threadPoolExecutor.execute(() -> enforceMobileDataPolicy());
                 } catch (Exception e) {
-                    // ignore
+                    // Executor shut down during service stop — ignore
                 }
             }
         };
+        // notifyForDescendants=true on the global settings root catches both
+        // "mobile_data" and per-subscription "mobile_data<subId>" keys.
         getContentResolver().registerContentObserver(
-                android.provider.Settings.Global.getUriFor("mobile_data"),
-                false,
+                android.provider.Settings.Global.CONTENT_URI,
+                true,
                 mobileDataObserver
         );
+    }
+
+    /**
+     * Runs every second (and instantly on a settings change via the content observer).
+     * If the server policy requires mobile data ON and it is off, switches it back on
+     * programmatically; if the platform refuses (stock Android gives device owners no
+     * direct toggle API), escalates to the blocking dialog, throttled.
+     */
+    private void enforceMobileDataPolicy() {
+        try {
+            ServerConfig config = settingsHelper.getConfig();
+            if (config == null || controlDisabled || !Boolean.TRUE.equals(config.getMobileData())) {
+                mobileDataViolationTicks = 0;
+                return;
+            }
+            if (Utils.isSimAbsent(this)) {
+                mobileDataViolationTicks = 0;
+                return;
+            }
+            if (Utils.isMobileDataEnabled(this)) {
+                if (mobileDataViolationTicks > 0) {
+                    RemoteLogger.log(this, Const.LOG_INFO,
+                            "StatusControlService: mobile data is back ON (policy enforced)");
+                }
+                mobileDataViolationTicks = 0;
+                return;
+            }
+
+            // Violation: try to silently switch data back on
+            mobileDataViolationTicks++;
+            Utils.setMobileDataEnabled(this, true);
+            if (Utils.isMobileDataEnabled(this)) {
+                RemoteLogger.log(this, Const.LOG_INFO,
+                        "StatusControlService: mobile data was disabled by user, re-enabled automatically");
+                mobileDataViolationTicks = 0;
+                return;
+            }
+
+            // Still off after a few attempts — the OS rejected the programmatic toggle.
+            // Force the user to turn it back on via the blocking dialog.
+            long now = System.currentTimeMillis();
+            if (mobileDataViolationTicks >= MOBILE_DATA_ESCALATE_AFTER_TICKS
+                    && now - lastMobileDataEscalationMs >= MOBILE_DATA_ESCALATE_INTERVAL_MS) {
+                lastMobileDataEscalationMs = now;
+                enforceMobileDataAndBringToFront();
+            }
+        } catch (Exception e) {
+            // ignore
+        }
     }
 
     private void unregisterMobileDataObserver() {
@@ -306,15 +381,10 @@ public class StatusControlService extends Service {
         if (!Utils.isSimAbsent(this)) {
             try {
                 if (Boolean.TRUE.equals(config.getMobileData())) {
-                    // Lock the toggle so the user cannot disable mobile data at all.
+                    // Lock the toggle (Settings + Quick Settings become read-only) and block
+                    // the airplane-mode bypass. Turning data back on if it is off is handled
+                    // by the 1-second watchdog in enforceMobileDataPolicy().
                     Utils.setMobileDataLocked(true, this);
-                    // Also ensure data is currently on (device may have just booted with it off).
-                    if (!Utils.isMobileDataEnabled(this)) {
-                        boolean reEnabled = Utils.setMobileDataEnabled(this, true);
-                        if (!reEnabled) {
-                            notifyStatusViolation(Const.MOBILE_DATA_ON_REQUIRED);
-                        }
-                    }
                 } else if (Boolean.FALSE.equals(config.getMobileData())) {
                     // Policy says OFF — unlock so we can read the real state, then warn if on.
                     Utils.setMobileDataLocked(false, this);
