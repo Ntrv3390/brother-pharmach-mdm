@@ -59,6 +59,9 @@
     <uses-permission android:name="com.mediatek.permission.CTA_ENABLE_WIFI"/>
     <uses-permission android:name="com.mediatek.permission.CTA_ENABLE_BT"/>
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Used only by LocationDiag's H1 (Doze) experiment: an ~80ms pulse immediately before an
+         urgent capture, gated behind ExperimentalFlags.DOZE_VIBRATION_PULSE_ENABLED (off by default). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

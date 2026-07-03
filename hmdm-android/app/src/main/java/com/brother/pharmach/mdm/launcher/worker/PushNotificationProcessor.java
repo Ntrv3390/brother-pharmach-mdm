@@ -110,9 +110,9 @@ public class PushNotificationProcessor {
             // Route urgent GPS to LocationForegroundService — runs at Thread.MAX_PRIORITY
             // on a non-daemon thread, making it the highest-priority work in the process.
             final Context appContext = context.getApplicationContext();
-            LocationDiag.markUrgentRequestStart(appContext, "pushMessage:" + message.getPayloadJSON());
-            LocationDiag.logProcessAndPowerState(appContext, "pushReceived");
-            LocationForegroundService.triggerUrgent(appContext);
+            long pushReceivedMs = System.currentTimeMillis();
+            LocationDiag.logProcessAndPowerState(appContext, "pushReceived:fetchGpsUrgent");
+            LocationForegroundService.triggerUrgent(appContext, "pushMessage:fetchGpsUrgent", pushReceivedMs);
             RemoteLogger.log(appContext, Const.LOG_INFO,
                     "Urgent GPS push: dispatched to LocationForegroundService at max priority");
             return;

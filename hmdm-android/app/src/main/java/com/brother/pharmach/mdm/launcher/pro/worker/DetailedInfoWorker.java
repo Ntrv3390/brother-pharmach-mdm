@@ -46,7 +46,12 @@ public class DetailedInfoWorker {
         lastRequestMs = now;
 
         try {
-            LocationForegroundService.triggerUrgent(context);
+            // Redundant with the dedicated TYPE_FETCH_GPS_URGENT push handled in
+            // PushNotificationProcessor — both fire from the same "Get Latest GPS" server click
+            // (see DeviceInfoResource.refreshDevice(), which sends TYPE_FETCH_GPS_URGENT AND
+            // calls notifyDeviceOnSettingUpdate(), whose TYPE_CONFIG_UPDATED push lands here).
+            // Tagged distinctly so CONCURRENT_REQUESTS logging can prove this overlap directly.
+            LocationForegroundService.triggerUrgent(context, "pushMessage:configUpdatedSideEffect");
         } catch (Exception e) {
             RemoteLogger.log(context, Const.LOG_WARN,
                     "Failed to trigger location service for DeviceInfo refresh: " + e.getMessage());

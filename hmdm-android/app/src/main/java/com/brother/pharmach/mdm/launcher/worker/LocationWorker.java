@@ -32,6 +32,7 @@ import com.brother.pharmach.mdm.launcher.service.LocationForegroundService;
 import com.brother.pharmach.mdm.launcher.util.LocationUploader;
 import android.content.SharedPreferences;
 
+import com.brother.pharmach.mdm.launcher.util.ExperimentalFlags;
 import com.brother.pharmach.mdm.launcher.util.LocationDiag;
 import com.brother.pharmach.mdm.launcher.util.OemCompat;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
@@ -47,6 +48,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -88,6 +90,11 @@ public class LocationWorker extends Worker {
     private static final java.util.concurrent.atomic.AtomicInteger FGS_CACHE_MISS_COUNT =
             new java.util.concurrent.atomic.AtomicInteger(0);
     private static final int FGS_RESTART_THRESHOLD = 2;
+
+    // H2 experimental fix (ExperimentalFlags.ABORT_ON_INTERRUPT_ENABLED): single-flight gate so
+    // a periodic and an urgent captureAndUpload() cannot run requestProvidersInParallel()
+    // concurrently. Unused (never acquired) when the flag is off.
+    private static final Semaphore PROVIDER_REQUEST_GATE = new Semaphore(1);
 
     /** Allows captureAndUpload() to poll for WorkManager stop without holding a Worker reference. */
     public interface StopChecker {
@@ -143,25 +150,33 @@ public class LocationWorker extends Worker {
 
     // Executes an urgent GPS refresh immediately in the current process.
     // This bypasses WorkManager scheduling latency and is used by push-triggered refreshes.
-    public static Result runUrgentNow(Context context) {
-        LocationDiag.timeline(context, "runUrgentNow:entered");
-        return captureAndUpload(context, true, () -> false);
+    public static Result runUrgentNow(Context context, String reqId) {
+        LocationDiag.timeline(context, reqId, "runUrgentNow:entered");
+        return captureAndUpload(context, true, () -> false, reqId);
     }
 
-    public static void enqueueUrgentNow(Context context) {
+    /**
+     * {@code reqId} must already be active (via {@link LocationDiag#beginRequest}) — this is the
+     * fallback path used when {@code startForegroundService()} itself throws, so the request was
+     * already begun by the caller (LocationForegroundService.triggerUrgent()). This method ends
+     * the request once the capture completes, since it is the terminal consumer for this path.
+     */
+    public static void enqueueUrgentNow(Context context, String reqId) {
         final Context appContext = context.getApplicationContext();
-        LocationDiag.timeline(appContext, "enqueueUrgentNow:queued");
+        LocationDiag.timeline(appContext, reqId, "enqueueUrgentNow:queued");
         if (URGENT_EXECUTOR.getQueue().size() >= 1) {
             RemoteLogger.log(appContext, Const.LOG_WARN,
                     "LocationWorker: urgent queue saturated — oldest queued request replaced by new push");
         }
         URGENT_EXECUTOR.execute(() -> {
             try {
-                LocationDiag.timeline(appContext, "enqueueUrgentNow:threadStarted");
-                runUrgentNow(appContext);
+                LocationDiag.timeline(appContext, reqId, "enqueueUrgentNow:threadStarted");
+                runUrgentNow(appContext, reqId);
             } catch (Exception e) {
                 RemoteLogger.log(appContext, Const.LOG_WARN,
                         "LocationWorker: queued urgent capture failed: " + e.getMessage());
+            } finally {
+                LocationDiag.endRequest(appContext, reqId);
             }
         });
     }
@@ -173,12 +188,18 @@ public class LocationWorker extends Worker {
         // Ensure the FGS is alive — restarts it if the OS killed it since last boot.
         LocationForegroundService.start(context);
         boolean forceFreshFix = getTags().contains(WORK_TAG_ONE_SHOT);
-        return captureAndUpload(context, forceFreshFix, this::isStopped);
+        String origin = forceFreshFix ? "workManagerOneShot" : "workManagerPeriodic";
+        String reqId = LocationDiag.beginRequest(context, origin);
+        try {
+            return captureAndUpload(context, forceFreshFix, this::isStopped, reqId);
+        } finally {
+            LocationDiag.endRequest(context, reqId);
+        }
     }
 
     @NonNull
     public static Result captureAndUpload(Context context, boolean forceFreshFix,
-                                          StopChecker stopChecker) {
+                                          StopChecker stopChecker, String reqId) {
         PowerManager.WakeLock wakeLock = null;
         boolean fineGranted = ContextCompat.checkSelfPermission(context,
                 Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
@@ -224,7 +245,7 @@ public class LocationWorker extends Worker {
                             + ", api=" + Build.VERSION.SDK_INT
                             + ", device=" + Build.MANUFACTURER + "/" + Build.MODEL + ")");
 
-            LocationDiag.timeline(context, "captureAndUpload:entered");
+            LocationDiag.timeline(context, reqId, "captureAndUpload:entered");
             LocationDiag.logProcessAndPowerState(context, "captureAndUpload:entered");
             LocationDiag.logDeviceMetadata(context);
 
@@ -323,24 +344,54 @@ public class LocationWorker extends Worker {
 
             RemoteLogger.log(context, Const.LOG_INFO, "LocationWorker: requesting fresh location updates");
 
-            LocationDiag.logProcessAndPowerState(context, "beforeProvidersRequested");
-            LocationDiag.timeline(context, "providersRequested");
-            LocationDiag.GnssWatch gnssWatch = LocationDiag.GnssWatch.start(
-                    context, locationManager, forceFreshFix ? "urgent" : "periodic");
+            if (forceFreshFix) {
+                LocationDiag.firePreCaptureVibrationPulseIfEnabled(context, reqId);
+            }
 
-            boolean allowNetwork = fineGranted || coarseGranted;
-            ParallelProviderResult parallelResult;
-            try {
-                parallelResult = requestProvidersInParallel(
-                        context,
-                        locationManager,
-                        fineGranted,
-                        allowNetwork,
-                        maxFixAgeMs,
-                        stopChecker);
-            } finally {
-                gnssWatch.stopAndSummarize();
-                LocationDiag.timeline(context, "providersResolved");
+            // H2 experimental fix: single-flight gate around the provider-request phase so a
+            // periodic and an urgent capture never run requestProvidersInParallel() at once.
+            // With the flag off (default), gateEnabled is false so gateAcquired stays true and
+            // no acquire/release is attempted — behavior is identical to before this instrumentation.
+            // gateEnabled is captured once so a mid-flight flag toggle can't unbalance acquire/release.
+            boolean gateEnabled = ExperimentalFlags.ABORT_ON_INTERRUPT_ENABLED;
+            boolean gateAcquired = true;
+            if (gateEnabled) {
+                try {
+                    gateAcquired = PROVIDER_REQUEST_GATE.tryAcquire(2, TimeUnit.SECONDS);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    gateAcquired = false;
+                }
+            }
+
+            ParallelProviderResult parallelResult = new ParallelProviderResult();
+            if (!gateAcquired) {
+                RemoteLogger.log(context, Const.LOG_WARN, "LocationDiag: SKIPPED_CONCURRENT_REQUEST reqId="
+                        + reqId + " — another capture already holds the provider-request gate,"
+                        + " skipping fresh GPS/Network request for this attempt");
+            } else {
+                LocationDiag.logProcessAndPowerState(context, "beforeProvidersRequested");
+                LocationDiag.timeline(context, reqId, "providersRequested");
+                LocationDiag.GnssWatch gnssWatch = LocationDiag.GnssWatch.start(
+                        context, locationManager, forceFreshFix ? "urgent" : "periodic");
+
+                boolean allowNetwork = fineGranted || coarseGranted;
+                try {
+                    parallelResult = requestProvidersInParallel(
+                            context,
+                            locationManager,
+                            fineGranted,
+                            allowNetwork,
+                            maxFixAgeMs,
+                            stopChecker,
+                            reqId);
+                } finally {
+                    gnssWatch.stopAndSummarize();
+                    LocationDiag.timeline(context, reqId, "providersResolved");
+                    if (gateEnabled) {
+                        PROVIDER_REQUEST_GATE.release();
+                    }
+                }
             }
 
             if (stopChecker.isStopped()) return Result.success();
@@ -417,7 +468,7 @@ public class LocationWorker extends Worker {
             return Result.success();
         } finally {
             releaseWakeLock(wakeLock);
-            LocationDiag.timeline(context, "captureAndUpload:complete");
+            LocationDiag.timeline(context, reqId, "captureAndUpload:complete");
         }
     }
 
@@ -464,7 +515,8 @@ public class LocationWorker extends Worker {
             boolean allowGps,
             boolean allowNetwork,
             long maxFixAgeMs,
-            StopChecker stopChecker) {
+            StopChecker stopChecker,
+            String reqId) {
         ParallelProviderResult result = new ParallelProviderResult();
         ExecutorService executor = Executors.newFixedThreadPool(2);
         Future<Location> gpsFuture = null;
@@ -476,7 +528,7 @@ public class LocationWorker extends Worker {
                     RemoteLogger.log(context, Const.LOG_INFO,
                             "LocationWorker: GPS request started");
                     return tryRequestLiveUpdate(context, locationManager,
-                            LocationManager.GPS_PROVIDER, GPS_FIX_WAIT_SECONDS);
+                            LocationManager.GPS_PROVIDER, GPS_FIX_WAIT_SECONDS, reqId);
                 });
             }
 
@@ -490,7 +542,7 @@ public class LocationWorker extends Worker {
                         RemoteLogger.log(context, Const.LOG_INFO,
                                 "LocationWorker: Network request started");
                         return tryRequestLiveUpdate(context, locationManager,
-                                LocationManager.NETWORK_PROVIDER, NETWORK_FIX_WAIT_SECONDS);
+                                LocationManager.NETWORK_PROVIDER, NETWORK_FIX_WAIT_SECONDS, reqId);
                     });
                 }
             }
@@ -508,7 +560,8 @@ public class LocationWorker extends Worker {
                 if (gpsPending && gpsFuture.isDone()) {
                     result.rawGps = getFutureResult(context, gpsFuture, 0);
                     gpsPending = false;
-                    LocationDiag.timeline(context, "fallback:gpsResolved(fix=" + (result.rawGps != null) + ")");
+                    LocationDiag.timeline(context, reqId,
+                            "fallback:gpsResolved(fix=" + (result.rawGps != null) + ")");
                     if (isLocationFresh(result.rawGps, maxFixAgeMs) && result.firstFresh == null) {
                         result.firstFresh = result.rawGps;
                     }
@@ -517,7 +570,8 @@ public class LocationWorker extends Worker {
                 if (networkPending && networkFuture.isDone()) {
                     result.rawNetwork = getFutureResult(context, networkFuture, 0);
                     networkPending = false;
-                    LocationDiag.timeline(context, "fallback:networkResolved(fix=" + (result.rawNetwork != null) + ")");
+                    LocationDiag.timeline(context, reqId,
+                            "fallback:networkResolved(fix=" + (result.rawNetwork != null) + ")");
                     if (isLocationFresh(result.rawNetwork, maxFixAgeMs) && result.firstFresh == null) {
                         result.firstFresh = result.rawNetwork;
                     }
@@ -540,7 +594,7 @@ public class LocationWorker extends Worker {
             }
 
             if (gpsPending || networkPending) {
-                LocationDiag.timeline(context, "fallback:outerWaitDeadlineHit(gpsPending="
+                LocationDiag.timeline(context, reqId, "fallback:outerWaitDeadlineHit(gpsPending="
                         + gpsPending + ",networkPending=" + networkPending + ")");
             }
             if (result.rawGps == null && gpsFuture != null) {
@@ -657,14 +711,15 @@ public class LocationWorker extends Worker {
             Context context,
             LocationManager locationManager,
             String provider,
-            long timeoutSeconds) {
+            long timeoutSeconds,
+            String reqId) {
         if (Build.VERSION.SDK_INT < 34) return null;
         if (!locationManager.isProviderEnabled(provider)) return null;
 
         final CountDownLatch latch = new CountDownLatch(1);
         final Location[] result = new Location[1];
         final CancellationSignal cancellationSignal =
-                LocationDiag.wrapWithCancelLogging(context, "getCurrentLocation:" + provider);
+                LocationDiag.wrapWithCancelLogging(context, reqId, "getCurrentLocation:" + provider);
         final Handler cancelHandler = new Handler(Looper.getMainLooper());
 
         // Auto-cancel after timeout so the system doesn't keep the GPS radio alive
@@ -752,6 +807,12 @@ public class LocationWorker extends Worker {
             // Ensure cleanup on any unexpected error.
             cancellationSignal.cancel();
             cancelHandler.removeCallbacksAndMessages(null);
+            if (e instanceof InterruptedException) {
+                // Preserve interrupt status — catching InterruptedException clears it, and the
+                // caller (tryRequestLiveUpdate) needs to see it via checkInterruptGate() to know
+                // this fallback chain was cancelled rather than genuinely timed out.
+                Thread.currentThread().interrupt();
+            }
             RemoteLogger.log(context, Const.LOG_WARN,
                     "LocationWorker: getCurrentLocation(" + provider + ") failed: "
                     + e.getClass().getSimpleName() + " — " + e.getMessage());
@@ -772,7 +833,8 @@ public class LocationWorker extends Worker {
             Context context,
             LocationManager locationManager,
             String provider,
-            long timeoutSeconds) {
+            long timeoutSeconds,
+            String reqId) {
         if (!locationManager.isProviderEnabled(provider)) return null;
         if (Looper.myLooper() == Looper.getMainLooper()) return null; // already on main — avoid deadlock
 
@@ -783,7 +845,7 @@ public class LocationWorker extends Worker {
 
         try {
             RemoteLogger.log(context, Const.LOG_INFO,
-                    "LocationWorker: main-looper fallback for " + provider + " started");
+                    "LocationWorker: main-looper fallback for " + provider + " started reqId=" + reqId);
 
             LocationListener listener = location -> {
                 if (location == null
@@ -817,6 +879,9 @@ public class LocationWorker extends Worker {
             }
             return result[0];
         } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             RemoteLogger.log(context, Const.LOG_WARN,
                     "LocationWorker: main-looper fallback for " + provider + " failed: " + e.getMessage());
             return null;
@@ -834,7 +899,7 @@ public class LocationWorker extends Worker {
      * No Google account or sign-in is required. Only needs GMS APK installed, which is
      * the case on any device that passes {@link OemCompat#isGmsAvailable(Context)}.
      */
-    private static Location tryFusedLocation(Context context, long timeoutSeconds) {
+    private static Location tryFusedLocation(Context context, long timeoutSeconds, String reqId) {
         if (!OemCompat.isGmsAvailable(context)) return null;
 
         try {
@@ -842,7 +907,7 @@ public class LocationWorker extends Worker {
                     LocationServices.getFusedLocationProviderClient(context);
 
             RemoteLogger.log(context, Const.LOG_INFO,
-                    "LocationWorker: FusedLocationProvider started");
+                    "LocationWorker: FusedLocationProvider started reqId=" + reqId);
 
             com.google.android.gms.tasks.Task<Location> task = fusedClient.getCurrentLocation(
                     Priority.PRIORITY_HIGH_ACCURACY, null);
@@ -865,8 +930,12 @@ public class LocationWorker extends Worker {
                     + " (timeout=" + timeoutSeconds + "s)");
             return null;
         } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             Throwable cause = e.getCause() != null ? e.getCause() : e;
-            StringBuilder sb = new StringBuilder("LocationDiag: FusedLocationProvider failed: ")
+            StringBuilder sb = new StringBuilder("LocationDiag: FusedLocationProvider failed reqId=")
+                    .append(reqId).append(": ")
                     .append(e.getClass().getName()).append(" — ").append(e.getMessage());
             if (cause instanceof ApiException) {
                 ApiException apiEx = (ApiException) cause;
@@ -885,7 +954,8 @@ public class LocationWorker extends Worker {
     private static Location tryRequestLiveUpdate(Context context,
                                                   LocationManager locationManager,
                                                   String provider,
-                                                  long timeoutSeconds) {
+                                                  long timeoutSeconds,
+                                                  String reqId) {
         if (!locationManager.isProviderEnabled(provider)) {
             RemoteLogger.log(context, Const.LOG_WARN,
                     "LocationWorker: provider '" + provider
@@ -899,10 +969,13 @@ public class LocationWorker extends Worker {
         // FusedLocationProvider already combines GPS + Network internally, so we only
         // fall back on the GPS provider path to avoid parallel duplicate calls.
         if (Build.VERSION.SDK_INT >= 34) {
-            Location loc = tryGetCurrentLocation(context, locationManager, provider, timeoutSeconds);
+            Location loc = tryGetCurrentLocation(context, locationManager, provider, timeoutSeconds, reqId);
             if (loc != null) return loc;
+            if (LocationDiag.checkInterruptGate(context, reqId, "beforeFusedFallback:" + provider)) {
+                return null;
+            }
             if (LocationManager.GPS_PROVIDER.equals(provider)) {
-                return tryFusedLocation(context, timeoutSeconds);
+                return tryFusedLocation(context, timeoutSeconds, reqId);
             }
             return null;
         }
@@ -911,8 +984,8 @@ public class LocationWorker extends Worker {
         HandlerThread handlerThread = new HandlerThread("gps-update-" + provider);
         handlerThread.start();
         RemoteLogger.log(context, Const.LOG_INFO,
-                "LocationDiag: HandlerThread(" + provider + ") stage=requestStart isAlive="
-                        + handlerThread.isAlive());
+                "LocationDiag: HandlerThread(" + provider + ") stage=requestStart reqId=" + reqId
+                        + " isAlive=" + handlerThread.isAlive());
         LocationListener listener = null;
 
         try {
@@ -976,16 +1049,24 @@ public class LocationWorker extends Worker {
                 }
             }
 
+            if (LocationDiag.checkInterruptGate(context, reqId, "beforeMainLooperRescue:" + provider)) {
+                return null;
+            }
+
             // Last resort: main-looper-based listener. On Realme/Xiaomi/Vivo the HandlerThread
             // looper may be frozen, but the main thread looper always runs.
-            Location mainLoc = tryRequestOnMainLooper(context, locationManager, provider, timeoutSeconds);
+            Location mainLoc = tryRequestOnMainLooper(context, locationManager, provider, timeoutSeconds, reqId);
             if (mainLoc != null) return mainLoc;
+
+            if (LocationDiag.checkInterruptGate(context, reqId, "beforeFusedFallback:" + provider)) {
+                return null;
+            }
 
             // Final fallback: FusedLocationProviderClient (GMS). Bypasses OEM LocationManager
             // suppression because GMS runs as a system-privileged process.
             // Only on GPS provider — fused already combines all providers internally.
             if (LocationManager.GPS_PROVIDER.equals(provider)) {
-                return tryFusedLocation(context, timeoutSeconds);
+                return tryFusedLocation(context, timeoutSeconds, reqId);
             }
             return null;
         } catch (SecurityException e) {

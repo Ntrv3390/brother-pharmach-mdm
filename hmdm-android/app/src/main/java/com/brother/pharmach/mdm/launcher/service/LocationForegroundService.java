@@ -71,6 +71,13 @@ import java.util.concurrent.TimeUnit;
 public class LocationForegroundService extends Service {
 
     public static final String ACTION_URGENT_GPS = "com.brother.pharmach.mdm.launcher.ACTION_URGENT_GPS";
+    private static final String EXTRA_REQ_ID = "reqId";
+
+    // Best-effort hand-off of the reqId from triggerUrgent() to onCreate(), since onCreate() has
+    // no Intent parameter. Safe because Android serializes a single service instance's onCreate()
+    // — a concurrent plain start() cannot race a second onCreate() while one is in progress.
+    // Consumed (read-and-cleared) exactly once by onCreate().
+    private static volatile String pendingColdStartReqId;
 
     private static final String CHANNEL_ID = "location_service_channel";
     private static final int NOTIFICATION_ID = 1002;
@@ -106,6 +113,7 @@ public class LocationForegroundService extends Service {
     // Location listener infrastructure
     private LocationManager locationManager;
     private HandlerThread listenerThread;
+    private LocationDiag.ContinuousGnssMonitor continuousGnssMonitor;
 
     // Executors
     private ExecutorService urgentExecutor;    // Thread.MAX_PRIORITY, non-daemon
@@ -167,14 +175,34 @@ public class LocationForegroundService extends Service {
         }
     }
 
-    public static void triggerUrgent(Context context) {
-        LocationDiag.timeline(context, "triggerUrgent:entered");
+    /**
+     * @param origin identifies which code path is asking for an urgent GPS refresh (e.g.
+     *               "pushMessage:fetchGpsUrgent", "pushMessage:configUpdatedSideEffect",
+     *               "initializerConfigComplete") — this is what lets the next log capture prove
+     *               or disprove whether multiple origins are firing for a single admin action.
+     */
+    public static void triggerUrgent(Context context, String origin) {
+        triggerUrgent(context, origin, -1);
+    }
+
+    /** @param upstreamTimestampMs wall-clock time of the event that caused this call (e.g. push
+     *                             receipt), or -1 if there is no meaningful upstream timestamp. */
+    public static void triggerUrgent(Context context, String origin, long upstreamTimestampMs) {
+        String reqId = LocationDiag.beginRequest(context, origin);
+        LocationDiag.logUpstreamLatency(context, reqId, origin, upstreamTimestampMs);
+        LocationDiag.timeline(context, reqId, "triggerUrgent:entered");
+
         Intent intent = new Intent(context, LocationForegroundService.class);
         intent.setAction(ACTION_URGENT_GPS);
+        intent.putExtra(EXTRA_REQ_ID, reqId);
+        pendingColdStartReqId = reqId;
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
                 context.startForegroundService(intent);
-                LocationDiag.timeline(context, "triggerUrgent:startForegroundServiceReturned");
+                LocationDiag.timeline(context, reqId, "triggerUrgent:startForegroundServiceReturned");
+                // Request is now handed off to onStartCommand()/handleUrgentRequest() — it will
+                // call LocationDiag.endRequest() once the capture completes.
             } catch (Exception e) {
                 // ForegroundServiceStartNotAllowedException (API 31+) is thrown on Android 12+
                 // when startForegroundService() is called from a background context — tightened
@@ -183,13 +211,15 @@ public class LocationForegroundService extends Service {
                 RemoteLogger.log(context, Const.LOG_WARN,
                         "LocationForegroundService: startForegroundService blocked ("
                         + e.getClass().getSimpleName() + "), falling back to direct capture");
-                LocationDiag.timeline(context, "triggerUrgent:startForegroundServiceBlocked:"
+                LocationDiag.timeline(context, reqId, "triggerUrgent:startForegroundServiceBlocked:"
                         + e.getClass().getSimpleName());
-                LocationWorker.enqueueUrgentNow(context);
+                pendingColdStartReqId = null;
+                // enqueueUrgentNow() is now the terminal consumer — it calls endRequest() itself.
+                LocationWorker.enqueueUrgentNow(context, reqId);
             }
         } else {
             context.startService(intent);
-            LocationDiag.timeline(context, "triggerUrgent:startServiceReturned(legacy)");
+            LocationDiag.timeline(context, reqId, "triggerUrgent:startServiceReturned(legacy)");
         }
     }
 
@@ -200,7 +230,11 @@ public class LocationForegroundService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        LocationDiag.timeline(this, "onCreate:entered");
+        String reqId = pendingColdStartReqId;
+        pendingColdStartReqId = null;
+        if (reqId == null) reqId = "none(coldStartNotFromTriggerUrgent)";
+        LocationDiag.timeline(this, reqId, "onCreate:entered");
+        LocationDiag.DozeTracker.register(this);
 
         // Call startForeground() IMMEDIATELY — before executors, OemCompat checks, or any I/O.
         // AutoDroid kills services that don't call startForeground() within ~5s of
@@ -209,7 +243,7 @@ public class LocationForegroundService extends Service {
         Utils.startStableForegroundService(this, NOTIFICATION_ID, buildPlaceholderNotification());
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService: startForeground() called immediately (Realme fast-path)");
-        LocationDiag.timeline(this, "onCreate:placeholderForegroundReturned");
+        LocationDiag.timeline(this, reqId, "onCreate:placeholderForegroundReturned");
         LocationDiag.logFgsRegistration(this, LocationForegroundService.class,
                 "onCreate:afterPlaceholderForeground");
         LocationDiag.logDeviceMetadata(this);
@@ -240,7 +274,7 @@ public class LocationForegroundService extends Service {
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService: onCreate timing — notificationMs="
                 + (System.currentTimeMillis() - onCreateStart));
-        LocationDiag.timeline(this, "onCreate:fullNotificationReturned");
+        LocationDiag.timeline(this, reqId, "onCreate:fullNotificationReturned");
         LocationDiag.logFgsRegistration(this, LocationForegroundService.class,
                 "onCreate:afterFullNotification");
 
@@ -258,7 +292,7 @@ public class LocationForegroundService extends Service {
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService: onCreate timing — trackingStartMs="
                 + (System.currentTimeMillis() - onCreateStart));
-        LocationDiag.timeline(this, "onCreate:listenersRegistered");
+        LocationDiag.timeline(this, reqId, "onCreate:listenersRegistered");
         LocationDiag.logProcessAndPowerState(this, "onCreate:listenersRegistered");
 
         registerNetworkCallback();
@@ -277,16 +311,22 @@ public class LocationForegroundService extends Service {
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService: onCreate complete — totalMs="
                 + (System.currentTimeMillis() - onCreateStart));
-        LocationDiag.timeline(this, "onCreate:complete");
+        LocationDiag.timeline(this, reqId, "onCreate:complete");
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_URGENT_GPS.equals(intent.getAction())) {
-            LocationDiag.timeline(this, "onStartCommand:urgentActionReceived");
+            String reqId = intent.getStringExtra(EXTRA_REQ_ID);
+            if (reqId == null) {
+                // Defensive: should not happen since triggerUrgent() always sets this extra, but
+                // a missing correlation id must not silently break CONCURRENT_REQUESTS accounting.
+                reqId = LocationDiag.beginRequest(this, "onStartCommand:unknownOrigin(missingReqIdExtra)");
+            }
+            LocationDiag.timeline(this, reqId, "onStartCommand:urgentActionReceived");
             LocationDiag.logFgsRegistration(this, LocationForegroundService.class,
                     "onStartCommand:urgentActionReceived");
-            handleUrgentRequest();
+            handleUrgentRequest(reqId);
         }
         // START_STICKY: OS automatically restarts this service if killed.
         return START_STICKY;
@@ -298,6 +338,7 @@ public class LocationForegroundService extends Service {
         getSharedPreferences(PREFS_FGS_ALIVE, Context.MODE_PRIVATE).edit()
                 .putBoolean(KEY_FGS_ALIVE, false)
                 .apply();
+        LocationDiag.DozeTracker.unregister(this);
         stopPendingIntentTracking();
         stopContinuousTracking();
         unregisterNetworkCallback();
@@ -335,6 +376,10 @@ public class LocationForegroundService extends Service {
                     "LocationForegroundService: LocationManager unavailable");
             return;
         }
+
+        // Runs for the FGS lifetime (not just during urgent windows) — answers whether the
+        // continuous listener path gets ANY GNSS engagement at all, independent of urgent requests.
+        continuousGnssMonitor = LocationDiag.ContinuousGnssMonitor.start(this, locationManager);
 
         listenerThread = new HandlerThread("location-listener-fg");
         listenerThread.start();
@@ -418,6 +463,10 @@ public class LocationForegroundService extends Service {
     }
 
     private void stopContinuousTracking() {
+        if (continuousGnssMonitor != null) {
+            continuousGnssMonitor.stop();
+            continuousGnssMonitor = null;
+        }
         if (locationManager != null) {
             try {
                 locationManager.removeUpdates(continuousListener);
@@ -484,53 +533,60 @@ public class LocationForegroundService extends Service {
     // Urgent request handler — MAX_PRIORITY path
     // ---------------------------------------------------------------------------
 
-    private void handleUrgentRequest() {
+    private void handleUrgentRequest(String reqId) {
         RemoteLogger.log(this, Const.LOG_INFO,
-                "LocationForegroundService: urgent GPS triggered — MAX_PRIORITY");
+                "LocationForegroundService: urgent GPS triggered — MAX_PRIORITY reqId=" + reqId);
 
-        // Cancel any queued urgent task so the newest request always wins.
+        // Cancel any queued urgent task so the newest request always wins. NOTE: this is exactly
+        // the H2 concurrency concern — interrupting the previous task does not by itself stop it
+        // from proceeding through its fallback chain; see ExperimentalFlags.ABORT_ON_INTERRUPT_ENABLED.
         Future<?> prev = currentUrgentTask;
         if (prev != null && !prev.isDone()) {
             prev.cancel(true);
         }
 
         final Context appContext = getApplicationContext();
-        LocationDiag.timeline(appContext, "handleUrgentRequest:submittedToExecutor");
+        LocationDiag.timeline(appContext, reqId, "handleUrgentRequest:submittedToExecutor");
         currentUrgentTask = urgentExecutor.submit(() -> {
-            // Explicit re-set — thread factory sets MAX_PRIORITY but re-applying after
-            // executor internals guarantees it survives any wrapping.
-            Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
-            LocationDiag.timeline(appContext, "handleUrgentRequest:threadStarted");
-            LocationDiag.logProcessAndPowerState(appContext, "handleUrgentRequest:threadStarted");
-
-            Location recent = latestContinuousFix;
-            long fixAge = recent != null
-                    ? System.currentTimeMillis() - recent.getTime() : Long.MAX_VALUE;
-
-            if (recent != null && fixAge < URGENT_FIX_MAX_AGE_MS) {
-                // GPS is warm — serve the latest streaming fix instantly (sub-second).
-                RemoteLogger.log(appContext, Const.LOG_INFO,
-                        "LocationForegroundService: urgent served from stream (fix age=" + fixAge
-                        + "ms, source=fgsMemoryCache)");
-                LocationDiag.timeline(appContext, "handleUrgentRequest:servedFromMemoryCache");
-                uploadFix(new Location(recent), true, "fgsMemoryCache");
-                return;
-            }
-
-            // No recent fix: GPS lost signal (tunnel, indoors, cold boot).
-            // Fall back to a full cold-start capture which tries GPS + Network with 45s timeout.
-            RemoteLogger.log(appContext, Const.LOG_INFO,
-                    "LocationForegroundService: no recent fix (age="
-                    + (fixAge == Long.MAX_VALUE ? "none" : fixAge + "ms")
-                    + ") — falling back to cold-start capture");
-            LocationDiag.timeline(appContext, "handleUrgentRequest:coldStartBegin");
             try {
-                LocationWorker.captureAndUpload(appContext, true, () -> false);
-            } catch (Exception e) {
-                RemoteLogger.log(appContext, Const.LOG_WARN,
-                        "LocationForegroundService: urgent cold-start failed: " + e.getMessage());
+                // Explicit re-set — thread factory sets MAX_PRIORITY but re-applying after
+                // executor internals guarantees it survives any wrapping.
+                Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
+                LocationDiag.timeline(appContext, reqId, "handleUrgentRequest:threadStarted");
+                LocationDiag.logProcessAndPowerState(appContext, "handleUrgentRequest:threadStarted");
+
+                Location recent = latestContinuousFix;
+                long fixAge = recent != null
+                        ? System.currentTimeMillis() - recent.getTime() : Long.MAX_VALUE;
+
+                if (recent != null && fixAge < URGENT_FIX_MAX_AGE_MS) {
+                    // GPS is warm — serve the latest streaming fix instantly (sub-second).
+                    RemoteLogger.log(appContext, Const.LOG_INFO,
+                            "LocationForegroundService: urgent served from stream (fix age=" + fixAge
+                            + "ms, source=fgsMemoryCache)");
+                    LocationDiag.timeline(appContext, reqId, "handleUrgentRequest:servedFromMemoryCache");
+                    uploadFix(new Location(recent), true, "fgsMemoryCache");
+                    return;
+                }
+
+                // No recent fix: GPS lost signal (tunnel, indoors, cold boot).
+                // Fall back to a full cold-start capture which tries GPS + Network with 45s timeout.
+                RemoteLogger.log(appContext, Const.LOG_INFO,
+                        "LocationForegroundService: no recent fix (age="
+                        + (fixAge == Long.MAX_VALUE ? "none" : fixAge + "ms")
+                        + ") — falling back to cold-start capture");
+                LocationDiag.timeline(appContext, reqId, "handleUrgentRequest:coldStartBegin");
+                try {
+                    LocationWorker.captureAndUpload(appContext, true, () -> false, reqId);
+                } catch (Exception e) {
+                    RemoteLogger.log(appContext, Const.LOG_WARN,
+                            "LocationForegroundService: urgent cold-start failed: " + e.getMessage());
+                } finally {
+                    LocationDiag.timeline(appContext, reqId, "handleUrgentRequest:coldStartEnd");
+                }
             } finally {
-                LocationDiag.timeline(appContext, "handleUrgentRequest:coldStartEnd");
+                // This is the terminal consumer for both the memory-cache and cold-start branches.
+                LocationDiag.endRequest(appContext, reqId);
             }
         });
     }

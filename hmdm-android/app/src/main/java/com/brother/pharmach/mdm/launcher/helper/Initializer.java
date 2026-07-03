@@ -269,7 +269,7 @@ public class Initializer {
                 DeviceInfo deviceInfo = DeviceInfoProvider.getDeviceInfo(context, true, true);
                 sendDeviceInfoTask.execute(deviceInfo);
                 SendDeviceInfoWorker.scheduleDeviceInfoSending(context);
-                LocationForegroundService.triggerUrgent(context);
+                LocationForegroundService.triggerUrgent(context, "initializerConfigComplete");
             }
 
             @Override
