@@ -1,6 +1,7 @@
 package com.brother.pharmach.mdm.launcher.service;
 
 import android.Manifest;
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -106,6 +107,10 @@ public class LocationForegroundService extends Service {
     // Urgent: use the streaming in-memory fix if it's < 20s old (GPS is warm, instant response).
     private static final long URGENT_FIX_MAX_AGE_MS = 20_000L;
 
+    // A duplicate urgent request within this window joins the in-flight capture instead of
+    // cancelling it. Sized to the full cold-start capture (parallel provider wait ~47s + upload).
+    private static final long URGENT_COALESCE_WINDOW_MS = 60_000L;
+
     // ---------------------------------------------------------------------------
     // State
     // ---------------------------------------------------------------------------
@@ -128,8 +133,9 @@ public class LocationForegroundService extends Service {
     private ScheduledExecutorService flushScheduler; // periodic queue-flush cycle
     private ScheduledExecutorService heartbeatScheduler; // guaranteed every-30s upload
 
-    // Track in-flight urgent task so a new push cancels any pending one.
+    // Track in-flight urgent task so duplicate pushes coalesce into it (see handleUrgentRequest).
     private volatile Future<?> currentUrgentTask;
+    private volatile long urgentTaskStartedMs;
 
     // Flush the offline SQLite queue when the network comes back.
     private ConnectivityManager.NetworkCallback networkCallback;
@@ -370,6 +376,40 @@ public class LocationForegroundService extends Service {
         urgentExecutor.shutdownNow();
         uploadExecutor.shutdownNow();
         RemoteLogger.log(this, Const.LOG_INFO, "LocationForegroundService stopped");
+        // Nothing in the app ever stops this service intentionally — any onDestroy means the
+        // OS/OEM killed it. Resurrect in ~5s; the 15-min watchdog remains the safety net.
+        scheduleSelfRestart("onDestroy");
+    }
+
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        super.onTaskRemoved(rootIntent);
+        // Some OEMs (MIUI, ColorOS) kill the whole process when the task is swiped away.
+        scheduleSelfRestart("onTaskRemoved");
+    }
+
+    /** Arms a one-shot alarm that restarts this FGS shortly after it is killed. */
+    private void scheduleSelfRestart(String origin) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        try {
+            AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+            if (am == null) return;
+            Intent intent = new Intent(getApplicationContext(), LocationForegroundService.class);
+            PendingIntent pi = PendingIntent.getForegroundService(
+                    getApplicationContext(), 2001, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            long triggerAt = System.currentTimeMillis() + 5_000L;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
+                am.setWindow(AlarmManager.RTC_WAKEUP, triggerAt, 10_000L, pi);
+            } else {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
+            }
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationForegroundService: killed (" + origin + ") — restart alarm armed for 5s");
+        } catch (Exception e) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationForegroundService: failed to arm restart alarm: " + e.getMessage());
+        }
     }
 
     @Nullable
@@ -472,6 +512,20 @@ public class LocationForegroundService extends Service {
                     "LocationForegroundService: seeded last known fix ("
                     + ((System.currentTimeMillis() - best.getTime()) / 1000) + "s old)");
         }
+        // GMS Fused cache often has a fix when LocationManager's cache is empty (cleared on
+        // reboot/location toggle). Blocking lookup — must run off the main thread.
+        uploadExecutor.execute(() -> {
+            Location fused = LocationWorker.tryFusedLastLocation(getApplicationContext());
+            if (fused != null
+                    && (latestContinuousFix == null
+                        || fused.getTime() > latestContinuousFix.getTime())) {
+                latestContinuousFix = fused;
+                writeFixToSharedPrefs(fused);
+                RemoteLogger.log(this, Const.LOG_INFO,
+                        "LocationForegroundService: seeded fix from fused cache ("
+                        + ((System.currentTimeMillis() - fused.getTime()) / 1000) + "s old)");
+            }
+        });
     }
 
     /** Best available getLastKnownLocation() across GPS/Network/Passive, or null if none. */
@@ -508,14 +562,22 @@ public class LocationForegroundService extends Service {
             Location location = latestContinuousFix;
             boolean usedLastKnownFallback = false;
             if (location == null) {
-                location = getBestLastKnownLocation();
+                // Widest possible fallback: LocationManager last-known, GMS Fused cache,
+                // FGS prefs cache, offline SQLite queue — any age. Runs on the heartbeat
+                // thread, so the blocking Fused lookup is safe here.
+                location = LocationWorker.getBestCachedLocationAnyAge(
+                        getApplicationContext(), locationManager);
                 usedLastKnownFallback = true;
             }
             if (location == null) {
                 RemoteLogger.log(this, Const.LOG_WARN,
                         "LocationForegroundService: 30s heartbeat — no continuous fix and no"
-                        + " last-known location available, skipping this cycle");
+                        + " cached location in any source, skipping this cycle");
                 return;
+            }
+            if (usedLastKnownFallback) {
+                // Seed the in-memory fix so the next urgent request can serve instantly.
+                latestContinuousFix = location;
             }
 
             long ageS = (System.currentTimeMillis() - location.getTime()) / 1000;
@@ -607,13 +669,29 @@ public class LocationForegroundService extends Service {
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService: urgent GPS triggered — MAX_PRIORITY reqId=" + reqId);
 
-        // Cancel any queued urgent task so the newest request always wins. NOTE: this is exactly
-        // the H2 concurrency concern — interrupting the previous task does not by itself stop it
-        // from proceeding through its fallback chain; see ExperimentalFlags.ABORT_ON_INTERRUPT_ENABLED.
+        // Coalesce instead of cancel: one "Get Latest GPS" click makes the server send BOTH a
+        // fetchGpsUrgent push and a configUpdated push, and the configUpdated side-effect used to
+        // cancel(true) the real capture mid-flight (field logs: InterruptedException 5s in, then a
+        // fresh 45s wait from zero). An in-flight capture's upload serves every caller, so a new
+        // request just joins it. Only a capture stuck past the full provider timeout is replaced.
         Future<?> prev = currentUrgentTask;
         if (prev != null && !prev.isDone()) {
+            long inFlightMs = System.currentTimeMillis() - urgentTaskStartedMs;
+            if (inFlightMs < URGENT_COALESCE_WINDOW_MS) {
+                RemoteLogger.log(this, Const.LOG_INFO,
+                        "LocationForegroundService: urgent request coalesced — capture already"
+                        + " in flight for " + inFlightMs + "ms, its upload serves this request too"
+                        + " reqId=" + reqId);
+                LocationDiag.timeline(this, reqId, "handleUrgentRequest:coalescedIntoInFlight");
+                LocationDiag.endRequest(this, reqId);
+                return;
+            }
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationForegroundService: previous urgent capture stuck for " + inFlightMs
+                    + "ms — cancelling and starting fresh");
             prev.cancel(true);
         }
+        urgentTaskStartedMs = System.currentTimeMillis();
 
         final Context appContext = getApplicationContext();
         LocationDiag.timeline(appContext, reqId, "handleUrgentRequest:submittedToExecutor");

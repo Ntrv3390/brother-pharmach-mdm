@@ -38,7 +38,9 @@ import com.brother.pharmach.mdm.launcher.util.OemCompat;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
 import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.location.CurrentLocationRequest;
 import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.Granularity;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.Priority;
 import com.google.android.gms.tasks.CancellationToken;
@@ -344,6 +346,42 @@ public class LocationWorker extends Worker {
             }
             Location lastKnownFresh = isLocationFresh(lastKnownAny, maxFixAgeMs) ? lastKnownAny : null;
 
+            // Urgent instant-response: upload the best cached fix from ANY source (LocationManager,
+            // GMS FusedLocation cache, FGS prefs cache, offline SQLite queue) right away, so the
+            // admin sees a position within seconds even on devices where a fresh fix takes 45 s or
+            // never arrives (ColorOS GNSS suppression with screen off). The fresh capture below
+            // still runs and uploads a second, better fix when it succeeds. A stale cached fix
+            // keeps its original timestamp so the server keeps polling for the fresh one.
+            Location immediateSent = null;
+            if (forceFreshFix) {
+                Location cachedAnyAge = chooseBestLocation(lastKnownAny,
+                        tryFusedLastLocation(context),
+                        readFixFromSharedPrefs(context, Long.MAX_VALUE),
+                        readLatestQueuedDbFix(context));
+                if (cachedAnyAge != null) {
+                    boolean cachedFresh = isLocationFresh(cachedAnyAge, maxFixAgeMs);
+                    long cachedAgeS = Math.max(0,
+                            System.currentTimeMillis() - cachedAnyAge.getTime()) / 1000;
+                    RemoteLogger.log(context, Const.LOG_INFO,
+                            "LocationWorker: urgent instant-response — uploading cached fix now"
+                            + " (provider=" + cachedAnyAge.getProvider()
+                            + ", age=" + cachedAgeS + "s, fresh=" + cachedFresh
+                            + ") while fresh capture continues");
+                    LocationDiag.timeline(context, reqId,
+                            "urgent:instantCachedUpload(fresh=" + cachedFresh + ")");
+                    immediateSent = cachedAnyAge;
+                    final boolean sendAsStale = !cachedFresh;
+                    // Off-thread so the HTTP round-trip doesn't delay the fresh capture start.
+                    new Thread(() -> performUpload(context, cachedAnyAge, true, sendAsStale),
+                            "urgent-instant-upload").start();
+                } else {
+                    RemoteLogger.log(context, Const.LOG_WARN,
+                            "LocationWorker: urgent instant-response — no cached fix in any source"
+                            + " (LocationManager, FusedLocation cache, prefs cache, offline queue"
+                            + " all empty)");
+                }
+            }
+
             if (stopChecker.isStopped()) return Result.success();
 
             RemoteLogger.log(context, Const.LOG_INFO, "LocationWorker: requesting fresh location updates");
@@ -387,6 +425,7 @@ public class LocationWorker extends Worker {
                             fineGranted,
                             allowNetwork,
                             maxFixAgeMs,
+                            forceFreshFix,
                             stopChecker,
                             reqId);
                 } finally {
@@ -440,9 +479,25 @@ public class LocationWorker extends Worker {
 
             if (location == null) {
                 if (forceFreshFix) {
-                    RemoteLogger.log(context, Const.LOG_WARN,
-                            "LocationWorker: urgent refresh could not find any location to upload");
+                    if (immediateSent != null) {
+                        RemoteLogger.log(context, Const.LOG_INFO,
+                                "LocationWorker: no fresh fix obtained — cached fix was already"
+                                + " uploaded by the instant-response path");
+                    } else {
+                        RemoteLogger.log(context, Const.LOG_WARN,
+                                "LocationWorker: urgent refresh could not find any location to upload");
+                    }
                 }
+                return Result.success();
+            }
+
+            if (immediateSent != null
+                    && location.getTime() == immediateSent.getTime()
+                    && location.getLatitude() == immediateSent.getLatitude()
+                    && location.getLongitude() == immediateSent.getLongitude()) {
+                RemoteLogger.log(context, Const.LOG_INFO,
+                        "LocationWorker: final result is identical to the instant-response upload"
+                        + " — skipping duplicate");
                 return Result.success();
             }
 
@@ -519,6 +574,7 @@ public class LocationWorker extends Worker {
             boolean allowGps,
             boolean allowNetwork,
             long maxFixAgeMs,
+            boolean urgentFastReturn,
             StopChecker stopChecker,
             String reqId) {
         ParallelProviderResult result = new ParallelProviderResult();
@@ -581,8 +637,15 @@ public class LocationWorker extends Worker {
                     }
                 }
 
-                // Do NOT break on firstFresh alone. Let both providers run so captureAndUpload
-                // can prefer GPS accuracy over network speed. Break only when all are done.
+                // Urgent captures return the FIRST fresh fix immediately — latency beats GPS
+                // accuracy when an admin is waiting on "Get Latest GPS". Periodic captures keep
+                // the old behavior: let both providers finish so GPS accuracy wins.
+                if (urgentFastReturn && result.firstFresh != null) {
+                    LocationDiag.timeline(context, reqId,
+                            "fallback:urgentFastReturn(provider=" + result.firstFresh.getProvider() + ")");
+                    break;
+                }
+
                 if (!gpsPending && !networkPending) {
                     break;
                 }
@@ -918,8 +981,16 @@ public class LocationWorker extends Worker {
             RemoteLogger.log(context, Const.LOG_INFO,
                     "LocationWorker: FusedLocationProvider started reqId=" + reqId);
 
+            // maxUpdateAge lets GMS answer instantly from a fix it already has (its cache is fed
+            // by every app on the device), instead of always waiting for a brand-new computation.
+            CurrentLocationRequest request = new CurrentLocationRequest.Builder()
+                    .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+                    .setGranularity(Granularity.GRANULARITY_PERMISSION_LEVEL)
+                    .setMaxUpdateAgeMillis(TimeUnit.SECONDS.toMillis(60))
+                    .setDurationMillis(TimeUnit.SECONDS.toMillis(timeoutSeconds))
+                    .build();
             com.google.android.gms.tasks.Task<Location> task = fusedClient.getCurrentLocation(
-                    Priority.PRIORITY_HIGH_ACCURACY, cancellationToken);
+                    request, cancellationToken);
 
             Location location = Tasks.await(task, timeoutSeconds, TimeUnit.SECONDS);
 
@@ -1300,6 +1371,76 @@ public class LocationWorker extends Worker {
         location.setTime(fixTime);
         if (accuracy > 0) location.setAccuracy(accuracy);
         return location;
+    }
+
+    /**
+     * GMS FusedLocationProvider's passive cache — populated by Google services and every other
+     * app on the device, so it usually has a fix even when LocationManager's per-provider cache
+     * is empty (cleared on reboot / location toggle) and our own FGS never got a callback.
+     * Must NOT be called on the main thread (Tasks.await throws there).
+     */
+    public static Location tryFusedLastLocation(Context context) {
+        if (!OemCompat.isGmsAvailable(context)) return null;
+        try {
+            FusedLocationProviderClient fusedClient =
+                    LocationServices.getFusedLocationProviderClient(context);
+            Location location = Tasks.await(fusedClient.getLastLocation(), 3, TimeUnit.SECONDS);
+            if (location == null
+                    || (location.getLatitude() == 0.0 && location.getLongitude() == 0.0)) {
+                return null;
+            }
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "LocationWorker: fused getLastLocation hit (age="
+                    + ((System.currentTimeMillis() - location.getTime()) / 1000) + "s"
+                    + ", accuracy=" + (location.hasAccuracy()
+                            ? location.getAccuracy() + "m" : "unknown") + ")");
+            return location;
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            RemoteLogger.log(context, Const.LOG_WARN,
+                    "LocationWorker: fused getLastLocation failed: "
+                    + e.getClass().getSimpleName() + " — " + e.getMessage());
+            return null;
+        }
+    }
+
+    /** Newest fix waiting in the offline SQLite queue, or null. Survives process restarts. */
+    private static Location readLatestQueuedDbFix(Context context) {
+        try {
+            DatabaseHelper helper = DatabaseHelper.instance(context);
+            if (helper == null) return null;
+            java.util.List<LocationTable.Location> rows =
+                    LocationTable.select(helper.getReadableDatabase(), 1);
+            if (rows.isEmpty()) return null;
+            LocationTable.Location row = rows.get(0);
+            if (row.getLat() == 0.0 && row.getLon() == 0.0) return null;
+            Location location = new Location("offlineQueue");
+            location.setLatitude(row.getLat());
+            location.setLongitude(row.getLon());
+            location.setTime(row.getTs());
+            return location;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Best cached location from every source we have, with no age limit: LocationManager
+     * last-known (GPS/Network/Passive), GMS Fused cache, FGS prefs cache, offline SQLite queue.
+     * Used by the urgent instant-response path and the FGS 30s heartbeat so "send the last
+     * recorded position" works even when the app's own capture pipeline is fully suppressed.
+     * Must NOT be called on the main thread.
+     */
+    public static Location getBestCachedLocationAnyAge(Context context,
+                                                       LocationManager locationManager) {
+        Location lastKnown = locationManager != null
+                ? getBestLastKnownLocation(context, locationManager) : null;
+        return chooseBestLocation(lastKnown,
+                tryFusedLastLocation(context),
+                readFixFromSharedPrefs(context, Long.MAX_VALUE),
+                readLatestQueuedDbFix(context));
     }
 
     // ---------------------------------------------------------------------------
