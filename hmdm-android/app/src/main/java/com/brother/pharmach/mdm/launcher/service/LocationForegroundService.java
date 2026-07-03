@@ -108,13 +108,22 @@ public class LocationForegroundService extends Service {
     private static final long URGENT_FIX_MAX_AGE_MS = 20_000L;
 
     // A duplicate urgent request within this window joins the in-flight capture instead of
-    // cancelling it. Sized to the full cold-start capture (parallel provider wait ~47s + upload).
-    private static final long URGENT_COALESCE_WINDOW_MS = 60_000L;
+    // cancelling it. Sized to the urgent cold-start capture (20s provider wait + 2s outer
+    // margin + upload) plus headroom; anything still running past this is stuck and replaced.
+    private static final long URGENT_COALESCE_WINDOW_MS = 35_000L;
 
     // Heartbeat re-checks all caches (incl. the GMS Fused cache fed by other apps) once the
     // in-memory fix is older than this, so a newer external fix is picked up while our own
     // location callbacks are suppressed.
     private static final long HEARTBEAT_CACHE_RECHECK_AGE_MS = 60_000L;
+
+    // Proactive cache refresh: when the best known fix is older than this, each heartbeat also
+    // fires a lightweight balanced-power (WiFi/cell, no GNSS) fused request so the cache the
+    // urgent instant-response serves from stays under ~10 minutes old. Throttled to one attempt
+    // per PROACTIVE_REFRESH_MIN_INTERVAL_MS.
+    private static final long PROACTIVE_REFRESH_AGE_MS = 8 * 60_000L;
+    private static final long PROACTIVE_REFRESH_MIN_INTERVAL_MS = 60_000L;
+    private static final long PROACTIVE_REFRESH_TIMEOUT_SECONDS = 15L;
 
     // ---------------------------------------------------------------------------
     // State
@@ -141,6 +150,11 @@ public class LocationForegroundService extends Service {
     // Track in-flight urgent task so duplicate pushes coalesce into it (see handleUrgentRequest).
     private volatile Future<?> currentUrgentTask;
     private volatile long urgentTaskStartedMs;
+
+    // Proactive refresh single-flight guard + attempt throttle.
+    private final java.util.concurrent.atomic.AtomicBoolean proactiveRefreshInFlight =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    private volatile long lastProactiveRefreshAttemptMs;
 
     // Flush the offline SQLite queue when the network comes back.
     private ConnectivityManager.NetworkCallback networkCallback;
@@ -583,6 +597,10 @@ public class LocationForegroundService extends Service {
                     latestContinuousFix = cached;
                 }
             }
+            // Regardless of what we upload below, keep the cache young: if the best fix we have
+            // is older than PROACTIVE_REFRESH_AGE_MS, actively request a new balanced-power fix.
+            maybeProactiveRefresh(location);
+
             if (location == null) {
                 RemoteLogger.log(this, Const.LOG_WARN,
                         "LocationForegroundService: 30s heartbeat — no continuous fix and no"
@@ -602,6 +620,47 @@ public class LocationForegroundService extends Service {
             RemoteLogger.log(this, Const.LOG_WARN,
                     "LocationForegroundService: 30s heartbeat failed: " + e.getMessage());
         }
+    }
+
+    /**
+     * Fires a lightweight balanced-power (WiFi/cell, no GNSS wait) fused request when the best
+     * known fix has aged past {@link #PROACTIVE_REFRESH_AGE_MS}, so the cache served by the
+     * urgent instant-response path stays under ~10 minutes old even while the app's own GPS
+     * callbacks are suppressed (Doze, ColorOS). Single-flight and throttled; a success feeds
+     * the in-memory fix and the prefs cache, and the next heartbeat uploads it.
+     */
+    private void maybeProactiveRefresh(@Nullable Location current) {
+        long ageMs = current != null
+                ? System.currentTimeMillis() - current.getTime() : Long.MAX_VALUE;
+        if (ageMs < PROACTIVE_REFRESH_AGE_MS) return;
+        long sinceLastAttempt = System.currentTimeMillis() - lastProactiveRefreshAttemptMs;
+        if (sinceLastAttempt < PROACTIVE_REFRESH_MIN_INTERVAL_MS) return;
+        if (!proactiveRefreshInFlight.compareAndSet(false, true)) return;
+        lastProactiveRefreshAttemptMs = System.currentTimeMillis();
+
+        new Thread(() -> {
+            try {
+                RemoteLogger.log(getApplicationContext(), Const.LOG_INFO,
+                        "LocationForegroundService: proactive refresh — best fix is "
+                        + (ageMs == Long.MAX_VALUE ? "absent" : (ageMs / 1000) + "s old")
+                        + ", requesting balanced-power fix");
+                Location fresh = LocationWorker.tryFusedBalancedCurrentLocation(
+                        getApplicationContext(), PROACTIVE_REFRESH_TIMEOUT_SECONDS);
+                if (fresh != null) {
+                    latestContinuousFix = fresh;
+                    writeFixToSharedPrefs(fresh);
+                    RemoteLogger.log(getApplicationContext(), Const.LOG_INFO,
+                            "LocationForegroundService: proactive refresh success (accuracy="
+                            + (fresh.hasAccuracy() ? fresh.getAccuracy() + "m" : "unknown")
+                            + ") — cache is fresh again");
+                }
+            } catch (Exception e) {
+                RemoteLogger.log(getApplicationContext(), Const.LOG_WARN,
+                        "LocationForegroundService: proactive refresh failed: " + e.getMessage());
+            } finally {
+                proactiveRefreshInFlight.set(false);
+            }
+        }, "proactive-loc-refresh").start();
     }
 
     private void stopContinuousTracking() {

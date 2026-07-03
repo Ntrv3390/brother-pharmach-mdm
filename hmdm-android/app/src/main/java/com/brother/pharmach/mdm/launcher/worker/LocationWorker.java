@@ -65,8 +65,10 @@ public class LocationWorker extends Worker {
     // GPS reacquisition while moving (e.g. low-power mode exit) can take 30-90 s.
     // 45 s gives the chip enough time without blocking too long for periodic runs.
     private static final long GPS_FIX_WAIT_SECONDS = 45;
-    private static final long NETWORK_FIX_WAIT_SECONDS = 45;
-    private static final long URGENT_MAX_FIX_AGE_MS = TimeUnit.MINUTES.toMillis(5);
+    // Urgent captures have a hard ~30s answer budget: instant cached upload at ~1s, fresh
+    // attempt capped at 20s, upload overhead ~2-5s. The admin never waits out a 45s timeout.
+    private static final long URGENT_FIX_WAIT_SECONDS = 20;
+    private static final long URGENT_MAX_FIX_AGE_MS = TimeUnit.MINUTES.toMillis(10);
     private static final long PERIODIC_MAX_FIX_AGE_MS = TimeUnit.MINUTES.toMillis(30);
     private static final float MAX_FIX_ACCURACY_METERS = 2000f;
     // Covers parallel GPS+network wait (max 47 s) + DB write + upload.
@@ -270,6 +272,7 @@ public class LocationWorker extends Worker {
             }
 
             long maxFixAgeMs = forceFreshFix ? URGENT_MAX_FIX_AGE_MS : PERIODIC_MAX_FIX_AGE_MS;
+            long fixWaitSeconds = forceFreshFix ? URGENT_FIX_WAIT_SECONDS : GPS_FIX_WAIT_SECONDS;
             long now = System.currentTimeMillis();
 
             // SharedPrefs cache fast-path: on OEMs with frozen HandlerThread loopers,
@@ -352,13 +355,34 @@ public class LocationWorker extends Worker {
             // never arrives (ColorOS GNSS suppression with screen off). The fresh capture below
             // still runs and uploads a second, better fix when it succeeds. A stale cached fix
             // keeps its original timestamp so the server keeps polling for the fresh one.
-            Location immediateSent = null;
+            // Entirely off-thread (including cache collection — the fused lookup alone can block
+            // ~3s) so the fresh capture below starts with zero added latency.
+            final java.util.concurrent.atomic.AtomicReference<Location> immediateSentRef =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            // Set just before the fresh result uploads, so a slow instant-response lookup can't
+            // land its (older) fix AFTER the fresh one and regress the position on the server.
+            final java.util.concurrent.atomic.AtomicBoolean freshUploadStarted =
+                    new java.util.concurrent.atomic.AtomicBoolean(false);
             if (forceFreshFix) {
-                Location cachedAnyAge = chooseBestLocation(lastKnownAny,
-                        tryFusedLastLocation(context),
-                        readFixFromSharedPrefs(context, Long.MAX_VALUE),
-                        readLatestQueuedDbFix(context));
-                if (cachedAnyAge != null) {
+                final Location lastKnownForInstant = lastKnownAny;
+                new Thread(() -> {
+                    Location cachedAnyAge = chooseBestLocation(lastKnownForInstant,
+                            tryFusedLastLocation(context),
+                            readFixFromSharedPrefs(context, Long.MAX_VALUE),
+                            readLatestQueuedDbFix(context));
+                    if (freshUploadStarted.get()) {
+                        RemoteLogger.log(context, Const.LOG_INFO,
+                                "LocationWorker: instant-response skipped — fresh fix already"
+                                + " uploading");
+                        return;
+                    }
+                    if (cachedAnyAge == null) {
+                        RemoteLogger.log(context, Const.LOG_WARN,
+                                "LocationWorker: urgent instant-response — no cached fix in any"
+                                + " source (LocationManager, FusedLocation cache, prefs cache,"
+                                + " offline queue all empty)");
+                        return;
+                    }
                     boolean cachedFresh = isLocationFresh(cachedAnyAge, maxFixAgeMs);
                     long cachedAgeS = Math.max(0,
                             System.currentTimeMillis() - cachedAnyAge.getTime()) / 1000;
@@ -369,17 +393,9 @@ public class LocationWorker extends Worker {
                             + ") while fresh capture continues");
                     LocationDiag.timeline(context, reqId,
                             "urgent:instantCachedUpload(fresh=" + cachedFresh + ")");
-                    immediateSent = cachedAnyAge;
-                    final boolean sendAsStale = !cachedFresh;
-                    // Off-thread so the HTTP round-trip doesn't delay the fresh capture start.
-                    new Thread(() -> performUpload(context, cachedAnyAge, true, sendAsStale),
-                            "urgent-instant-upload").start();
-                } else {
-                    RemoteLogger.log(context, Const.LOG_WARN,
-                            "LocationWorker: urgent instant-response — no cached fix in any source"
-                            + " (LocationManager, FusedLocation cache, prefs cache, offline queue"
-                            + " all empty)");
-                }
+                    immediateSentRef.set(cachedAnyAge);
+                    performUpload(context, cachedAnyAge, true, !cachedFresh);
+                }, "urgent-instant-upload").start();
             }
 
             if (stopChecker.isStopped()) return Result.success();
@@ -425,6 +441,7 @@ public class LocationWorker extends Worker {
                             fineGranted,
                             allowNetwork,
                             maxFixAgeMs,
+                            fixWaitSeconds,
                             forceFreshFix,
                             stopChecker,
                             reqId);
@@ -477,6 +494,7 @@ public class LocationWorker extends Worker {
                 }
             }
 
+            Location immediateSent = immediateSentRef.get();
             if (location == null) {
                 if (forceFreshFix) {
                     if (immediateSent != null) {
@@ -507,6 +525,7 @@ public class LocationWorker extends Worker {
                         "LocationWorker: implausibly old fix (" + locationAgeS / 3600
                                 + " h) — possible system clock skew on first boot");
             }
+            freshUploadStarted.set(true);
             String locationSource = usedStaleFallback ? "staleFallback"
                     : (chosenFresh != null ? "handlerThread" : "lastKnown");
             RemoteLogger.log(context, Const.LOG_INFO, "LocationWorker: success using "
@@ -574,6 +593,7 @@ public class LocationWorker extends Worker {
             boolean allowGps,
             boolean allowNetwork,
             long maxFixAgeMs,
+            long fixWaitSeconds,
             boolean urgentFastReturn,
             StopChecker stopChecker,
             String reqId) {
@@ -586,9 +606,9 @@ public class LocationWorker extends Worker {
             if (allowGps) {
                 gpsFuture = executor.submit(() -> {
                     RemoteLogger.log(context, Const.LOG_INFO,
-                            "LocationWorker: GPS request started");
+                            "LocationWorker: GPS request started (timeout=" + fixWaitSeconds + "s)");
                     return tryRequestLiveUpdate(context, locationManager,
-                            LocationManager.GPS_PROVIDER, GPS_FIX_WAIT_SECONDS, reqId);
+                            LocationManager.GPS_PROVIDER, fixWaitSeconds, reqId);
                 });
             }
 
@@ -596,20 +616,20 @@ public class LocationWorker extends Worker {
                 if (!OemCompat.isGmsAvailable(context)) {
                     RemoteLogger.log(context, Const.LOG_INFO,
                             "LocationWorker: GMS absent — NETWORK_PROVIDER skipped"
-                                    + " (Google NLP unavailable, would cause 45s dead-wait)");
+                                    + " (Google NLP unavailable, would cause a dead-wait)");
                 } else {
                     networkFuture = executor.submit(() -> {
                         RemoteLogger.log(context, Const.LOG_INFO,
-                                "LocationWorker: Network request started");
+                                "LocationWorker: Network request started (timeout="
+                                + fixWaitSeconds + "s)");
                         return tryRequestLiveUpdate(context, locationManager,
-                                LocationManager.NETWORK_PROVIDER, NETWORK_FIX_WAIT_SECONDS, reqId);
+                                LocationManager.NETWORK_PROVIDER, fixWaitSeconds, reqId);
                     });
                 }
             }
 
-            // Use max of both timeouts so future increases to GPS_FIX_WAIT_SECONDS
-            // never cause the outer loop to expire before the inner GPS latch finishes.
-            long outerWaitSeconds = Math.max(GPS_FIX_WAIT_SECONDS, NETWORK_FIX_WAIT_SECONDS) + 2;
+            // +2s so the outer loop never expires before the inner provider latches finish.
+            long outerWaitSeconds = fixWaitSeconds + 2;
             long deadlineNs = System.nanoTime() + TimeUnit.SECONDS.toNanos(outerWaitSeconds);
             boolean gpsPending = gpsFuture != null;
             boolean networkPending = networkFuture != null;
@@ -967,11 +987,29 @@ public class LocationWorker extends Worker {
      * the case on any device that passes {@link OemCompat#isGmsAvailable(Context)}.
      */
     private static Location tryFusedLocation(Context context, long timeoutSeconds, String reqId) {
-        return tryFusedLocation(context, timeoutSeconds, reqId, null);
+        return tryFusedLocation(context, timeoutSeconds, reqId, null,
+                Priority.PRIORITY_HIGH_ACCURACY, TimeUnit.SECONDS.toMillis(60), "fusedHigh");
+    }
+
+    /**
+     * Runs a lightweight balanced-power (WiFi/cell, no GNSS wait) fused request. Used by the
+     * FGS proactive cache refresher to keep the cached position under 10 minutes old on devices
+     * where the app's own GPS callbacks are suppressed. Must NOT be called on the main thread.
+     */
+    public static Location tryFusedBalancedCurrentLocation(Context context, long timeoutSeconds) {
+        CancellationTokenSource cancelSource = new CancellationTokenSource();
+        try {
+            return tryFusedLocation(context, timeoutSeconds, "proactiveRefresh",
+                    cancelSource.getToken(), Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                    TimeUnit.MINUTES.toMillis(2), "fusedBalanced");
+        } finally {
+            cancelSource.cancel();
+        }
     }
 
     private static Location tryFusedLocation(Context context, long timeoutSeconds, String reqId,
-                                              CancellationToken cancellationToken) {
+                                              CancellationToken cancellationToken, int priority,
+                                              long maxUpdateAgeMs, String label) {
         if (!OemCompat.isGmsAvailable(context)) return null;
 
         try {
@@ -979,14 +1017,14 @@ public class LocationWorker extends Worker {
                     LocationServices.getFusedLocationProviderClient(context);
 
             RemoteLogger.log(context, Const.LOG_INFO,
-                    "LocationWorker: FusedLocationProvider started reqId=" + reqId);
+                    "LocationWorker: FusedLocationProvider(" + label + ") started reqId=" + reqId);
 
             // maxUpdateAge lets GMS answer instantly from a fix it already has (its cache is fed
             // by every app on the device), instead of always waiting for a brand-new computation.
             CurrentLocationRequest request = new CurrentLocationRequest.Builder()
-                    .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+                    .setPriority(priority)
                     .setGranularity(Granularity.GRANULARITY_PERMISSION_LEVEL)
-                    .setMaxUpdateAgeMillis(TimeUnit.SECONDS.toMillis(60))
+                    .setMaxUpdateAgeMillis(maxUpdateAgeMs)
                     .setDurationMillis(TimeUnit.SECONDS.toMillis(timeoutSeconds))
                     .build();
             com.google.android.gms.tasks.Task<Location> task = fusedClient.getCurrentLocation(
@@ -998,7 +1036,7 @@ public class LocationWorker extends Worker {
                     && location.getLatitude() != 0.0
                     && location.getLongitude() != 0.0) {
                 RemoteLogger.log(context, Const.LOG_INFO,
-                        "LocationWorker: FusedLocationProvider success"
+                        "LocationWorker: FusedLocationProvider(" + label + ") success"
                         + " (provider=" + location.getProvider()
                         + ", accuracy=" + (location.hasAccuracy()
                                 ? location.getAccuracy() + "m" : "unknown") + ")");
@@ -1006,7 +1044,7 @@ public class LocationWorker extends Worker {
             }
 
             RemoteLogger.log(context, Const.LOG_WARN,
-                    "LocationWorker: FusedLocationProvider returned no fix"
+                    "LocationWorker: FusedLocationProvider(" + label + ") returned no fix"
                     + " (timeout=" + timeoutSeconds + "s)");
             return null;
         } catch (Exception e) {
@@ -1014,7 +1052,8 @@ public class LocationWorker extends Worker {
                 Thread.currentThread().interrupt();
             }
             Throwable cause = e.getCause() != null ? e.getCause() : e;
-            StringBuilder sb = new StringBuilder("LocationDiag: FusedLocationProvider failed reqId=")
+            StringBuilder sb = new StringBuilder("LocationDiag: FusedLocationProvider(")
+                    .append(label).append(") failed reqId=")
                     .append(reqId).append(": ")
                     .append(e.getClass().getName()).append(" — ").append(e.getMessage());
             if (cause instanceof ApiException) {
@@ -1059,23 +1098,38 @@ public class LocationWorker extends Worker {
     private static Location tryGetCurrentLocationRacingFused(
             Context context, LocationManager locationManager, String provider,
             long timeoutSeconds, String reqId) {
-        ExecutorService racer = Executors.newFixedThreadPool(2);
+        ExecutorService racer = Executors.newFixedThreadPool(3);
         CancellationTokenSource fusedCancelSource = new CancellationTokenSource();
+        CancellationTokenSource balancedCancelSource = new CancellationTokenSource();
         Future<Location> rawFuture = null;
         Future<Location> fusedFuture = null;
+        Future<Location> balancedFuture = null;
         try {
             rawFuture = racer.submit(() ->
                     tryGetCurrentLocation(context, locationManager, provider, timeoutSeconds, reqId));
             fusedFuture = racer.submit(() ->
-                    tryFusedLocation(context, timeoutSeconds, reqId, fusedCancelSource.getToken()));
+                    tryFusedLocation(context, timeoutSeconds, reqId, fusedCancelSource.getToken(),
+                            Priority.PRIORITY_HIGH_ACCURACY,
+                            TimeUnit.SECONDS.toMillis(60), "fusedHigh"));
+            // Third racer: balanced power = WiFi/cell only, no GNSS wait. Indoors or under OEM
+            // GNSS suppression this typically resolves in 2-10s while the other two starve.
+            // maxUpdateAge 30s keeps it from "winning" with an old cached fix — the instant
+            // -response path already reported the cache; this racer must contribute freshness.
+            balancedFuture = racer.submit(() ->
+                    tryFusedLocation(context, timeoutSeconds, reqId, balancedCancelSource.getToken(),
+                            Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                            TimeUnit.SECONDS.toMillis(30), "fusedBalanced"));
 
             long deadlineNs = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds);
             boolean rawPending = true;
             boolean fusedPending = true;
+            boolean balancedPending = true;
             Location rawResult = null;
             Location fusedResult = null;
+            Location balancedResult = null;
 
-            while ((rawPending || fusedPending) && System.nanoTime() < deadlineNs) {
+            while ((rawPending || fusedPending || balancedPending)
+                    && System.nanoTime() < deadlineNs) {
                 if (LocationDiag.checkInterruptGate(context, reqId, "race:" + provider)) {
                     return null;
                 }
@@ -1096,7 +1150,15 @@ public class LocationWorker extends Worker {
                         break;
                     }
                 }
-                if (!rawPending && !fusedPending) {
+                if (balancedPending && balancedFuture.isDone()) {
+                    balancedResult = getFutureResult(context, balancedFuture, 0);
+                    balancedPending = false;
+                    if (balancedResult != null) {
+                        LocationDiag.timeline(context, reqId, "race:" + provider + ":balancedWon");
+                        break;
+                    }
+                }
+                if (!rawPending && !fusedPending && !balancedPending) {
                     break;
                 }
                 try {
@@ -1115,23 +1177,35 @@ public class LocationWorker extends Worker {
             if (fusedResult == null && fusedFuture.isDone()) {
                 fusedResult = getFutureResult(context, fusedFuture, 0);
             }
+            if (balancedResult == null && balancedFuture.isDone()) {
+                balancedResult = getFutureResult(context, balancedFuture, 0);
+            }
 
-            Location winner = rawResult != null ? rawResult : fusedResult;
-            String winnerLabel = winner == null ? "none" : (winner == rawResult ? "raw" : "fused");
+            Location winner = rawResult != null ? rawResult
+                    : (fusedResult != null ? fusedResult : balancedResult);
+            String winnerLabel = winner == null ? "none"
+                    : (winner == rawResult ? "raw"
+                        : (winner == fusedResult ? "fusedHigh" : "fusedBalanced"));
             RemoteLogger.log(context, Const.LOG_INFO,
                     "LocationDiag: race:" + provider + " reqId=" + reqId
-                            + " rawResult=" + (rawResult != null) + " fusedResult=" + (fusedResult != null)
+                            + " rawResult=" + (rawResult != null)
+                            + " fusedResult=" + (fusedResult != null)
+                            + " balancedResult=" + (balancedResult != null)
                             + " winner=" + winnerLabel);
             return winner;
         } finally {
             if (rawFuture != null && !rawFuture.isDone()) {
                 rawFuture.cancel(true);
             }
+            // Cancel via GMS's own tokens (stops the underlying requests), not just Thread
+            // interruption — Tasks.await() alone doesn't stop the Play Services side.
             if (fusedFuture != null && !fusedFuture.isDone()) {
-                // Cancel via GMS's own token (stops the underlying request), not just Thread
-                // interruption — Tasks.await() alone doesn't stop the Play Services side.
                 fusedCancelSource.cancel();
                 fusedFuture.cancel(true);
+            }
+            if (balancedFuture != null && !balancedFuture.isDone()) {
+                balancedCancelSource.cancel();
+                balancedFuture.cancel(true);
             }
             racer.shutdownNow();
         }
