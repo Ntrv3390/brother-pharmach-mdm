@@ -43,6 +43,8 @@ import com.brother.pharmach.mdm.launcher.worker.SendDeviceInfoWorker;
 import com.brother.pharmach.mdm.launcher.worker.SmsLogUploadWorker;
 import com.brother.pharmach.mdm.launcher.worker.LocationWorker;
 
+import androidx.work.WorkManager;
+
 import java.util.Collections;
 
 import org.eclipse.paho.android.service.MqttAndroidClient;
@@ -80,7 +82,21 @@ public class Initializer {
 
             ConnectionWaiter.waitForConnect(context, () -> {
                 DetailedInfoWorker.schedule(context);
-                LocationForegroundService.start(context);
+                // Trying out LocationService in place of LocationForegroundService — see
+                // LocationService.java. Not deleted, just disabled:
+                // LocationForegroundService.start(context);
+                // Kiosk app is always running, so start it once here and it stays alive
+                // (once-a-minute periodic capture is scheduled internally from its onCreate()).
+                LocationService.start(context);
+                // Cancel any periodic/one-shot LocationWorker WorkManager jobs left over from a
+                // previous build — LocationWorker.schedule()/scheduleOneShot() are no longer
+                // called anywhere in current code, but WorkManager persists periodic work across
+                // app updates until explicitly cancelled, so an old job can keep firing silently
+                // on devices that were running an earlier version of this app.
+                WorkManager.getInstance(context.getApplicationContext())
+                        .cancelUniqueWork("com.brother.pharmach.mdm.launcher.WORK_TAG_LOCATION_PERIODIC");
+                WorkManager.getInstance(context.getApplicationContext())
+                        .cancelUniqueWork("com.brother.pharmach.mdm.launcher.WORK_TAG_LOCATION_ONE_SHOT");
 
                 // Prevent Samsung/Xiaomi/Oppo battery optimizers from killing the app
                 if (Utils.isDeviceOwner(context) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

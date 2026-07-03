@@ -187,8 +187,13 @@ public class LocationWorker extends Worker {
     @Override
     public Result doWork() {
         if (isStopped()) return Result.success();
-        // Ensure the FGS is alive — restarts it if the OS killed it since last boot.
-        LocationForegroundService.start(context);
+        // Trying out LocationService in place of LocationForegroundService — see
+        // LocationService.java. Not deleted, just disabled. This whole doWork() path is now
+        // dormant anyway: LocationWorker.schedule()/scheduleOneShot() are no longer called
+        // from anywhere, so nothing should be enqueuing this Worker in current builds (see the
+        // WorkManager.cancelUniqueWork() calls added in Initializer for pre-existing installs
+        // that still have the old periodic job registered from a previous build).
+        // LocationForegroundService.start(context);
         boolean forceFreshFix = getTags().contains(WORK_TAG_ONE_SHOT);
         String origin = forceFreshFix ? "workManagerOneShot" : "workManagerPeriodic";
         String reqId = LocationDiag.beginRequest(context, origin);
@@ -318,7 +323,9 @@ public class LocationWorker extends Worker {
                         // Skip the futile 2-second restart wait — jump straight to
                         // getCurrentLocation() / HandlerThread capture below.
                     } else {
-                        LocationForegroundService.start(context);
+                        // Trying out LocationService in place of LocationForegroundService — see
+                        // LocationService.java. Not deleted, just disabled:
+                        // LocationForegroundService.start(context);
                         try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
                         Location cachedAfterRestart = readFixFromSharedPrefs(context, maxFixAgeMs);
                         if (cachedAfterRestart != null) {

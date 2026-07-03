@@ -9,6 +9,7 @@ import android.os.Build;
 
 import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.service.LocationForegroundService;
+import com.brother.pharmach.mdm.launcher.service.LocationService;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
 import java.util.concurrent.TimeUnit;
@@ -32,14 +33,18 @@ public class LocationWatchdogReceiver extends BroadcastReceiver {
         if (!ACTION.equals(intent.getAction())) return;
 
         RemoteLogger.log(context, Const.LOG_INFO,
-                "LocationWatchdog: heartbeat — ensuring LocationForegroundService is alive");
+                "LocationWatchdog: heartbeat — ensuring LocationService is alive");
 
-        // Always reschedule next alarm first so the chain survives even if FGS start fails.
+        // Always reschedule next alarm first so the chain survives even if start fails.
         schedule(context);
 
-        // start() is idempotent: if FGS is already running, onStartCommand fires with no
-        // action and returns immediately. If it was killed, it restarts from scratch.
-        LocationForegroundService.start(context.getApplicationContext());
+        // Trying out LocationService in place of LocationForegroundService — see
+        // LocationService.java. Not deleted, just disabled:
+        // LocationForegroundService.start(context.getApplicationContext());
+        // start() is idempotent: if already running, onStartCommand fires with no action and
+        // returns immediately. If it was killed, it restarts from scratch (periodic capture
+        // resumes from onCreate()).
+        LocationService.start(context.getApplicationContext());
     }
 
     /** Arms the next watchdog alarm. Safe to call multiple times — UPDATE_CURRENT deduplicates. */
