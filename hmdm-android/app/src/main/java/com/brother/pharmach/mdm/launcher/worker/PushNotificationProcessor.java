@@ -112,9 +112,13 @@ public class PushNotificationProcessor {
             final Context appContext = context.getApplicationContext();
             long pushReceivedMs = System.currentTimeMillis();
             LocationDiag.logProcessAndPowerState(appContext, "pushReceived:fetchGpsUrgent");
-            LocationForegroundService.triggerUrgent(appContext, "pushMessage:fetchGpsUrgent", pushReceivedMs);
+            // Trying out the simplified LocationService in place of LocationForegroundService's
+            // urgent path — see LocationService.java. Not deleted, just swapped:
+            // LocationForegroundService.triggerUrgent(appContext, "pushMessage:fetchGpsUrgent", pushReceivedMs);
+            com.brother.pharmach.mdm.launcher.service.LocationService.triggerUrgent(
+                    appContext, "pushMessage:fetchGpsUrgent");
             RemoteLogger.log(appContext, Const.LOG_INFO,
-                    "Urgent GPS push: dispatched to LocationForegroundService at max priority");
+                    "Urgent GPS push: dispatched to LocationService at max priority");
             return;
         } else if (message.getMessageType().equals(PushMessage.TYPE_RUN_APP)) {
             // Run application

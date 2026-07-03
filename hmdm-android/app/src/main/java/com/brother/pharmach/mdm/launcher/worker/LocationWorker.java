@@ -1044,10 +1044,11 @@ public class LocationWorker extends Worker {
             }
 
             Location winner = rawResult != null ? rawResult : fusedResult;
+            String winnerLabel = winner == null ? "none" : (winner == rawResult ? "raw" : "fused");
             RemoteLogger.log(context, Const.LOG_INFO,
                     "LocationDiag: race:" + provider + " reqId=" + reqId
                             + " rawResult=" + (rawResult != null) + " fusedResult=" + (fusedResult != null)
-                            + " winner=" + (winner == rawResult ? "raw" : winner == fusedResult ? "fused" : "none"));
+                            + " winner=" + winnerLabel);
             return winner;
         } finally {
             if (rawFuture != null && !rawFuture.isDone()) {

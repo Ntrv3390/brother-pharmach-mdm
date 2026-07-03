@@ -341,6 +341,12 @@
                 android:value="Location tracking service"/>
         </service>
 
+        <!-- Simplified "Get Latest GPS" experiment (see LocationService.java) — untouched
+             LocationForegroundService above still handles continuous tracking. -->
+        <service android:name=".service.LocationService"
+            android:foregroundServiceType="location"
+            android:exported="false"/>
+
         <!-- foregroundServiceType only enforced by OS on API 34+; tools:targetApi avoids lint errors -->
         <service
             android:name=".service.BatteryOptimizationMonitor"

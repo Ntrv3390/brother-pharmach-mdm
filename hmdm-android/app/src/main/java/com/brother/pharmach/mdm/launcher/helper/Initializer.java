@@ -27,6 +27,7 @@ import com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundApplicationS
 import com.brother.pharmach.mdm.launcher.pro.worker.DetailedInfoWorker;
 import com.brother.pharmach.mdm.launcher.receiver.LocationWatchdogReceiver;
 import com.brother.pharmach.mdm.launcher.service.LocationForegroundService;
+import com.brother.pharmach.mdm.launcher.service.LocationService;
 import com.brother.pharmach.mdm.launcher.service.PushLongPollingService;
 import com.brother.pharmach.mdm.launcher.service.StatusControlService;
 import com.brother.pharmach.mdm.launcher.task.SendDeviceInfoTask;
@@ -269,7 +270,10 @@ public class Initializer {
                 DeviceInfo deviceInfo = DeviceInfoProvider.getDeviceInfo(context, true, true);
                 sendDeviceInfoTask.execute(deviceInfo);
                 SendDeviceInfoWorker.scheduleDeviceInfoSending(context);
-                LocationForegroundService.triggerUrgent(context, "initializerConfigComplete");
+                // Trying out the simplified LocationService in place of LocationForegroundService's
+                // urgent path — see LocationService.java. Not deleted, just swapped:
+                // LocationForegroundService.triggerUrgent(context, "initializerConfigComplete");
+                LocationService.triggerUrgent(context, "initializerConfigComplete");
             }
 
             @Override
