@@ -327,6 +327,9 @@ public class LocationForegroundService extends Service {
         // Ensure battery optimization exemption BEFORE registering listeners so Realme's
         // LocationManager dispatch layer does not suppress callbacks on registration.
         ensureBatteryOptimizationExempted();
+        // Best-effort, off the main thread (binder-heavy): disable Battery Saver and its
+        // auto-trigger so the OS never throttles power to the location hardware.
+        uploadExecutor.execute(this::hardenPowerSettingsAsDeviceOwner);
         startContinuousTracking();
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService: onCreate timing — trackingStartMs="
@@ -926,6 +929,58 @@ public class LocationForegroundService extends Service {
         RemoteLogger.log(this, Const.LOG_WARN,
                 "LocationForegroundService: battery optimization NOT exempted"
                 + " — relying on LocationWorker.getCurrentLocation() fallback");
+    }
+
+    // Once per process — the FGS can be recreated many times per day and these settings stick.
+    private static volatile boolean powerHardeningAttempted = false;
+
+    /**
+     * Best-effort Device Owner hardening of global power settings: turns Battery Saver off and
+     * sets its auto-trigger level to 0 so the OS never throttles power to the location hardware
+     * (Battery Saver forces location to "only while screen on" even for foreground services).
+     * Uses the same hidden executeShellCommand channel as tryGrantExemptionAsDeviceOwner —
+     * fails harmlessly (logged) on devices where that channel is unsupported.
+     */
+    private void hardenPowerSettingsAsDeviceOwner() {
+        if (powerHardeningAttempted) return;
+        powerHardeningAttempted = true;
+        if (!Utils.isDeviceOwner(this)) return;
+        DevicePolicyManager dpm =
+                (DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
+        if (dpm == null) return;
+        ComponentName admin = LegacyUtils.getAdminComponentName(this);
+
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        RemoteLogger.log(this, Const.LOG_INFO,
+                "LocationForegroundService: power hardening — batterySaverActive="
+                + (pm != null && pm.isPowerSaveMode())
+                + ", disabling Battery Saver + auto-trigger via DPM shell (best-effort)");
+
+        runDpmShell(dpm, admin, "settings put global low_power 0");
+        runDpmShell(dpm, admin, "settings put global low_power_trigger_level 0");
+    }
+
+    /** Executes a shell command via the hidden DPM channel. Returns true if it ran. */
+    private boolean runDpmShell(DevicePolicyManager dpm, ComponentName admin, String shellCmd) {
+        try {
+            android.os.ParcelFileDescriptor[] pipe =
+                    android.os.ParcelFileDescriptor.createPipe();
+            dpm.getClass()
+               .getMethod("executeShellCommand", ComponentName.class, String.class,
+                       android.os.ParcelFileDescriptor.class,
+                       android.os.ParcelFileDescriptor.class)
+               .invoke(dpm, admin, shellCmd, pipe[1], null);
+            pipe[0].close();
+            pipe[1].close();
+            RemoteLogger.log(this, Const.LOG_INFO,
+                    "LocationForegroundService: DPM shell succeeded: " + shellCmd);
+            return true;
+        } catch (Exception e) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationForegroundService: DPM shell failed (" + shellCmd + "): "
+                    + e.getClass().getSimpleName() + " — " + e.getMessage());
+            return false;
+        }
     }
 
     /**
