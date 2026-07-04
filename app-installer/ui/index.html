@@ -570,6 +570,26 @@
             observed.className = "action-observed";
             observed.textContent = `Observed -> users: ${entry.observed.users}, accounts: ${entry.observed.accounts}, packageInstalled: ${entry.observed.packageInstalled}`;
             wrap.appendChild(observed);
+
+            const accountDetails = Array.isArray(entry.observed.accountDetails)
+              ? entry.observed.accountDetails
+              : [];
+            if (accountDetails.length > 0) {
+              const accounts = document.createElement("div");
+              accounts.className = "action-observed";
+              accounts.textContent = `Blocking account(s): ${accountDetails.join(", ")}`;
+              wrap.appendChild(accounts);
+            }
+
+            const userDetails = Array.isArray(entry.observed.userDetails)
+              ? entry.observed.userDetails
+              : [];
+            if (userDetails.length > 1) {
+              const users = document.createElement("div");
+              users.className = "action-observed";
+              users.textContent = `Android users: ${userDetails.join(", ")}`;
+              wrap.appendChild(users);
+            }
           }
 
           const steps = Array.isArray(entry.steps) ? entry.steps : [];
