@@ -4,6 +4,7 @@ import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.util.Log;
 
+import com.brother.pharmach.mdm.launcher.util.NotificationSuppressionPolicy;
 import com.brother.pharmach.mdm.launcher.util.WorkTimeManager;
 
 import java.lang.ref.WeakReference;
@@ -70,7 +71,9 @@ public class WorkTimeNotificationListenerService extends NotificationListenerSer
         String pkg = sbn.getPackageName();
         if (pkg == null || pkg.equals(getPackageName())) return;
 
-        if (!WorkTimeManager.getInstance().isAppAllowed(pkg)) {
+        boolean suppress = NotificationSuppressionPolicy.isEnabled(getApplicationContext())
+                && NotificationSuppressionPolicy.shouldSuppressNotification(pkg, getPackageName());
+        if (suppress || !WorkTimeManager.getInstance().isAppAllowed(pkg)) {
             Log.d(TAG, "Cancelling notification from restricted app: " + pkg);
             try {
                 cancelNotification(sbn.getKey());

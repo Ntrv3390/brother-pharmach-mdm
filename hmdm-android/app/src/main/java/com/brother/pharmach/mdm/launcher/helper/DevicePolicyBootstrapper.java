@@ -45,6 +45,7 @@ public final class DevicePolicyBootstrapper {
         applyLocationPermissions(context, dpm, adminComponent);
         applyKeyguardPolicy(dpm, adminComponent);
         applyLockTaskFeatures(dpm, adminComponent);
+        applyStatusBarPolicy(dpm, adminComponent);
     }
 
     /**
@@ -108,6 +109,19 @@ public final class DevicePolicyBootstrapper {
                     DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS
                             | DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD);
             Log.i(TAG, "LockTask features applied");
+        }
+    }
+
+    /**
+     * Disables the notification shade/status bar expansion for kiosk-style operation.
+     * This is a best-effort device-owner mitigation; Android still reserves some system
+     * notifications and privacy indicators for the framework itself.
+     */
+    private static void applyStatusBarPolicy(DevicePolicyManager dpm,
+                                             ComponentName adminComponent) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            dpm.setStatusBarDisabled(adminComponent, true);
+            Log.i(TAG, "Status bar disabled for kiosk operation");
         }
     }
 }

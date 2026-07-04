@@ -3095,22 +3095,10 @@ public class MainActivity
     }
 
     private void applyWorkTimeSettingsRestriction() {
-        boolean shouldLockSettings = com.brother.pharmach.mdm.launcher.util.WorkTimeManager
-                .getInstance()
-                .shouldLockSettingsNow();
-
-        // If the device is not exempt from battery optimization, the user must be able to reach
-        // Settings to grant the exemption. Override the worktime lock so Settings stays accessible.
-        if (shouldLockSettings && isBatteryOptimizationComplianceRequired()) {
-            shouldLockSettings = false;
-        }
-
-        if (settingsLockedByWorkTime != null && settingsLockedByWorkTime == shouldLockSettings) {
-            return;
-        }
-
-        settingsLockedByWorkTime = shouldLockSettings;
-        Utils.lockPackages(this, Const.SETTINGS_PACKAGE_NAME, shouldLockSettings);
+        // Settings must remain accessible during worktime. Only the app whitelist and other
+        // worktime restrictions are enforced; the Settings app is intentionally excluded.
+        settingsLockedByWorkTime = false;
+        Utils.lockPackages(this, Const.SETTINGS_PACKAGE_NAME, false);
     }
 
     private boolean isBatteryOptimizationComplianceRequired() {

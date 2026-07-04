@@ -31,6 +31,7 @@ import android.os.PersistableBundle;
 
 import androidx.annotation.RequiresApi;
 
+import com.brother.pharmach.mdm.launcher.helper.DevicePolicyBootstrapper;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.json.DeviceEnrollOptions;
 import com.brother.pharmach.mdm.launcher.util.PreferenceLogger;
@@ -53,6 +54,7 @@ public class AdminReceiver extends DeviceAdminReceiver {
         SharedPreferences preferences = context.getApplicationContext().getSharedPreferences( Const.PREFERENCES, MODE_PRIVATE );
         PreferenceLogger.log(preferences, "Administrator enabled");
         preferences.edit().putInt(Const.PREFERENCES_ADMINISTRATOR, Const.PREFERENCES_ON).commit();
+        DevicePolicyBootstrapper.applyPolicies(context);
     }
 
     @Override
