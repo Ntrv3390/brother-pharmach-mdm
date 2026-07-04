@@ -99,14 +99,27 @@ public class Utils {
                     return false;
                 }
             }
-            if (BuildConfig.ENABLE_SMS_LOG) {
+            // READ_CALL_LOG and READ_SMS are hard-restricted since Android 10: the grant
+            // fails unless the installer whitelisted them, so treat them as best-effort
+            // and never fail the whole flow because of them.
+            try {
                 if (devicePolicyManager.getPermissionGrantState(adminComponentName,
-                        context.getPackageName(), Manifest.permission.READ_SMS) != DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED) {
-                    boolean success = devicePolicyManager.setPermissionGrantState(adminComponentName,
-                            context.getPackageName(), Manifest.permission.READ_SMS, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
-                    if (!success) {
-                        return false;
+                        context.getPackageName(), Manifest.permission.READ_CALL_LOG) != DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED) {
+                    devicePolicyManager.setPermissionGrantState(adminComponentName,
+                            context.getPackageName(), Manifest.permission.READ_CALL_LOG, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            if (BuildConfig.ENABLE_SMS_LOG) {
+                try {
+                    if (devicePolicyManager.getPermissionGrantState(adminComponentName,
+                            context.getPackageName(), Manifest.permission.READ_SMS) != DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED) {
+                        devicePolicyManager.setPermissionGrantState(adminComponentName,
+                                context.getPackageName(), Manifest.permission.READ_SMS, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
                     }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

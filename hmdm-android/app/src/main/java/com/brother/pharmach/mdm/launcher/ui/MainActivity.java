@@ -132,6 +132,7 @@ import org.apache.commons.io.FileUtils;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 
 import okhttp3.Cache;
@@ -850,6 +851,11 @@ public class MainActivity
                     // This may be called on Android 10, not sure why; just continue the flow
                     Log.i(Const.LOG_TAG, "Called onRequestPermissionsResult: permissions=" + Arrays.toString(permissions) +
                             ", grantResults=" + Arrays.toString(grantResults));
+                    if (hasRequiredPhonePermissions()) {
+                        // Remove a stale permissions dialog shown by the fallback
+                        // while the system permission prompt was on screen
+                        dismissDialog(permissionsDialog);
+                    }
                     super.onRequestPermissionsResult(requestCode, permissions, grantResults);
                     return;
                 }
@@ -882,6 +888,15 @@ public class MainActivity
                         continue;
                     }
 
+                    if (permissions[n].equals(Manifest.permission.READ_CALL_LOG) ||
+                            permissions[n].equals(Manifest.permission.READ_SMS)) {
+                        // These are hard-restricted since Android 10: the system silently
+                        // denies them on non-whitelisted installs, so re-showing the
+                        // permissions dialog for them would loop forever. Call log / SMS
+                        // upload degrade gracefully without them.
+                        continue;
+                    }
+
                     // Let user know that he need to grant permissions
                      requestPermissions = true;
                 }
@@ -889,8 +904,13 @@ public class MainActivity
 
             if (requestPermissions) {
                 createAndShowPermissionsDialog();
-            } else if (BuildConfig.ENABLE_SMS_LOG) {
-                SmsLogUploadWorker.schedule(this);
+            } else {
+                // All mandatory permissions granted: remove a stale dialog which may have
+                // been shown by the fallback while the system prompt was on screen
+                dismissDialog(permissionsDialog);
+                if (BuildConfig.ENABLE_SMS_LOG) {
+                    SmsLogUploadWorker.schedule(this);
+                }
             }
         }
     }
@@ -1087,8 +1107,60 @@ public class MainActivity
         permissionsDialog.setCancelable( false );
         permissionsDialog.requestWindowFeature( Window.FEATURE_NO_TITLE );
 
+        String missingPermissions = getMissingMandatoryPermissionLabels();
+        if (!missingPermissions.isEmpty()) {
+            dialogPermissionsBinding.missingPermissions.setText(missingPermissions);
+            dialogPermissionsBinding.missingPermissions.setVisibility(View.VISIBLE);
+        }
+
         permissionsDialog.setContentView( dialogPermissionsBinding.getRoot() );
         permissionsDialog.show();
+    }
+
+    // Human-readable list of the mandatory permissions which are still not granted,
+    // shown in the permissions dialog so the user knows what exactly to enable
+    private String getMissingMandatoryPermissionLabels() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return "";
+        }
+
+        List<String> missing = new LinkedList<>();
+        if (checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+            missing.add(Manifest.permission.READ_PHONE_STATE);
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+            }
+            if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            }
+        }
+        if (preferences.getInt(Const.PREFERENCES_DISABLE_LOCATION, Const.PREFERENCES_OFF) != Const.PREFERENCES_ON) {
+            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.ACCESS_FINE_LOCATION);
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                    checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+            }
+        }
+
+        PackageManager pm = getPackageManager();
+        StringBuilder sb = new StringBuilder();
+        for (String permission : missing) {
+            if (sb.length() > 0) {
+                sb.append("\n");
+            }
+            String label;
+            try {
+                label = pm.getPermissionInfo(permission, 0).loadLabel(pm).toString();
+            } catch (Exception e) {
+                label = permission.substring(permission.lastIndexOf('.') + 1);
+            }
+            sb.append("• ").append(label);
+        }
+        return sb.toString();
     }
 
     public void permissionsRetryClicked(View view) {
@@ -2641,12 +2713,10 @@ public class MainActivity
                 // Prefer auto-grant in device owner mode, but verify dangerous permissions before continuing.
                 Utils.autoGrantPhonePermission(this);
 
-                boolean hasPhoneState = checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED;
-                boolean hasCallLog = checkSelfPermission(Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED;
-                boolean hasSms = !BuildConfig.ENABLE_SMS_LOG ||
-                        checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED;
-
-                if (hasPhoneState && hasCallLog && hasSms) {
+                // Only READ_PHONE_STATE is mandatory; call log / SMS permissions are
+                // hard-restricted and may be undeniable by the user, so they are
+                // requested below but never block the launcher.
+                if (hasRequiredPhonePermissions()) {
                     return true;
                 }
 
@@ -2669,11 +2739,12 @@ public class MainActivity
         }
 
         if (preferences.getInt(Const.PREFERENCES_DISABLE_LOCATION, Const.PREFERENCES_OFF) == Const.PREFERENCES_ON) {
+            // READ_CALL_LOG / READ_SMS are requested below but intentionally excluded
+            // from this gate: they are hard-restricted since Android 10 and may never
+            // become grantable, which would loop the permissions dialog forever.
             if ((Build.VERSION.SDK_INT < Build.VERSION_CODES.R && checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) ||
                 (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) ||
-                    checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED ||
-                    checkSelfPermission(Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED ||
-                    (BuildConfig.ENABLE_SMS_LOG && checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED)) {
+                    checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
 
                 if (startSettings) {
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
@@ -2722,12 +2793,12 @@ public class MainActivity
             return true;
         }
 
-        boolean hasPhoneState = checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED;
-        boolean hasCallLog = checkSelfPermission(Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED;
-        boolean hasSms = !BuildConfig.ENABLE_SMS_LOG ||
-                checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED;
-
-        return hasPhoneState && hasCallLog && hasSms;
+        // READ_CALL_LOG and READ_SMS are intentionally NOT checked here: they are
+        // hard-restricted since Android 10, so on non-whitelisted installs the system
+        // silently denies them and they can't even be enabled from app settings.
+        // Treating them as mandatory makes the permissions dialog reappear forever.
+        // Call log / SMS upload degrade gracefully when the permission is missing.
+        return checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED;
     }
 
     private void enforceMandatoryPermissionsDialogFallback() {
@@ -2750,13 +2821,14 @@ public class MainActivity
     // So it's implemented in a separate method
     @RequiresApi(api = Build.VERSION_CODES.M)
     private boolean checkLocationPermissions(boolean startSettings) {
+        // READ_CALL_LOG / READ_SMS are requested below but intentionally excluded from
+        // this gate: they are hard-restricted since Android 10 and may never become
+        // grantable, which would loop the permissions dialog forever.
         if ((Build.VERSION.SDK_INT < Build.VERSION_CODES.R && checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) ||
                 (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) ||
                 checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
                 (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) ||
-                checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED ||
-            checkSelfPermission(Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED ||
-            (BuildConfig.ENABLE_SMS_LOG && checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED)) {
+                checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
 
             if (startSettings) {
                 boolean activeModeLocation = false;
