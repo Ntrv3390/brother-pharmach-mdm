@@ -44,6 +44,8 @@ public class PillSliderView extends View {
     private Drawable icon;
     private float fraction = 0.5f;
     private boolean dragging = false;
+    private boolean userInteractionEnabled = true;
+    private Runnable onDisabledTouch;
     private OnValueChangeListener listener;
 
     public PillSliderView(Context context) {
@@ -68,6 +70,20 @@ public class PillSliderView extends View {
 
     public void setOnValueChangeListener(OnValueChangeListener listener) {
         this.listener = listener;
+    }
+
+    /**
+     * Read-only mode for server-managed values: the fill still reflects the
+     * live system state, but touches are ignored (an optional callback lets the
+     * host explain why, e.g. a "managed by administrator" toast).
+     */
+    public void setUserInteractionEnabled(boolean enabled, Runnable onDisabledTouch) {
+        this.userInteractionEnabled = enabled;
+        this.onDisabledTouch = onDisabledTouch;
+        setAlpha(enabled ? 1f : 0.5f);
+        if (!enabled) {
+            dragging = false;
+        }
     }
 
     /** Programmatic update (from ContentObserver / volume broadcast), no callback. */
@@ -112,6 +128,13 @@ public class PillSliderView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (!userInteractionEnabled) {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN && onDisabledTouch != null) {
+                onDisabledTouch.run();
+            }
+            // Consume so the touch doesn't fall through, but never change the value
+            return true;
+        }
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 dragging = true;

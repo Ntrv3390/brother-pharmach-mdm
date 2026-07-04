@@ -32,13 +32,14 @@ import com.brother.pharmach.mdm.launcher.R;
  * Added as the last child of the MainActivity root layout, so it lives inside
  * the same window/task as the launcher content — no WindowManager overlay, no
  * extra Activity, nothing lock-task can treat as a foreign window. The system
- * status bar / shade is already disabled elsewhere (Device Owner policy); this
- * view only captures the top-edge swipe inside the app's own content area.
+ * status bar / shade is already disabled elsewhere (Device Owner policy).
  *
  * Touch model:
- *  - closed: only a swipe starting within the top edge band is consumed
- *    (drag-to-reveal, rubber-band follow); everything else falls through to the
- *    launcher content below this view;
+ *  - closed: this view is fully transparent to touches. The opening gesture is
+ *    detected at MainActivity.dispatchTouchEvent level (QuickPanelController)
+ *    so a swipe down from the top works anywhere across the screen width, even
+ *    when it starts over app icons — the controller then drives the reveal via
+ *    the external-drag API below;
  *  - open: all touches are consumed — tap on the scrim closes, swipe up on the
  *    panel (when its inner scroll is at the end) closes, panel children handle
  *    their own clicks/drags.
@@ -58,14 +59,12 @@ public class QuickPanelView extends FrameLayout {
 
     private final View scrim;
     private final ScrollView panel;
-    private final int edgeCaptureHeight;
     private final int touchSlop;
     private final int minFlingVelocity;
 
     private Listener listener;
     private boolean open = false;
     private boolean dragging = false;
-    private boolean downInEdgeZone = false;
     private float downX, downY;
     private float dragStartTranslation;
     private VelocityTracker velocityTracker;
@@ -77,7 +76,6 @@ public class QuickPanelView extends FrameLayout {
         scrim = findViewById(R.id.qp_scrim);
         panel = findViewById(R.id.qp_panel);
 
-        edgeCaptureHeight = getResources().getDimensionPixelSize(R.dimen.qp_edge_capture_height);
         ViewConfiguration vc = ViewConfiguration.get(context);
         touchSlop = vc.getScaledTouchSlop();
         minFlingVelocity = vc.getScaledMinimumFlingVelocity() * 4;
@@ -93,8 +91,13 @@ public class QuickPanelView extends FrameLayout {
         return open;
     }
 
-    public ScrollView getPanel() {
-        return panel;
+    /** True while an open/close animation is running. */
+    public boolean isAnimating() {
+        return animator != null && animator.isRunning();
+    }
+
+    public boolean isDragging() {
+        return dragging;
     }
 
     @Override
@@ -112,7 +115,7 @@ public class QuickPanelView extends FrameLayout {
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
-        if (!open && !dragging && (animator == null || !animator.isRunning())) {
+        if (!open && !dragging && !isAnimating()) {
             panel.setTranslationY(-panel.getHeight());
         }
     }
@@ -126,12 +129,57 @@ public class QuickPanelView extends FrameLayout {
         return 1f + panel.getTranslationY() / panelHeight();
     }
 
-    // ------------------------------------------------------------------ touch
+    // ------------------------------------------------------------------ external drag API
+    // Driven by QuickPanelController from MainActivity.dispatchTouchEvent while
+    // the panel is closed, so the opening swipe works from anywhere along the
+    // top of the screen (not just over this view's transparent area).
+
+    /** Begin revealing the panel; the finger will drive translation via externalDragBy. */
+    public void startExternalDrag() {
+        cancelAnimator();
+        dragging = true;
+        dragStartTranslation = open ? panel.getTranslationY() : -panelHeight();
+        showChildren();
+    }
+
+    /** @param totalDy total downward finger travel since the drag committed */
+    public void externalDragBy(float totalDy) {
+        if (!dragging) {
+            return;
+        }
+        panel.setTranslationY(clampTranslation(dragStartTranslation + totalDy));
+        publishFraction();
+    }
+
+    /** Finger lifted: commit to open/closed based on fling velocity or position. */
+    public void externalDragEnd(float velocityY) {
+        if (!dragging) {
+            return;
+        }
+        dragging = false;
+        settle(velocityY);
+    }
+
+    private void settle(float velocityY) {
+        boolean shouldOpen;
+        if (Math.abs(velocityY) > minFlingVelocity) {
+            // Fast flick wins regardless of the distance dragged
+            shouldOpen = velocityY > 0;
+        } else {
+            shouldOpen = openFraction() >= OPEN_COMMIT_FRACTION;
+        }
+        if (shouldOpen) {
+            open(true);
+        } else {
+            close(true);
+        }
+    }
+
+    // ------------------------------------------------------------------ touch (open state only)
 
     @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
         if (!open) {
-            // Children are hidden while closed; nothing to intercept from
             return false;
         }
         switch (ev.getActionMasked()) {
@@ -147,7 +195,9 @@ public class QuickPanelView extends FrameLayout {
                 // when its inner scroll cannot consume the movement itself
                 if (dy < -touchSlop && Math.abs(dy) > Math.abs(dx)
                         && downY < panelBottom() && !panel.canScrollVertically(1)) {
-                    startDrag();
+                    cancelAnimator();
+                    dragging = true;
+                    dragStartTranslation = panel.getTranslationY() - dy;
                     return true;
                 }
                 return false;
@@ -157,50 +207,47 @@ public class QuickPanelView extends FrameLayout {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (!open && !dragging) {
+            // Closed panel is transparent to touches; opening is handled at the
+            // activity dispatch level
+            return false;
+        }
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 downX = event.getX();
                 downY = event.getY();
                 trackVelocity(event);
-                if (!open) {
-                    downInEdgeZone = downY <= edgeCaptureHeight
-                            && (animator == null || !animator.isRunning());
-                    // Consume only edge-zone touches; anything else falls through
-                    // to the launcher content behind this view
-                    return downInEdgeZone;
-                }
-                // Open: we own every touch that no child claimed (the scrim area
-                // is handled by its click listener; this is a safety net)
                 return true;
 
             case MotionEvent.ACTION_MOVE:
                 trackVelocity(event);
                 float dy = event.getY() - downY;
                 float dx = event.getX() - downX;
-                if (!dragging) {
-                    boolean commitDown = !open && downInEdgeZone
-                            && dy > touchSlop && dy > Math.abs(dx);
-                    boolean commitUp = open && dy < -touchSlop && Math.abs(dy) > Math.abs(dx);
-                    if (commitDown || commitUp) {
-                        startDrag();
-                    }
+                if (!dragging && open && dy < -touchSlop && Math.abs(dy) > Math.abs(dx)) {
+                    cancelAnimator();
+                    dragging = true;
+                    dragStartTranslation = panel.getTranslationY() - dy;
                 }
                 if (dragging) {
-                    float translation = clampTranslation(dragStartTranslation + dy);
-                    panel.setTranslationY(translation);
+                    panel.setTranslationY(clampTranslation(dragStartTranslation + dy));
                     publishFraction();
                 }
-                return dragging || downInEdgeZone || open;
+                return true;
 
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
-                boolean handled = dragging || downInEdgeZone || open;
                 if (dragging) {
-                    finishDrag(event);
+                    dragging = false;
+                    float velocityY = 0;
+                    if (velocityTracker != null) {
+                        velocityTracker.addMovement(event);
+                        velocityTracker.computeCurrentVelocity(1000);
+                        velocityY = velocityTracker.getYVelocity();
+                    }
+                    settle(velocityY);
                 }
-                downInEdgeZone = false;
                 recycleVelocity();
-                return handled;
+                return true;
         }
         return super.onTouchEvent(event);
     }
@@ -216,35 +263,6 @@ public class QuickPanelView extends FrameLayout {
             translation = (float) (Math.sqrt(translation) * 4);
         }
         return Math.max(min, Math.min(translation, 60f));
-    }
-
-    private void startDrag() {
-        cancelAnimator();
-        dragging = true;
-        dragStartTranslation = panel.getTranslationY();
-        showChildren();
-    }
-
-    private void finishDrag(MotionEvent event) {
-        dragging = false;
-        float velocityY = 0;
-        if (velocityTracker != null) {
-            velocityTracker.addMovement(event);
-            velocityTracker.computeCurrentVelocity(1000);
-            velocityY = velocityTracker.getYVelocity();
-        }
-        boolean shouldOpen;
-        if (Math.abs(velocityY) > minFlingVelocity) {
-            // Fast flick wins regardless of the distance dragged
-            shouldOpen = velocityY > 0;
-        } else {
-            shouldOpen = openFraction() >= OPEN_COMMIT_FRACTION;
-        }
-        if (shouldOpen) {
-            open(true);
-        } else {
-            close(true);
-        }
     }
 
     private void trackVelocity(MotionEvent event) {
@@ -283,6 +301,7 @@ public class QuickPanelView extends FrameLayout {
         cancelAnimator();
         boolean wasOpen = open;
         open = false;
+        dragging = false;
         Runnable onDone = () -> {
             hideChildren();
             if (wasOpen && listener != null) {

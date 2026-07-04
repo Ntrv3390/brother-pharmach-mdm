@@ -40,7 +40,7 @@
     <dimen name="status_bar_side_width">60dp</dimen>
 
     <!-- Quick panel (top-edge swipe-down settings panel) -->
-    <dimen name="qp_edge_capture_height">40dp</dimen>
+    <dimen name="qp_edge_capture_height">90dp</dimen>
     <dimen name="qp_panel_corner_radius">28dp</dimen>
     <dimen name="qp_panel_padding">16dp</dimen>
     <dimen name="qp_pill_height">64dp</dimen>

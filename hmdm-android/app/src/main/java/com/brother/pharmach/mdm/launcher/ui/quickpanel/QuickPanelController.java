@@ -24,19 +24,19 @@ import android.graphics.Shader;
 import android.location.LocationManager;
 import android.net.ConnectivityManager;
 import android.net.wifi.WifiManager;
-import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.telephony.TelephonyManager;
-import android.view.LayoutInflater;
+import android.view.MotionEvent;
+import android.view.VelocityTracker;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
-import android.widget.GridLayout;
-import android.widget.RelativeLayout;
 import android.widget.ImageView;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -46,13 +46,17 @@ import com.brother.pharmach.mdm.launcher.R;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.json.ServerConfig;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
- * Owns the swipe-down quick panel: builds the (policy-driven) tile registry,
- * keeps tile/pill/slider state in sync with the system while the panel is open,
- * and routes the settings gear to the launcher's admin-password flow.
+ * Owns the swipe-down quick panel: Wi-Fi / Bluetooth / Torch pills plus
+ * brightness and volume sliders. Values pinned by the MDM server policy are
+ * shown read-only (with a "managed by administrator" toast) so the user never
+ * fights the StatusControlService enforcement loop.
+ *
+ * The opening gesture is detected here, from MainActivity.dispatchTouchEvent —
+ * not inside the view hierarchy — so a swipe down that starts anywhere along
+ * the top band of the screen opens the panel, even when it begins over app
+ * icons. Once the swipe commits, the in-flight gesture is stolen (children get
+ * ACTION_CANCEL) and the finger drives the panel via its external-drag API.
  *
  * Instantiated by MainActivity and attached to its root layout — deliberately
  * NOT a separate window/Activity, so lock task mode treats it as launcher UI.
@@ -66,6 +70,15 @@ public class QuickPanelController implements QuickPanelView.Listener {
         void onQuickPanelSettingsClicked();
     }
 
+    // Verdicts for onActivityTouch()
+    public static final int TOUCH_NONE = 0;      // not ours; dispatch normally
+    public static final int TOUCH_STEAL = 1;     // swipe committed: cancel children, then consume
+    public static final int TOUCH_CONSUMED = 2;  // mid-drag: consume silently
+
+    private static final int GESTURE_IDLE = 0;
+    private static final int GESTURE_TRACKING = 1;
+    private static final int GESTURE_DRAGGING = 2;
+
     private final Activity activity;
     private final Host host;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -74,25 +87,30 @@ public class QuickPanelController implements QuickPanelView.Listener {
     private View blurTarget;
 
     private TextView carrierView;
-    private TextView networkTypeView;
-    private TextView batteryView;
-    private View pillWifi, pillBluetooth;
-    private ImageView pillWifiIcon, pillBluetoothIcon;
-    private TextView pillWifiLabel, pillBluetoothLabel;
+    private View pillWifi, pillBluetooth, pillTorch, torchRow;
+    private ImageView pillWifiIcon, pillBluetoothIcon, pillTorchIcon;
+    private TextView pillWifiLabel, pillBluetoothLabel, pillTorchLabel;
     private PillSliderView brightnessSlider;
     private PillSliderView volumeSlider;
     private ImageView autoBrightnessButton;
     private ImageView muteButton;
 
-    private final List<QuickTile> tiles = new ArrayList<>();
-    private final List<View> tileViews = new ArrayList<>();
-
     private boolean receiversRegistered = false;
     private float lastNonZeroVolume = 0.5f;
+
+    // Top-edge gesture state (fed from MainActivity.dispatchTouchEvent)
+    private final int edgeCaptureHeight;
+    private final int touchSlop;
+    private int gestureState = GESTURE_IDLE;
+    private float gestureDownX, gestureDownY;
+    private VelocityTracker gestureVelocity;
 
     public QuickPanelController(Activity activity, Host host) {
         this.activity = activity;
         this.host = host;
+        edgeCaptureHeight = activity.getResources()
+                .getDimensionPixelSize(R.dimen.qp_edge_capture_height);
+        touchSlop = ViewConfiguration.get(activity).getScaledTouchSlop();
     }
 
     // ------------------------------------------------------------------ attach
@@ -113,7 +131,6 @@ public class QuickPanelController implements QuickPanelView.Listener {
             panelView = new QuickPanelView(activity);
             panelView.setListener(this);
             bindViews();
-            buildTiles();
         }
         // Match the parent's LayoutParams type (MainActivity root is a RelativeLayout)
         ViewGroup.LayoutParams lp;
@@ -145,18 +162,141 @@ public class QuickPanelController implements QuickPanelView.Listener {
         return false;
     }
 
+    // ------------------------------------------------------------------ top-edge gesture
+    // Called from MainActivity.dispatchTouchEvent for EVERY touch event, before
+    // the normal view hierarchy sees it.
+
+    public int onActivityTouch(MotionEvent ev) {
+        if (panelView == null || panelView.isOpen()) {
+            // Open panel handles its own touches through the view hierarchy
+            gestureState = GESTURE_IDLE;
+            return TOUCH_NONE;
+        }
+
+        switch (ev.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                if (ev.getY() <= edgeCaptureHeight && !panelView.isAnimating()) {
+                    gestureState = GESTURE_TRACKING;
+                    gestureDownX = ev.getX();
+                    gestureDownY = ev.getY();
+                    obtainGestureVelocity();
+                    gestureVelocity.addMovement(ev);
+                } else {
+                    gestureState = GESTURE_IDLE;
+                }
+                return TOUCH_NONE;
+
+            case MotionEvent.ACTION_MOVE:
+                if (gestureState == GESTURE_TRACKING) {
+                    if (gestureVelocity != null) {
+                        gestureVelocity.addMovement(ev);
+                    }
+                    float dy = ev.getY() - gestureDownY;
+                    float dx = ev.getX() - gestureDownX;
+                    if (dy > touchSlop && dy > Math.abs(dx)) {
+                        // Downward swipe committed: steal the gesture and start revealing
+                        gestureState = GESTURE_DRAGGING;
+                        panelView.startExternalDrag();
+                        panelView.externalDragBy(dy);
+                        return TOUCH_STEAL;
+                    }
+                    if (dy < -touchSlop || (Math.abs(dx) > touchSlop * 2 && Math.abs(dx) > dy)) {
+                        // Clearly not a pull-down; stop watching this gesture
+                        endGesture();
+                    }
+                    return TOUCH_NONE;
+                }
+                if (gestureState == GESTURE_DRAGGING) {
+                    if (gestureVelocity != null) {
+                        gestureVelocity.addMovement(ev);
+                    }
+                    panelView.externalDragBy(ev.getY() - gestureDownY);
+                    return TOUCH_CONSUMED;
+                }
+                return TOUCH_NONE;
+
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                if (gestureState == GESTURE_DRAGGING) {
+                    float velocityY = 0;
+                    if (gestureVelocity != null) {
+                        gestureVelocity.addMovement(ev);
+                        gestureVelocity.computeCurrentVelocity(1000);
+                        velocityY = gestureVelocity.getYVelocity();
+                    }
+                    panelView.externalDragEnd(velocityY);
+                    endGesture();
+                    return TOUCH_CONSUMED;
+                }
+                endGesture();
+                return TOUCH_NONE;
+        }
+        return TOUCH_NONE;
+    }
+
+    private void obtainGestureVelocity() {
+        if (gestureVelocity == null) {
+            gestureVelocity = VelocityTracker.obtain();
+        } else {
+            gestureVelocity.clear();
+        }
+    }
+
+    private void endGesture() {
+        gestureState = GESTURE_IDLE;
+        if (gestureVelocity != null) {
+            gestureVelocity.recycle();
+            gestureVelocity = null;
+        }
+    }
+
+    // ------------------------------------------------------------------ server policy helpers
+
+    private ServerConfig config() {
+        SettingsHelper settingsHelper = SettingsHelper.getInstance(activity);
+        return settingsHelper != null ? settingsHelper.getConfig() : null;
+    }
+
+    /** Non-null when the server pins Wi-Fi on/off ("Any" comes through as null). */
+    private Boolean pinnedWifi() {
+        ServerConfig c = config();
+        return c != null ? c.getWifi() : null;
+    }
+
+    private Boolean pinnedBluetooth() {
+        ServerConfig c = config();
+        return c != null ? c.getBluetooth() : null;
+    }
+
+    /** True when the server manages brightness (auto flag or fixed value). */
+    private boolean isBrightnessManaged() {
+        ServerConfig c = config();
+        return c != null && c.getAutoBrightness() != null;
+    }
+
+    private boolean isVolumeLocked() {
+        ServerConfig c = config();
+        return c != null && Boolean.TRUE.equals(c.getLockVolume());
+    }
+
+    private void toastManaged() {
+        Toast.makeText(activity, R.string.qp_managed_by_admin, Toast.LENGTH_SHORT).show();
+    }
+
     // ------------------------------------------------------------------ view wiring
 
     private void bindViews() {
         carrierView = panelView.findViewById(R.id.qp_carrier);
-        networkTypeView = panelView.findViewById(R.id.qp_network_type);
-        batteryView = panelView.findViewById(R.id.qp_battery);
         pillWifi = panelView.findViewById(R.id.qp_pill_wifi);
         pillBluetooth = panelView.findViewById(R.id.qp_pill_bluetooth);
+        pillTorch = panelView.findViewById(R.id.qp_pill_torch);
+        torchRow = panelView.findViewById(R.id.qp_torch_row);
         pillWifiIcon = panelView.findViewById(R.id.qp_pill_wifi_icon);
         pillBluetoothIcon = panelView.findViewById(R.id.qp_pill_bluetooth_icon);
+        pillTorchIcon = panelView.findViewById(R.id.qp_pill_torch_icon);
         pillWifiLabel = panelView.findViewById(R.id.qp_pill_wifi_label);
         pillBluetoothLabel = panelView.findViewById(R.id.qp_pill_bluetooth_label);
+        pillTorchLabel = panelView.findViewById(R.id.qp_pill_torch_label);
         brightnessSlider = panelView.findViewById(R.id.qp_brightness_slider);
         volumeSlider = panelView.findViewById(R.id.qp_volume_slider);
         autoBrightnessButton = panelView.findViewById(R.id.qp_auto_brightness);
@@ -166,11 +306,10 @@ public class QuickPanelController implements QuickPanelView.Listener {
             panelView.close(true);
             host.onQuickPanelSettingsClicked();
         });
-        // Edit and power are visual stubs for reference-design parity (alpha-dimmed in XML)
 
         pillWifi.setOnClickListener(v -> {
-            if (isPolicyPinned(pinnedWifi())) {
-                toast(SystemActionResult.PERMISSION_DENIED);
+            if (pinnedWifi() != null) {
+                toastManaged();
                 return;
             }
             boolean target = !QuickTileActions.isWifiEnabled(activity);
@@ -180,13 +319,20 @@ public class QuickPanelController implements QuickPanelView.Listener {
         });
 
         pillBluetooth.setOnClickListener(v -> {
-            if (isPolicyPinned(pinnedBluetooth())) {
-                toast(SystemActionResult.PERMISSION_DENIED);
+            if (pinnedBluetooth() != null) {
+                toastManaged();
                 return;
             }
             boolean target = !QuickTileActions.isBluetoothEnabled(activity);
             stylePill(pillBluetooth, pillBluetoothIcon, pillBluetoothLabel, target); // optimistic
             handleResult(QuickTileActions.setBluetoothEnabled(activity, target));
+            scheduleRefresh();
+        });
+
+        pillTorch.setOnClickListener(v -> {
+            boolean target = !QuickTileActions.isTorchOn(activity);
+            stylePill(pillTorch, pillTorchIcon, pillTorchLabel, target); // optimistic
+            handleResult(QuickTileActions.setTorchOn(activity, target));
             scheduleRefresh();
         });
 
@@ -219,12 +365,20 @@ public class QuickPanelController implements QuickPanelView.Listener {
         });
 
         autoBrightnessButton.setOnClickListener(v -> {
+            if (isBrightnessManaged()) {
+                toastManaged();
+                return;
+            }
             boolean target = !QuickTileActions.isAutoBrightness(activity);
             handleResult(QuickTileActions.setAutoBrightness(activity, target));
             refreshAuxButtons();
         });
 
         muteButton.setOnClickListener(v -> {
+            if (isVolumeLocked()) {
+                toastManaged();
+                return;
+            }
             float current = QuickTileActions.getVolumeFraction(activity);
             if (current > 0f) {
                 lastNonZeroVolume = current;
@@ -237,186 +391,42 @@ public class QuickPanelController implements QuickPanelView.Listener {
         });
     }
 
-    // ------------------------------------------------------------------ tile registry
-
-    private ServerConfig config() {
-        SettingsHelper settingsHelper = SettingsHelper.getInstance(activity);
-        return settingsHelper != null ? settingsHelper.getConfig() : null;
-    }
-
-    private Boolean pinnedWifi() {
-        ServerConfig c = config();
-        return c != null ? c.getWifi() : null;
-    }
-
-    private Boolean pinnedBluetooth() {
-        ServerConfig c = config();
-        return c != null ? c.getBluetooth() : null;
-    }
-
-    private static boolean isPolicyPinned(Boolean policyValue) {
-        return policyValue != null;
-    }
-
-    /**
-     * Registry of grid tiles. A tile whose radio is pinned by the MDM server
-     * policy hides itself, so the user never fights StatusControlService.
-     */
-    private void buildTiles() {
-        tiles.clear();
-
-        tiles.add(new QuickTile("rotation", R.drawable.ic_qp_portrait, R.string.qp_portrait) {
-            @Override
-            public boolean isActive(Context context) {
-                return QuickTileActions.isRotationLocked(context);
-            }
-
-            @Override
-            public SystemActionResult toggle(Context context) {
-                return QuickTileActions.setRotationLocked(context, !isActive(context));
-            }
-        });
-
-        tiles.add(new QuickTile("flight", R.drawable.ic_qp_flight, R.string.qp_flight_mode) {
-            @Override
-            public boolean isActive(Context context) {
-                return QuickTileActions.isAirplaneModeOn(context);
-            }
-
-            @Override
-            public SystemActionResult toggle(Context context) {
-                return QuickTileActions.setAirplaneModeOn(context, !isActive(context));
-            }
-        });
-
-        tiles.add(new QuickTile("torch", R.drawable.ic_qp_torch, R.string.qp_torch) {
-            @Override
-            public boolean isVisible(Context context) {
-                return QuickTileActions.isTorchAvailable(context);
-            }
-
-            @Override
-            public boolean isActive(Context context) {
-                return QuickTileActions.isTorchOn(context);
-            }
-
-            @Override
-            public SystemActionResult toggle(Context context) {
-                return QuickTileActions.setTorchOn(context, !isActive(context));
-            }
-        });
-
-        tiles.add(new QuickTile("mobile_data", R.drawable.ic_qp_data, R.string.qp_mobile_data) {
-            @Override
-            public boolean isVisible(Context context) {
-                ServerConfig c = config();
-                return c == null || c.getMobileData() == null;
-            }
-
-            @Override
-            public boolean isActive(Context context) {
-                return QuickTileActions.isMobileDataEnabled(context);
-            }
-
-            @Override
-            public SystemActionResult toggle(Context context) {
-                return QuickTileActions.setMobileDataEnabled(context, !isActive(context));
-            }
-        });
-
-        tiles.add(new QuickTile("hotspot", R.drawable.ic_qp_hotspot, R.string.qp_hotspot) {
-            @Override
-            public boolean isActive(Context context) {
-                return QuickTileActions.isHotspotEnabled(context);
-            }
-
-            @Override
-            public SystemActionResult toggle(Context context) {
-                return QuickTileActions.setHotspotEnabled(context, !isActive(context));
-            }
-        });
-
-        tiles.add(new QuickTile("location", R.drawable.ic_qp_location, R.string.qp_location) {
-            @Override
-            public boolean isVisible(Context context) {
-                ServerConfig c = config();
-                return c == null || c.getGps() == null;
-            }
-
-            @Override
-            public boolean isActive(Context context) {
-                return QuickTileActions.isLocationEnabled(context);
-            }
-
-            @Override
-            public SystemActionResult toggle(Context context) {
-                return QuickTileActions.setLocationEnabled(context, !isActive(context));
-            }
-        });
-
-        populateGrid();
-    }
-
-    private void populateGrid() {
-        GridLayout grid = panelView.findViewById(R.id.qp_tile_grid);
-        grid.removeAllViews();
-        tileViews.clear();
-        LayoutInflater inflater = LayoutInflater.from(activity);
-        for (final QuickTile tile : tiles) {
-            if (!tile.isVisible(activity)) {
-                tileViews.add(null);
-                continue;
-            }
-            View item = inflater.inflate(R.layout.item_quick_tile, grid, false);
-            ((ImageView) item.findViewById(R.id.qp_tile_icon)).setImageResource(tile.iconRes);
-            ((TextView) item.findViewById(R.id.qp_tile_label)).setText(tile.labelRes);
-            item.setOnClickListener(v -> {
-                handleResult(tile.toggle(activity));
-                styleTile(item, tile.isActive(activity)); // optimistic
-                scheduleRefresh();
-            });
-            GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
-            lp.width = 0;
-            lp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
-            grid.addView(item, lp);
-            tileViews.add(item);
-        }
-    }
-
     // ------------------------------------------------------------------ state -> UI
 
     private void refreshAll() {
         refreshStatusRow();
         refreshPills();
-        refreshTiles();
         refreshSliders();
         refreshAuxButtons();
+        applyPolicyLocks();
     }
 
-    private void refreshTiles() {
-        for (int i = 0; i < tiles.size() && i < tileViews.size(); i++) {
-            View item = tileViews.get(i);
-            if (item != null) {
-                styleTile(item, tiles.get(i).isActive(activity));
-            }
-        }
-    }
+    /** Reflects server pinning: read-only styling for managed controls. */
+    private void applyPolicyLocks() {
+        pillWifi.setAlpha(pinnedWifi() != null ? 0.55f : 1f);
+        pillBluetooth.setAlpha(pinnedBluetooth() != null ? 0.55f : 1f);
 
-    private void styleTile(View item, boolean active) {
-        View circle = item.findViewById(R.id.qp_tile_circle);
-        ImageView icon = item.findViewById(R.id.qp_tile_icon);
-        circle.setBackgroundResource(active ?
-                R.drawable.bg_qp_tile_active : R.drawable.bg_qp_tile_inactive);
-        icon.setColorFilter(ContextCompat.getColor(activity,
-                active ? R.color.qpIconOnActive : R.color.qpTextPrimary), PorterDuff.Mode.SRC_IN);
+        boolean brightnessManaged = isBrightnessManaged();
+        brightnessSlider.setUserInteractionEnabled(!brightnessManaged, this::toastManaged);
+        autoBrightnessButton.setAlpha(brightnessManaged ? 0.55f : 1f);
+
+        boolean volumeLocked = isVolumeLocked();
+        volumeSlider.setUserInteractionEnabled(!volumeLocked, this::toastManaged);
+        muteButton.setAlpha(volumeLocked ? 0.55f : 1f);
+
+        torchRow.setVisibility(QuickTileActions.isTorchAvailable(activity) ?
+                View.VISIBLE : View.GONE);
     }
 
     private void refreshPills() {
-        stylePill(pillWifi, pillWifiIcon, pillWifiLabel, QuickTileActions.isWifiEnabled(activity));
+        // A pinned radio displays the server-enforced state, not a transient local one
+        Boolean wifiPinned = pinnedWifi();
+        stylePill(pillWifi, pillWifiIcon, pillWifiLabel,
+                wifiPinned != null ? wifiPinned : QuickTileActions.isWifiEnabled(activity));
+        Boolean btPinned = pinnedBluetooth();
         stylePill(pillBluetooth, pillBluetoothIcon, pillBluetoothLabel,
-                QuickTileActions.isBluetoothEnabled(activity));
-        pillWifi.setAlpha(isPolicyPinned(pinnedWifi()) ? 0.5f : 1f);
-        pillBluetooth.setAlpha(isPolicyPinned(pinnedBluetooth()) ? 0.5f : 1f);
+                btPinned != null ? btPinned : QuickTileActions.isBluetoothEnabled(activity));
+        stylePill(pillTorch, pillTorchIcon, pillTorchLabel, QuickTileActions.isTorchOn(activity));
     }
 
     private void stylePill(View pill, ImageView icon, TextView label, boolean active) {
@@ -450,7 +460,6 @@ public class QuickPanelController implements QuickPanelView.Listener {
 
     private void refreshStatusRow() {
         String carrier = "";
-        String networkType = "";
         try {
             TelephonyManager tm = (TelephonyManager) activity.getSystemService(Context.TELEPHONY_SERVICE);
             if (tm != null) {
@@ -458,53 +467,10 @@ public class QuickPanelController implements QuickPanelView.Listener {
                 if (carrier == null || carrier.trim().isEmpty()) {
                     carrier = tm.getNetworkOperatorName();
                 }
-                networkType = networkTypeLabel(tm);
             }
         } catch (Exception ignored) {
         }
         carrierView.setText(carrier != null ? carrier : "");
-        networkTypeView.setText(networkType);
-
-        try {
-            Intent battery = activity.registerReceiver(null,
-                    new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-            if (battery != null) {
-                int level = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-                int scale = battery.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
-                if (level >= 0 && scale > 0) {
-                    batteryView.setText(String.valueOf(level * 100 / scale));
-                }
-            }
-        } catch (Exception ignored) {
-        }
-    }
-
-    private String networkTypeLabel(TelephonyManager tm) {
-        try {
-            int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N ?
-                    tm.getDataNetworkType() : tm.getNetworkType();
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && type == TelephonyManager.NETWORK_TYPE_NR) {
-                return "5G";
-            }
-            switch (type) {
-                case TelephonyManager.NETWORK_TYPE_LTE:
-                    return "LTE";
-                case TelephonyManager.NETWORK_TYPE_HSPAP:
-                case TelephonyManager.NETWORK_TYPE_HSPA:
-                case TelephonyManager.NETWORK_TYPE_HSDPA:
-                case TelephonyManager.NETWORK_TYPE_HSUPA:
-                case TelephonyManager.NETWORK_TYPE_UMTS:
-                    return "3G";
-                case TelephonyManager.NETWORK_TYPE_EDGE:
-                case TelephonyManager.NETWORK_TYPE_GPRS:
-                    return "2G";
-                default:
-                    return "";
-            }
-        } catch (Exception e) {
-            // READ_PHONE_STATE not granted yet
-            return "";
-        }
     }
 
     // ------------------------------------------------------------------ result handling
@@ -517,10 +483,6 @@ public class QuickPanelController implements QuickPanelView.Listener {
         if (result == SystemActionResult.SUCCESS || !showToast) {
             return;
         }
-        toast(result);
-    }
-
-    private void toast(SystemActionResult result) {
         int messageRes;
         switch (result) {
             case PERMISSION_DENIED:
@@ -624,7 +586,6 @@ public class QuickPanelController implements QuickPanelView.Listener {
             filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
             filter.addAction(LocationManager.PROVIDERS_CHANGED_ACTION);
             filter.addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED);
-            filter.addAction(Intent.ACTION_BATTERY_CHANGED);
             filter.addAction(Intent.ACTION_SCREEN_OFF);
             filter.addAction("android.media.VOLUME_CHANGED_ACTION");
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -637,9 +598,6 @@ public class QuickPanelController implements QuickPanelView.Listener {
                     false, settingsObserver);
             activity.getContentResolver().registerContentObserver(
                     Settings.System.getUriFor(Settings.System.SCREEN_BRIGHTNESS_MODE),
-                    false, settingsObserver);
-            activity.getContentResolver().registerContentObserver(
-                    Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION),
                     false, settingsObserver);
             receiversRegistered = true;
         } catch (Exception ignored) {
@@ -664,6 +622,7 @@ public class QuickPanelController implements QuickPanelView.Listener {
     /** Full teardown, e.g. from onDestroy. */
     public void destroy() {
         close();
+        endGesture();
         unregisterReceivers();
         handler.removeCallbacksAndMessages(null);
         if (panelView != null && panelView.getParent() instanceof ViewGroup) {

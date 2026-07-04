@@ -148,14 +148,10 @@
     <!-- Quick panel (top-edge swipe-down settings panel) -->
     <string name="qp_wifi">Wi-Fi</string>
     <string name="qp_bluetooth">Bluetooth</string>
-    <string name="qp_portrait">Portrait</string>
-    <string name="qp_flight_mode">Flight mode</string>
     <string name="qp_torch">Torch</string>
-    <string name="qp_mobile_data">Mobile data</string>
-    <string name="qp_hotspot">Mobile Hotspot</string>
-    <string name="qp_location">Location</string>
     <string name="qp_settings">Settings</string>
     <string name="qp_action_permission_denied">Not allowed on this device</string>
     <string name="qp_action_unsupported">Not supported on this Android version</string>
     <string name="qp_action_failed">Action failed, please try again</string>
+    <string name="qp_managed_by_admin">This setting is managed by your administrator</string>
 </resources>

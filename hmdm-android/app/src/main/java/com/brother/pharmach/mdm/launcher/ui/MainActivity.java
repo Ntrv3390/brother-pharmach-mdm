@@ -54,6 +54,7 @@ import android.os.PowerManager;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.Display;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -3092,6 +3093,31 @@ public class MainActivity
         if (quickPanelController != null) {
             quickPanelController.close();
         }
+    }
+
+    // Top-band swipe detection for the quick panel happens here, before the view
+    // hierarchy, so a downward swipe starting anywhere along the top of the
+    // screen opens the panel — even when it begins over app icons. When the
+    // swipe commits, children that already received the gesture get a CANCEL.
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (quickPanelController != null) {
+            int verdict = quickPanelController.onActivityTouch(ev);
+            if (verdict == QuickPanelController.TOUCH_STEAL) {
+                MotionEvent cancel = MotionEvent.obtain(ev);
+                cancel.setAction(MotionEvent.ACTION_CANCEL);
+                try {
+                    super.dispatchTouchEvent(cancel);
+                } finally {
+                    cancel.recycle();
+                }
+                return true;
+            }
+            if (verdict == QuickPanelController.TOUCH_CONSUMED) {
+                return true;
+            }
+        }
+        return super.dispatchTouchEvent(ev);
     }
 
     // Lazily creates the swipe-down quick settings panel and (re-)attaches it to
