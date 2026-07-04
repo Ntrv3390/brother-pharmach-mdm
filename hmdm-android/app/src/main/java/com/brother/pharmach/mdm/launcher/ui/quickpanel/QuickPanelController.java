@@ -64,12 +64,6 @@ import com.brother.pharmach.mdm.launcher.json.ServerConfig;
  */
 public class QuickPanelController implements QuickPanelView.Listener {
 
-    /** Host callbacks implemented by MainActivity. */
-    public interface Host {
-        /** Settings gear tapped — open the admin-password-gated settings flow. */
-        void onQuickPanelSettingsClicked();
-    }
-
     // Verdicts for onActivityTouch()
     public static final int TOUCH_NONE = 0;      // not ours; dispatch normally
     public static final int TOUCH_STEAL = 1;     // swipe committed: cancel children, then consume
@@ -80,7 +74,6 @@ public class QuickPanelController implements QuickPanelView.Listener {
     private static final int GESTURE_DRAGGING = 2;
 
     private final Activity activity;
-    private final Host host;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     private QuickPanelView panelView;
@@ -105,9 +98,8 @@ public class QuickPanelController implements QuickPanelView.Listener {
     private float gestureDownX, gestureDownY;
     private VelocityTracker gestureVelocity;
 
-    public QuickPanelController(Activity activity, Host host) {
+    public QuickPanelController(Activity activity) {
         this.activity = activity;
-        this.host = host;
         edgeCaptureHeight = activity.getResources()
                 .getDimensionPixelSize(R.dimen.qp_edge_capture_height);
         touchSlop = ViewConfiguration.get(activity).getScaledTouchSlop();
@@ -192,16 +184,19 @@ public class QuickPanelController implements QuickPanelView.Listener {
                         gestureVelocity.addMovement(ev);
                     }
                     float dy = ev.getY() - gestureDownY;
-                    float dx = ev.getX() - gestureDownX;
-                    if (dy > touchSlop && dy > Math.abs(dx)) {
-                        // Downward swipe committed: steal the gesture and start revealing
+                    float absDx = Math.abs(ev.getX() - gestureDownX);
+                    // Commit on downward intent, allowing generous diagonals — a thumb
+                    // swipe from a screen edge naturally curves sideways, which is why a
+                    // stricter check used to only trigger near the center.
+                    if (dy >= touchSlop && dy >= absDx * 0.6f) {
                         gestureState = GESTURE_DRAGGING;
                         panelView.startExternalDrag();
                         panelView.externalDragBy(dy);
                         return TOUCH_STEAL;
                     }
-                    if (dy < -touchSlop || (Math.abs(dx) > touchSlop * 2 && Math.abs(dx) > dy)) {
-                        // Clearly not a pull-down; stop watching this gesture
+                    // Hand the gesture back only when it's clearly upward, or clearly a
+                    // horizontal swipe (sideways travel more than twice the downward).
+                    if (dy <= -touchSlop || (absDx > touchSlop && absDx > dy * 2f)) {
                         endGesture();
                     }
                     return TOUCH_NONE;
@@ -283,6 +278,17 @@ public class QuickPanelController implements QuickPanelView.Listener {
         Toast.makeText(activity, R.string.qp_managed_by_admin, Toast.LENGTH_SHORT).show();
     }
 
+    /** Settings gear: open the system Settings app directly, no password prompt. */
+    private void openDeviceSettings() {
+        try {
+            Intent intent = new Intent(Settings.ACTION_SETTINGS);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(activity, R.string.qp_action_failed, Toast.LENGTH_SHORT).show();
+        }
+    }
+
     // ------------------------------------------------------------------ view wiring
 
     private void bindViews() {
@@ -304,7 +310,7 @@ public class QuickPanelController implements QuickPanelView.Listener {
 
         panelView.findViewById(R.id.qp_settings_button).setOnClickListener(v -> {
             panelView.close(true);
-            host.onQuickPanelSettingsClicked();
+            openDeviceSettings();
         });
 
         pillWifi.setOnClickListener(v -> {

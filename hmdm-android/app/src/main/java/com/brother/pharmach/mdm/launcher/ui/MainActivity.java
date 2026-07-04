@@ -3128,8 +3128,7 @@ public class MainActivity
             return;
         }
         if (quickPanelController == null) {
-            quickPanelController = new QuickPanelController(this,
-                    this::createAndShowEnterPasswordDialog);
+            quickPanelController = new QuickPanelController(this);
         }
         try {
             quickPanelController.attach((ViewGroup) binding.getRoot());
