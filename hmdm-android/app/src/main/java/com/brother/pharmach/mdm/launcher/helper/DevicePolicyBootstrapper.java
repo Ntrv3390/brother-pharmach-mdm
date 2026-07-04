@@ -107,11 +107,13 @@ public final class DevicePolicyBootstrapper {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             // Disable status bar expansion by omitting LOCK_TASK_FEATURE_NOTIFICATIONS.
             // Enable SYSTEM_INFO to show time, battery and network icons.
+            // Enable OVERVIEW to keep the Recents button functional.
             int flags = DevicePolicyManager.LOCK_TASK_FEATURE_HOME 
                     | DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD
-                    | DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO;
+                    | DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
+                    | DevicePolicyManager.LOCK_TASK_FEATURE_OVERVIEW;
             dpm.setLockTaskFeatures(adminComponent, flags);
-            Log.i(TAG, "LockTask features applied (HOME | KEYGUARD | SYSTEM_INFO)");
+            Log.i(TAG, "LockTask features applied (HOME | KEYGUARD | SYSTEM_INFO | OVERVIEW)");
         }
     }
 
