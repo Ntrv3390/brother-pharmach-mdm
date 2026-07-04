@@ -145,6 +145,63 @@ public class Utils {
         return true;
     }
 
+    // Force "Allow all the time" location for the launcher itself in device owner mode.
+    // Location tracking is a core MDM feature: this self-heals devices where the
+    // background location grant was lost or never applied (e.g. because an earlier
+    // permission grant failure aborted the auto-grant loop).
+    // Foreground location is granted first, then background — the system rejects
+    // the background grant if foreground location is not granted yet.
+    @TargetApi(Build.VERSION_CODES.M)
+    public static boolean autoGrantLocationPermissions(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || !isDeviceOwner(context)) {
+            return false;
+        }
+        try {
+            DevicePolicyManager devicePolicyManager = (DevicePolicyManager) context.getSystemService(
+                    Context.DEVICE_POLICY_SERVICE);
+            ComponentName adminComponentName = LegacyUtils.getAdminComponentName(context);
+            String packageName = context.getPackageName();
+
+            boolean ok = grantPermissionIfNeeded(devicePolicyManager, adminComponentName, packageName,
+                    Manifest.permission.ACCESS_FINE_LOCATION);
+            ok &= grantPermissionIfNeeded(devicePolicyManager, adminComponentName, packageName,
+                    Manifest.permission.ACCESS_COARSE_LOCATION);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ok &= grantPermissionIfNeeded(devicePolicyManager, adminComponentName, packageName,
+                        Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+            }
+            if (ok) {
+                Log.i(Const.LOG_TAG, "Location permissions automatically granted (allow all the time)");
+            }
+            return ok;
+        } catch (Throwable e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    @TargetApi(Build.VERSION_CODES.M)
+    private static boolean grantPermissionIfNeeded(DevicePolicyManager devicePolicyManager,
+                                                   ComponentName adminComponentName,
+                                                   String packageName, String permission) {
+        try {
+            if (devicePolicyManager.getPermissionGrantState(adminComponentName,
+                    packageName, permission) == DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED) {
+                return true;
+            }
+            boolean success = devicePolicyManager.setPermissionGrantState(adminComponentName,
+                    packageName, permission, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+            if (!success) {
+                Log.w(Const.LOG_TAG, "Failed to grant permission " + permission + " to package " + packageName);
+            }
+            return success;
+        } catch (Exception e) {
+            Log.w(Const.LOG_TAG, "Failed to grant permission " + permission + " to package "
+                    + packageName + ": " + e.getMessage());
+            return false;
+        }
+    }
+
     // Automatically get dangerous permissions
     // Notice: default (null) app permission strategy is "Grant all"
     @TargetApi(Build.VERSION_CODES.M)
@@ -164,6 +221,14 @@ public class Utils {
             if (!packageName.equals(context.getPackageName())) {
                 otherPermissionsState = DevicePolicyManager.PERMISSION_GRANT_STATE_DEFAULT;
             }
+        }
+
+        // The launcher itself must always get location as "Allow all the time":
+        // device location tracking is a core MDM feature, so the app permission
+        // strategy configured for managed apps must not downgrade the launcher's
+        // own location permissions.
+        if (packageName.equals(context.getPackageName())) {
+            locationPermissionState = DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED;
         }
 
         DevicePolicyManager devicePolicyManager = (DevicePolicyManager) context.getSystemService(
@@ -196,19 +261,38 @@ public class Utils {
                 }
             }
 
+            // ACCESS_BACKGROUND_LOCATION must be granted last: the system only accepts
+            // the grant ("Allow all the time") when foreground location is already granted
+            if (permissions.remove(Manifest.permission.ACCESS_BACKGROUND_LOCATION)) {
+                permissions.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+            }
+
+            boolean allGranted = true;
             for (String permission : permissions) {
                 int permissionState = isLocationPermission(permission) ? locationPermissionState : otherPermissionsState;
-                if (devicePolicyManager.getPermissionGrantState(adminComponentName,
-                        packageName, permission) != permissionState) {
-                    boolean success = devicePolicyManager.setPermissionGrantState(adminComponentName,
-                            packageName, permission, permissionState);
-                    if (!success) {
-                        Log.w(Const.LOG_TAG, "Failed to grant permission " + permission);
-                        return false;
-                    } else {
-                        Log.d(Const.LOG_TAG, "Permission " + permission + " granted to package " + packageName);
+                try {
+                    if (devicePolicyManager.getPermissionGrantState(adminComponentName,
+                            packageName, permission) != permissionState) {
+                        boolean success = devicePolicyManager.setPermissionGrantState(adminComponentName,
+                                packageName, permission, permissionState);
+                        if (!success) {
+                            // Continue with the remaining permissions: aborting here used to leave
+                            // e.g. location permissions ungranted whenever a hard-restricted
+                            // permission (READ_CALL_LOG / READ_SMS) earlier in the list failed
+                            Log.w(Const.LOG_TAG, "Failed to grant permission " + permission + " to package " + packageName);
+                            allGranted = false;
+                        } else {
+                            Log.d(Const.LOG_TAG, "Permission " + permission + " granted to package " + packageName);
+                        }
                     }
+                } catch (Exception e) {
+                    Log.w(Const.LOG_TAG, "Failed to grant permission " + permission + " to package "
+                            + packageName + ": " + e.getMessage());
+                    allGranted = false;
                 }
+            }
+            if (!allGranted) {
+                return false;
             }
         } catch (NoSuchMethodError e) {
             // This exception is raised on Android 5.1

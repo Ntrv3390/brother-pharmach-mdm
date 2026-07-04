@@ -36,6 +36,7 @@ import com.brother.pharmach.mdm.launcher.util.ExperimentalFlags;
 import com.brother.pharmach.mdm.launcher.util.LocationDiag;
 import com.brother.pharmach.mdm.launcher.util.OemCompat;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
+import com.brother.pharmach.mdm.launcher.util.Utils;
 
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.location.CurrentLocationRequest;
@@ -208,6 +209,18 @@ public class LocationWorker extends Worker {
     public static Result captureAndUpload(Context context, boolean forceFreshFix,
                                           StopChecker stopChecker, String reqId) {
         PowerManager.WakeLock wakeLock = null;
+
+        // Self-heal on managed devices: re-grant "Allow all the time" location before
+        // checking, so a lost/never-applied background location grant fixes itself
+        // instead of failing every capture until the next config sync
+        if ((ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
+                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED))
+                && Utils.autoGrantLocationPermissions(context)) {
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "LocationWorker: location permissions were missing and have been re-granted automatically");
+        }
+
         boolean fineGranted = ContextCompat.checkSelfPermission(context,
                 Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         boolean coarseGranted = ContextCompat.checkSelfPermission(context,

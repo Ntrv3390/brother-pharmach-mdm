@@ -2712,6 +2712,9 @@ public class MainActivity
             } else {
                 // Prefer auto-grant in device owner mode, but verify dangerous permissions before continuing.
                 Utils.autoGrantPhonePermission(this);
+                // Self-heal location permissions on every start: location must always be
+                // "Allow all the time" for the launcher on managed devices
+                Utils.autoGrantLocationPermissions(this);
 
                 // Only READ_PHONE_STATE is mandatory; call log / SMS permissions are
                 // hard-restricted and may be undeniable by the user, so they are
