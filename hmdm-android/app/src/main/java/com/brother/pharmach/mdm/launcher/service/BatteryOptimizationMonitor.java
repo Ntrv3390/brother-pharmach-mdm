@@ -98,16 +98,19 @@ public class BatteryOptimizationMonitor extends Service {
                         "Battery optimization exemption removed — device is no longer exempt. " +
                         "Compliance gatekeeper will be shown until the user re-grants the exemption.");
             }
-            if (ComplianceGatekeeperActivity.isUserExploringSettings()) {
-                // The user left the gatekeeper via its button and is navigating Settings
-                // (possibly deep OEM battery menus). Re-launching the gatekeeper now would
-                // yank them out before they can grant the exemption — skip until the grace
-                // window expires or they return to the gatekeeper.
-                Log.i(TAG, "User is exploring Settings to grant the exemption — skipping gatekeeper re-launch");
-            } else {
-                Log.w(TAG, "Battery optimization exemption not active — enforcing compliance");
-                startComplianceEnforcement();
-            }
+            // DISABLED: do not launch the battery optimization (compliance gatekeeper) screen
+            // even when the exemption is missing. Kept for possible future re-enabling.
+//            if (ComplianceGatekeeperActivity.isUserExploringSettings()) {
+//                // The user left the gatekeeper via its button and is navigating Settings
+//                // (possibly deep OEM battery menus). Re-launching the gatekeeper now would
+//                // yank them out before they can grant the exemption — skip until the grace
+//                // window expires or they return to the gatekeeper.
+//                Log.i(TAG, "User is exploring Settings to grant the exemption — skipping gatekeeper re-launch");
+//            } else {
+//                Log.w(TAG, "Battery optimization exemption not active — enforcing compliance");
+//                startComplianceEnforcement();
+//            }
+            Log.i(TAG, "Battery optimization exemption not active — gatekeeper screen disabled, not enforcing");
             mWasCompliant = false;
         } else {
             if (!mWasCompliant) {

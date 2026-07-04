@@ -3287,13 +3287,15 @@ public class MainActivity
      * Called every onResume() to catch cases where the service hasn't started yet.
      */
     private void checkBatteryOptimizationCompliance() {
-        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-        if (pm == null) return;
-        if (!pm.isIgnoringBatteryOptimizations(getPackageName())) {
-            Log.w(Const.LOG_TAG, "Battery optimization not exempt — redirecting to ComplianceGatekeeperActivity");
-            Intent gatekeeperIntent = new Intent(this, ComplianceGatekeeperActivity.class);
-            gatekeeperIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            startActivity(gatekeeperIntent);
-        }
+        // DISABLED: do not redirect to the battery optimization (compliance gatekeeper) screen
+        // even when the exemption is missing. Kept for possible future re-enabling.
+//        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+//        if (pm == null) return;
+//        if (!pm.isIgnoringBatteryOptimizations(getPackageName())) {
+//            Log.w(Const.LOG_TAG, "Battery optimization not exempt — redirecting to ComplianceGatekeeperActivity");
+//            Intent gatekeeperIntent = new Intent(this, ComplianceGatekeeperActivity.class);
+//            gatekeeperIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+//            startActivity(gatekeeperIntent);
+//        }
     }
 }
