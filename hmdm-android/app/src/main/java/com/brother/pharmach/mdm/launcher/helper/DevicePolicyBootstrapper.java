@@ -103,12 +103,12 @@ public final class DevicePolicyBootstrapper {
      */
     private static void applyLockTaskFeatures(DevicePolicyManager dpm,
                                               ComponentName adminComponent) {
-        // API-DIFF: Android 11.0 (API 30)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            dpm.setLockTaskFeatures(adminComponent,
-                    DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS
-                            | DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD);
-            Log.i(TAG, "LockTask features applied");
+        // API-DIFF: Android 9.0 (API 28)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            // Disable status bar expansion by omitting LOCK_TASK_FEATURE_NOTIFICATIONS
+            int flags = DevicePolicyManager.LOCK_TASK_FEATURE_HOME | DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD;
+            dpm.setLockTaskFeatures(adminComponent, flags);
+            Log.i(TAG, "LockTask features applied (HOME | KEYGUARD)");
         }
     }
 

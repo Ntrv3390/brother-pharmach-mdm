@@ -28,6 +28,7 @@ import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.location.Location;
 import android.os.Build;
+import android.os.UserManager;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
@@ -43,6 +44,9 @@ import com.brother.pharmach.mdm.launcher.json.ServerConfig;
 import com.brother.pharmach.mdm.launcher.ui.custom.BlockingBar;
 import com.brother.pharmach.mdm.launcher.util.Utils;
 
+import android.app.ActivityManager;
+import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
+
 import java.util.Calendar;
 
 /**
@@ -52,11 +56,17 @@ import java.util.Calendar;
 public class ProUtils {
 
     public static boolean isPro() {
-        return false;
+        return true;
     }
 
     public static boolean kioskModeRequired(Context context) {
-        return false;
+        try {
+            SettingsHelper settingsHelper = SettingsHelper.getInstance(context.getApplicationContext());
+            ServerConfig config = settingsHelper.getConfig();
+            return config != null && config.isKioskMode();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public static void initCrashlytics(Context context) {
@@ -107,6 +117,9 @@ public class ProUtils {
             ComponentName adminComponent = new ComponentName(activity, AdminReceiver.class);
             if (dpm.isDeviceOwnerApp(activity.getPackageName())) {
                 dpm.setStatusBarDisabled(adminComponent, true);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_ADJUST_VOLUME);
+                }
             }
         } catch (Exception e) {
             Log.w("ProUtils", "Unable to disable status bar via device policy", e);
@@ -223,29 +236,86 @@ public class ProUtils {
     }
 
     public static boolean isKioskAppInstalled(Context context) {
-        // Stub
+        try {
+            SettingsHelper settingsHelper = SettingsHelper.getInstance(context.getApplicationContext());
+            ServerConfig config = settingsHelper.getConfig();
+            if (config != null) {
+                String kioskApp = config.getMainApp();
+                if (kioskApp != null && !kioskApp.trim().isEmpty()) {
+                    context.getPackageManager().getPackageInfo(kioskApp, 0);
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            // App not found or error
+        }
         return false;
     }
 
     public static boolean isKioskModeRunning(Context context) {
-        // Stub
-        return false;
+        try {
+            ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+            if (am == null) return false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                return am.getLockTaskModeState() != ActivityManager.LOCK_TASK_MODE_NONE;
+            } else {
+                return am.isInLockTaskMode();
+            }
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public static Intent getKioskAppIntent(String kioskApp, Activity activity) {
-        // Stub
-        return null;
+        try {
+            return activity.getPackageManager().getLaunchIntentForPackage(kioskApp);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     // Start COSU kiosk mode
     public static boolean startCosuKioskMode(String kioskApp, Activity activity, boolean enableSettings) {
-        // Stub
+        try {
+            DevicePolicyManager dpm = (DevicePolicyManager) activity.getSystemService(Context.DEVICE_POLICY_SERVICE);
+            ComponentName adminComponent = new ComponentName(activity, AdminReceiver.class);
+            if (dpm != null && dpm.isDeviceOwnerApp(activity.getPackageName())) {
+                String[] packages = new String[]{activity.getPackageName(), kioskApp};
+                dpm.setLockTaskPackages(adminComponent, packages);
+                updateKioskOptions(activity);
+                activity.startLockTask();
+                
+                if (!kioskApp.equals(activity.getPackageName())) {
+                    Intent intent = activity.getPackageManager().getLaunchIntentForPackage(kioskApp);
+                    if (intent != null) {
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        activity.startActivity(intent);
+                    }
+                }
+                return true;
+            }
+        } catch (Exception e) {
+            Log.e("ProUtils", "Failed to start kiosk mode", e);
+        }
         return false;
     }
 
     // Set/update kiosk mode options (lock tack features)
     public static void updateKioskOptions(Activity activity) {
-        // Stub
+        try {
+            DevicePolicyManager dpm = (DevicePolicyManager) activity.getSystemService(Context.DEVICE_POLICY_SERVICE);
+            ComponentName adminComponent = new ComponentName(activity, AdminReceiver.class);
+            if (dpm != null && dpm.isDeviceOwnerApp(activity.getPackageName())) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    // Disable status bar expansion by omitting LOCK_TASK_FEATURE_NOTIFICATIONS
+                    int flags = DevicePolicyManager.LOCK_TASK_FEATURE_HOME | DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD;
+                    dpm.setLockTaskFeatures(adminComponent, flags);
+                    Log.i("ProUtils", "Kiosk lock task features updated: " + flags);
+                }
+            }
+        } catch (Exception e) {
+            Log.e("ProUtils", "Failed to update kiosk options", e);
+        }
     }
 
     // Update app list in the kiosk mode
@@ -254,7 +324,12 @@ public class ProUtils {
     }
 
     public static void unlockKiosk(Activity activity) {
-        // Stub
+        try {
+            activity.stopLockTask();
+            Log.i("ProUtils", "Kiosk mode stopped");
+        } catch (Exception e) {
+            Log.e("ProUtils", "Failed to stop kiosk mode", e);
+        }
     }
 
     public static void processConfig(Context context, ServerConfig config) {

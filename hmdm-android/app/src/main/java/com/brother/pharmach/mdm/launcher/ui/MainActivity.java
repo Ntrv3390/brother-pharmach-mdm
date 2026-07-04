@@ -1085,8 +1085,10 @@ public class MainActivity
             }
         }
 
-        if (settingsHelper != null && settingsHelper.getConfig() != null && settingsHelper.getConfig().getLockStatusBar() != null && settingsHelper.getConfig().getLockStatusBar()) {
-            // If the admin requested status bar lock (may be required for some early Samsung devices), block the status bar and right bar (App list) expansion
+        if (settingsHelper != null && settingsHelper.getConfig() != null &&
+                ((settingsHelper.getConfig().getLockStatusBar() != null && settingsHelper.getConfig().getLockStatusBar()) ||
+                settingsHelper.getConfig().isKioskMode())) {
+            // If the admin requested status bar lock or kiosk mode is active, block the status bar and right bar (App list) expansion
             statusBarView = ProUtils.preventStatusBarExpansion(this);
             rightToolbarView = ProUtils.preventApplicationsList(this);
         }
