@@ -69,6 +69,8 @@ public class AdminReceiver extends DeviceAdminReceiver {
 
         PersistableBundle bundle = intent.getParcelableExtra(EXTRA_PROVISIONING_ADMIN_EXTRAS_BUNDLE);
         updateSettings(context, bundle);
+
+        DevicePolicyBootstrapper.applyPolicies(context);
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)

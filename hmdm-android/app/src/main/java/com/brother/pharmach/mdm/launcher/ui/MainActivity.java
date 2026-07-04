@@ -94,6 +94,7 @@ import com.brother.pharmach.mdm.launcher.databinding.DialogSystemSettingsBinding
 import com.brother.pharmach.mdm.launcher.databinding.DialogUnknownSourcesBinding;
 import com.brother.pharmach.mdm.launcher.helper.ConfigUpdater;
 import com.brother.pharmach.mdm.launcher.helper.CryptoHelper;
+import com.brother.pharmach.mdm.launcher.helper.DevicePolicyBootstrapper;
 import com.brother.pharmach.mdm.launcher.helper.Initializer;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.json.Application;
@@ -496,6 +497,10 @@ public class MainActivity
 
         settingsHelper = SettingsHelper.getInstance(this);
         preferences = getSharedPreferences(Const.PREFERENCES, MODE_PRIVATE);
+
+        // Apply DO policies on every startup to catch devices enrolled before the
+        // provisioning-timing fix was added (b/applyPolicies-in-onEnabled fires too early).
+        DevicePolicyBootstrapper.applyPolicies(this);
 
         if ("".equals(settingsHelper.getDeviceId()) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             AdminReceiver.updateSettingsFromFile(this);
