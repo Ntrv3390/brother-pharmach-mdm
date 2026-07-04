@@ -37,9 +37,6 @@ public class AppShortcutManager {
         int packageCount = 0;
         for (int i = 0; i < packs.size(); i++) {
             ApplicationInfo p = packs.get(i);
-            if ("com.android.settings".equals(p.packageName))
-                continue;
-
             if (context.getPackageManager().getLaunchIntentForPackage(p.packageName) != null) {
                 if (requiredPackages.containsKey(p.packageName)) {
                     packageCount++;
@@ -65,9 +62,6 @@ public class AppShortcutManager {
         // First we display app icons
         for (int i = 0; i < packs.size(); i++) {
             ApplicationInfo p = packs.get(i);
-            if ("com.android.settings".equals(p.packageName))
-                continue;
-
             if (context.getPackageManager().getLaunchIntentForPackage(p.packageName) != null) {
                 if (requiredPackages.containsKey(p.packageName)) {
                     Application app = requiredPackages.get(p.packageName);
