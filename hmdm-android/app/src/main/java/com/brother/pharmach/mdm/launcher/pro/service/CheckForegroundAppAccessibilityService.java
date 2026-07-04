@@ -67,7 +67,7 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
         if (pkg.isEmpty() || pkg.equals(getPackageName())) {
             return;
         }
-        if (!WorkTimeManager.getInstance().isAppAllowed(pkg)) {
+        if (!WorkTimeManager.getInstance().isAppAllowed(this, pkg)) {
             Log.d(TAG, "Blocking restricted app: " + pkg);
             Intent blockIntent = new Intent(Const.ACTION_HIDE_SCREEN);
             blockIntent.putExtra(Const.PACKAGE_NAME, pkg);

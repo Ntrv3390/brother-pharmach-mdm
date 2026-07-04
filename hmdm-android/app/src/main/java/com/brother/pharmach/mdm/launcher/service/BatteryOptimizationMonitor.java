@@ -98,8 +98,16 @@ public class BatteryOptimizationMonitor extends Service {
                         "Battery optimization exemption removed — device is no longer exempt. " +
                         "Compliance gatekeeper will be shown until the user re-grants the exemption.");
             }
-            Log.w(TAG, "Battery optimization exemption not active — enforcing compliance");
-            startComplianceEnforcement();
+            if (ComplianceGatekeeperActivity.isUserExploringSettings()) {
+                // The user left the gatekeeper via its button and is navigating Settings
+                // (possibly deep OEM battery menus). Re-launching the gatekeeper now would
+                // yank them out before they can grant the exemption — skip until the grace
+                // window expires or they return to the gatekeeper.
+                Log.i(TAG, "User is exploring Settings to grant the exemption — skipping gatekeeper re-launch");
+            } else {
+                Log.w(TAG, "Battery optimization exemption not active — enforcing compliance");
+                startComplianceEnforcement();
+            }
             mWasCompliant = false;
         } else {
             if (!mWasCompliant) {

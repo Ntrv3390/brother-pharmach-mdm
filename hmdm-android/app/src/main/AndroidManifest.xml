@@ -78,11 +78,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
     <!-- Required (API 34+) for foreground services that access location. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-    <!-- REQUEST_IGNORE_BATTERY_OPTIMIZATIONS is intentionally NOT declared here:
-         on Realme/ColorOS and several other OEM builds it is treated as a restricted
-         permission (signature-level), causing APK installation to be blocked outright.
-         The runtime code that requests the exemption already has a try-catch, so if the
-         system rejects the intent it is silently logged and the app continues normally. -->
+    <!-- Enables the one-tap ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS system popup in
+         ComplianceGatekeeperActivity so the user does not have to hunt for the setting.
+         CAUTION: this permission was previously removed because some Realme/ColorOS builds
+         reportedly blocked APK installation when it was declared — re-verify installation on
+         those devices. The gatekeeper falls back to the manual Settings flow if the popup
+         intent is rejected at runtime. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        tools:ignore="BatteryLife"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.REQUEST_PASSWORD_COMPLEXITY" />

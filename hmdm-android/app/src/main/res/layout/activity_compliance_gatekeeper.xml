@@ -57,7 +57,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Step 1  —  Tap the button below"
+                android:text="Step 1  —  Tap the red button below"
                 android:textColor="#FFCC00"
                 android:textSize="14sp"
                 android:textStyle="bold"
@@ -66,7 +66,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Step 2  —  Find Battery or Power Saving option on that screen"
+                android:text="Step 2  —  Tap Allow on the popup that appears"
                 android:textColor="#FFFFFF"
                 android:textSize="14sp"
                 android:lineSpacingMultiplier="1.4"
@@ -75,16 +75,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Step 3  —  Turn off any battery saving or power saving restriction for this app. If you see a selection instead of a switch, choose the option that allows the app to run freely in both foreground and background (such as No Restriction or Always allowed)"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:lineSpacingMultiplier="1.4"
-                android:layout_marginBottom="10dp"/>
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Step 4  —  Come back here by pressing the Back button"
+                android:text="If no popup appears on your phone, tap Open App Settings and turn off any battery saving restriction for this app. If you see a selection instead of a switch, choose the option that allows the app to run freely in both foreground and background (such as No Restriction or Always allowed). On some phones this option is inside Phone Settings under Battery."
                 android:textColor="#FFFFFF"
                 android:textSize="14sp"
                 android:lineSpacingMultiplier="1.4"/>
@@ -92,14 +83,38 @@
         </LinearLayout>
 
         <Button
-            android:id="@+id/btn_open_settings"
+            android:id="@+id/btn_allow_now"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Open Settings"
+            android:text="Allow Background Running"
             android:textColor="#FFFFFF"
             android:textSize="16sp"
             android:textStyle="bold"
             android:backgroundTint="#E53935"
+            android:paddingTop="14dp"
+            android:paddingBottom="14dp"
+            android:layout_marginBottom="12dp"/>
+
+        <Button
+            android:id="@+id/btn_open_settings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Open App Settings"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:backgroundTint="#607D8B"
+            android:paddingTop="14dp"
+            android:paddingBottom="14dp"
+            android:layout_marginBottom="12dp"/>
+
+        <Button
+            android:id="@+id/btn_open_full_settings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Can't find it? Open Phone Settings"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:backgroundTint="#455A64"
             android:paddingTop="14dp"
             android:paddingBottom="14dp"
             android:layout_marginBottom="20dp"/>

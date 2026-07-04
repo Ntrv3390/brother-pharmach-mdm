@@ -258,7 +258,7 @@ public class MainActivity
                     // Drop stale block events if policy changed (e.g., device exception became active)
                     // between the foreground check and this receiver callback.
                     if (blockedPackage != null && com.brother.pharmach.mdm.launcher.util.WorkTimeManager
-                            .getInstance().isAppAllowed(blockedPackage)) {
+                            .getInstance().isAppAllowed(context, blockedPackage)) {
                         RemoteLogger.log(MainActivity.this, Const.LOG_DEBUG,
                                 "Ignoring stale ACTION_HIDE_SCREEN for now-allowed package: " + blockedPackage);
                         break;

@@ -36,6 +36,7 @@ public class WorkTimeManager {
     private static final ScheduledExecutorService RETRY_EXECUTOR = Executors.newSingleThreadScheduledExecutor();
 
     private static WorkTimeManager instance;
+    private volatile Context appContext;
     private volatile EffectiveWorkTimePolicy policy;
     private volatile String lastAppliedConfigPolicyRaw;
     private Boolean lastWorkTimeState = null;
@@ -74,6 +75,9 @@ public class WorkTimeManager {
     }
 
     public void updatePolicy(Context context, boolean forceRefresh) {
+        if (context != null) {
+            this.appContext = context.getApplicationContext();
+        }
         SettingsHelper settingsHelper = SettingsHelper.getInstance(context);
         if (settingsHelper == null) return;
         
@@ -198,8 +202,23 @@ public class WorkTimeManager {
         }
     }
 
+    /** Context-aware variant: remembers the app context for the battery-compliance override. */
+    public boolean isAppAllowed(Context context, String packageName) {
+        if (context != null && appContext == null) {
+            this.appContext = context.getApplicationContext();
+        }
+        return isAppAllowed(packageName);
+    }
+
     public boolean isAppAllowed(String packageName) {
         if (isInfrastructurePackage(packageName)) {
+            return true;
+        }
+
+        // Battery-optimization compliance override: while the device is not exempt, the user
+        // must be able to explore the whole Settings app and OEM battery managers to grant the
+        // exemption — on many devices it is not reachable from the app details page.
+        if (OemCompat.isSettingsFamilyPackage(packageName) && isBatteryComplianceRequired()) {
             return true;
         }
 
@@ -234,6 +253,14 @@ public class WorkTimeManager {
             return false;
         }
         return isEnforcementActiveNow() && isCurrentTimeWorkTime();
+    }
+
+    private boolean isBatteryComplianceRequired() {
+        Context ctx = appContext;
+        if (ctx == null) return false;
+        android.os.PowerManager pm =
+                (android.os.PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
+        return pm != null && !pm.isIgnoringBatteryOptimizations(ctx.getPackageName());
     }
 
     private boolean isPackageAllowed(String packageName, List<String> list) {

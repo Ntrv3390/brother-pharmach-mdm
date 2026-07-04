@@ -113,6 +113,36 @@ public final class OemCompat {
      * Returns an OEM-specific deep-link Intent to battery unrestricted settings.
      * Always check resolveActivity() != null before launching.
      */
+    /**
+     * Packages that host battery/power-saving settings across OEMs. On many ROMs the
+     * battery exemption UI lives outside com.android.settings (e.g. MIUI Security Center,
+     * Samsung Device Care, Huawei System Manager), so all of them must stay reachable
+     * while the user is granting the battery optimization exemption.
+     */
+    public static boolean isSettingsFamilyPackage(String pkg) {
+        if (pkg == null) return false;
+        switch (pkg) {
+            case "com.android.settings":                 // AOSP / most OEMs
+            case "com.android.settings.intelligence":    // Settings search
+            case "com.samsung.android.lool":             // Samsung Device Care (battery)
+            case "com.samsung.android.sm_cn":            // Samsung Device Care (CN)
+            case "com.miui.securitycenter":              // Xiaomi Security Center (autostart/battery)
+            case "com.miui.powerkeeper":                 // Xiaomi battery manager
+            case "com.huawei.systemmanager":             // Huawei/Honor Phone Manager
+            case "com.coloros.phonemanager":             // Oppo/Realme Phone Manager
+            case "com.coloros.oppoguardelf":             // Oppo/Realme power monitor
+            case "com.oplus.battery":                    // Newer ColorOS/OxygenOS battery
+            case "com.oneplus.security":                 // OnePlus security/battery
+            case "com.iqoo.secure":                      // Vivo iManager (battery)
+            case "com.vivo.abe":                         // Vivo background power manager
+            case "com.evenwell.powersaving.g3":          // Nokia/HMD power saver
+            case "com.transsion.phonemanager":           // Tecno/Infinix/Itel Phone Master
+                return true;
+            default:
+                return false;
+        }
+    }
+
     public static Intent getBatterySettingsIntent(Context context) {
         if (isXiaomiMiui()) {
             Intent i = new Intent("miui.intent.action.APP_PERM_EDITOR");

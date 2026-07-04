@@ -79,7 +79,7 @@ public class CheckForegroundApplicationService extends Service {
             String pkg = recentStat.getPackageName();
             if (pkg.equals(getPackageName())) return;
 
-            boolean allowed = WorkTimeManager.getInstance().isAppAllowed(pkg);
+            boolean allowed = WorkTimeManager.getInstance().isAppAllowed(this, pkg);
             if (!allowed) {
                 // Debounce: only send ACTION_HIDE_SCREEN once per unique blocked package
                 // to prevent repeated startActivity() calls that cause screen flashing.

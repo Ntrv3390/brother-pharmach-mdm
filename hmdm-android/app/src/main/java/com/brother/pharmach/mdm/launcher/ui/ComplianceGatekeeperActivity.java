@@ -34,6 +34,18 @@ public class ComplianceGatekeeperActivity extends AppCompatActivity {
     // True while the user is in the Settings app via the button — suppresses home-button defense.
     private boolean mOpeningSettings = false;
 
+    // Elapsed-realtime timestamp of when the user left for Settings via the button; 0 when not
+    // exploring. Static so BatteryOptimizationMonitor can suppress gatekeeper re-launches while
+    // the user is navigating Settings (the exemption is often buried deep in OEM battery menus).
+    private static volatile long sSettingsExplorationStartMs = 0;
+
+    /** True while the user is inside the grace window for exploring Settings. */
+    public static boolean isUserExploringSettings() {
+        long start = sSettingsExplorationStartMs;
+        return start != 0 && android.os.SystemClock.elapsedRealtime() - start
+                < Constants.SETTINGS_EXPLORATION_GRACE_MS;
+    }
+
     private final BroadcastReceiver mComplianceReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -58,8 +70,21 @@ public class ComplianceGatekeeperActivity extends AppCompatActivity {
             }
         });
 
+        Button btnAllowNow = findViewById(R.id.btn_allow_now);
+        btnAllowNow.setOnClickListener(v -> requestExemptionPopup());
+
         Button btnSettings = findViewById(R.id.btn_open_settings);
         btnSettings.setOnClickListener(v -> openBatterySettings());
+
+        Button btnFullSettings = findViewById(R.id.btn_open_full_settings);
+        btnFullSettings.setOnClickListener(v -> openFullSettings());
+
+        // Show the one-tap system popup immediately so most users never have to
+        // navigate Settings at all. The buttons remain as fallback if it is denied
+        // or unavailable on this ROM.
+        if (savedInstanceState == null) {
+            requestExemptionPopup();
+        }
 
         RemoteLogger.log(this, Const.LOG_WARN,
                 "Battery optimization compliance gatekeeper displayed — " +
@@ -78,6 +103,8 @@ public class ComplianceGatekeeperActivity extends AppCompatActivity {
 
         boolean returningFromSettings = mOpeningSettings;
         mOpeningSettings = false;
+        // User is back on the gatekeeper — the Settings exploration window is over.
+        sSettingsExplorationStartMs = 0;
 
         if (isBatteryCompliant()) {
             if (returningFromSettings) {
@@ -114,8 +141,31 @@ public class ComplianceGatekeeperActivity extends AppCompatActivity {
         startActivity(reopen);
     }
 
+    /**
+     * One-tap path: shows the system "Allow app to run in background?" dialog directly,
+     * so the user does not have to find the setting. Requires the
+     * REQUEST_IGNORE_BATTERY_OPTIMIZATIONS manifest permission. Some OEM ROMs strip or
+     * reject this dialog — in that case we fall back to the manual Settings flow.
+     */
+    private void requestExemptionPopup() {
+        mOpeningSettings = true;
+        sSettingsExplorationStartMs = android.os.SystemClock.elapsedRealtime();
+        Intent request = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+        request.setData(Uri.parse("package:" + getPackageName()));
+        try {
+            startActivity(request);
+            RemoteLogger.log(this, Const.LOG_INFO,
+                    "Battery exemption popup shown — waiting for the user to tap Allow.");
+        } catch (ActivityNotFoundException | SecurityException e) {
+            Log.w(TAG, "Direct exemption popup unavailable on this ROM — " +
+                    "falling back to app settings: " + e.getMessage());
+            openBatterySettings();
+        }
+    }
+
     private void openBatterySettings() {
         mOpeningSettings = true;
+        sSettingsExplorationStartMs = android.os.SystemClock.elapsedRealtime();
         RemoteLogger.log(this, Const.LOG_INFO,
                 "User tapped 'Open Battery Settings' — navigating to app battery settings.");
 
@@ -138,6 +188,22 @@ public class ComplianceGatekeeperActivity extends AppCompatActivity {
         } catch (ActivityNotFoundException | SecurityException e) {
             Log.e(TAG, "All settings paths unavailable on this ROM: " + e.getMessage());
             mOpeningSettings = false;
+            sSettingsExplorationStartMs = 0;
+        }
+    }
+
+    private void openFullSettings() {
+        mOpeningSettings = true;
+        sSettingsExplorationStartMs = android.os.SystemClock.elapsedRealtime();
+        RemoteLogger.log(this, Const.LOG_INFO,
+                "User tapped 'Open Phone Settings' — opening the Settings app root so the " +
+                "device's own battery menus can be reached.");
+        try {
+            startActivity(new Intent(Settings.ACTION_SETTINGS));
+        } catch (ActivityNotFoundException | SecurityException e) {
+            Log.e(TAG, "Settings root unavailable on this ROM: " + e.getMessage());
+            mOpeningSettings = false;
+            sSettingsExplorationStartMs = 0;
         }
     }
 
