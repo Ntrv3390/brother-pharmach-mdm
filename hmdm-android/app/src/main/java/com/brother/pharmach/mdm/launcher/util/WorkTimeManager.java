@@ -215,13 +215,6 @@ public class WorkTimeManager {
             return true;
         }
 
-        // Battery-optimization compliance override: while the device is not exempt, the user
-        // must be able to explore the whole Settings app and OEM battery managers to grant the
-        // exemption — on many devices it is not reachable from the app details page.
-        if (OemCompat.isSettingsFamilyPackage(packageName) && isBatteryComplianceRequired()) {
-            return true;
-        }
-
         if (policy == null || !isEnforcementActiveNow()) {
             return true;
         }
@@ -253,14 +246,6 @@ public class WorkTimeManager {
             return false;
         }
         return isEnforcementActiveNow() && isCurrentTimeWorkTime();
-    }
-
-    private boolean isBatteryComplianceRequired() {
-        Context ctx = appContext;
-        if (ctx == null) return false;
-        android.os.PowerManager pm =
-                (android.os.PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
-        return pm != null && !pm.isIgnoringBatteryOptimizations(ctx.getPackageName());
     }
 
     private boolean isPackageAllowed(String packageName, List<String> list) {

@@ -3097,10 +3097,9 @@ public class MainActivity
     }
 
     private void applyWorkTimeSettingsRestriction() {
-        // Settings must remain accessible during worktime. Only the app whitelist and other
-        // worktime restrictions are enforced; the Settings app is intentionally excluded.
+        // Settings is treated like any other app: it will be allowed or blocked by
+        // the normal worktime allowlist/blocklist configuration.
         settingsLockedByWorkTime = false;
-        Utils.lockPackages(this, Const.SETTINGS_PACKAGE_NAME, false);
     }
 
     private boolean isBatteryOptimizationComplianceRequired() {
