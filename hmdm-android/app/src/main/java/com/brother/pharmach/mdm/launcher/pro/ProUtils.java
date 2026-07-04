@@ -173,6 +173,10 @@ public class ProUtils {
 
         applyDevicePolicyStatusBarLock(activity);
 
+        if (isKioskModeRunning(activity)) {
+            return null;
+        }
+
         View overlayView = addBlockingOverlay(activity);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -308,7 +312,10 @@ public class ProUtils {
             if (dpm != null && dpm.isDeviceOwnerApp(activity.getPackageName())) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     // Disable status bar expansion by omitting LOCK_TASK_FEATURE_NOTIFICATIONS
-                    int flags = DevicePolicyManager.LOCK_TASK_FEATURE_HOME | DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD;
+                    // Enable SYSTEM_INFO to show time, battery and network icons.
+                    int flags = DevicePolicyManager.LOCK_TASK_FEATURE_HOME 
+                            | DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD
+                            | DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO;
                     dpm.setLockTaskFeatures(adminComponent, flags);
                     Log.i("ProUtils", "Kiosk lock task features updated: " + flags);
                 }
