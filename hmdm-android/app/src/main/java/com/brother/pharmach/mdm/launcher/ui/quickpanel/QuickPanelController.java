@@ -12,11 +12,14 @@
 package com.brother.pharmach.mdm.launcher.ui.quickpanel;
 
 import android.app.Activity;
+import android.app.admin.DevicePolicyManager;
 import android.bluetooth.BluetoothAdapter;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ResolveInfo;
 import android.database.ContentObserver;
 import android.graphics.PorterDuff;
 import android.graphics.RenderEffect;
@@ -45,6 +48,13 @@ import androidx.core.content.ContextCompat;
 import com.brother.pharmach.mdm.launcher.R;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.json.ServerConfig;
+import com.brother.pharmach.mdm.launcher.pro.ProUtils;
+import com.brother.pharmach.mdm.launcher.util.LegacyUtils;
+import com.brother.pharmach.mdm.launcher.util.Utils;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Owns the swipe-down quick panel: Wi-Fi / Bluetooth / Torch pills plus
@@ -77,6 +87,7 @@ public class QuickPanelController implements QuickPanelView.Listener {
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     private QuickPanelView panelView;
+    private QuickPanelEdgeOverlay edgeOverlay;
     private View blurTarget;
 
     private TextView carrierView;
@@ -139,7 +150,45 @@ public class QuickPanelController implements QuickPanelView.Listener {
         root.addView(panelView, lp);
         blurTarget = root.findViewById(R.id.activity_main_content_wrapper);
         QuickTileActions.ensureTorchCallback(activity, this::postRefresh);
+
+        // Overlay strip over the system status bar so a pull-down that starts on
+        // the status info area (carrier/time/battery) also opens the panel.
+        if (edgeOverlay == null) {
+            edgeOverlay = new QuickPanelEdgeOverlay(activity, overlayDragTarget);
+        }
+        edgeOverlay.show();
+        edgeOverlay.setCaptureEnabled(!isOpen());
     }
+
+    /** Bridges the status-bar overlay's swipe to the panel's external-drag API. */
+    private final QuickPanelEdgeOverlay.DragTarget overlayDragTarget =
+            new QuickPanelEdgeOverlay.DragTarget() {
+        @Override
+        public boolean canStartReveal() {
+            return panelView != null && !panelView.isOpen() && !panelView.isAnimating();
+        }
+
+        @Override
+        public void onRevealStart() {
+            if (panelView != null) {
+                panelView.startExternalDrag();
+            }
+        }
+
+        @Override
+        public void onRevealBy(float totalDy) {
+            if (panelView != null) {
+                panelView.externalDragBy(totalDy);
+            }
+        }
+
+        @Override
+        public void onRevealEnd(float velocityY) {
+            if (panelView != null) {
+                panelView.externalDragEnd(velocityY);
+            }
+        }
+    };
 
     public boolean isOpen() {
         return panelView != null && panelView.isOpen();
@@ -283,9 +332,56 @@ public class QuickPanelController implements QuickPanelView.Listener {
         try {
             Intent intent = new Intent(Settings.ACTION_SETTINGS);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            // Under lock task (kiosk) a non-allowlisted app is silently blocked from
+            // launching — which is why the gear appeared to "do nothing". Temporarily
+            // add the Settings package to the lock task allowlist so it can open.
+            allowSettingsInLockTask(intent);
             activity.startActivity(intent);
         } catch (Exception e) {
             Toast.makeText(activity, R.string.qp_action_failed, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Appends the resolved Settings package to the lock task allowlist (preserving
+     * the launcher's own package). Device owner only; no-op otherwise. Does not
+     * touch setLockTaskFeatures / setStatusBarDisabled — the status-bar lockdown
+     * is unchanged.
+     */
+    private void allowSettingsInLockTask(Intent settingsIntent) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP
+                || !Utils.isDeviceOwner(activity)
+                || !ProUtils.isKioskModeRunning(activity)) {
+            return;
+        }
+        try {
+            DevicePolicyManager dpm = (DevicePolicyManager)
+                    activity.getSystemService(Context.DEVICE_POLICY_SERVICE);
+            ComponentName admin = LegacyUtils.getAdminComponentName(activity);
+            if (dpm == null || admin == null) {
+                return;
+            }
+            ResolveInfo ri = activity.getPackageManager().resolveActivity(settingsIntent, 0);
+            String settingsPkg = (ri != null && ri.activityInfo != null)
+                    ? ri.activityInfo.packageName : "com.android.settings";
+
+            List<String> packages = new ArrayList<>();
+            try {
+                String[] existing = dpm.getLockTaskPackages(admin);
+                if (existing != null) {
+                    packages.addAll(Arrays.asList(existing));
+                }
+            } catch (Exception ignored) {
+            }
+            if (!packages.contains(activity.getPackageName())) {
+                packages.add(activity.getPackageName());
+            }
+            if (!packages.contains(settingsPkg)) {
+                packages.add(settingsPkg);
+            }
+            dpm.setLockTaskPackages(admin, packages.toArray(new String[0]));
+        } catch (Exception e) {
+            // Best effort; the launch below may still work on non-locked builds
         }
     }
 
@@ -524,11 +620,20 @@ public class QuickPanelController implements QuickPanelView.Listener {
     public void onPanelOpened() {
         refreshAll();
         registerReceivers();
+        // Panel is up: make the status-bar strip pass-through so it never covers
+        // the panel header (settings gear); the panel handles its own touches.
+        if (edgeOverlay != null) {
+            edgeOverlay.setCaptureEnabled(false);
+        }
     }
 
     @Override
     public void onPanelClosed() {
         unregisterReceivers();
+        // Re-arm the status-bar strip to catch the next pull-down.
+        if (edgeOverlay != null) {
+            edgeOverlay.setCaptureEnabled(true);
+        }
         // Drop the temporary window brightness override; the persisted system value rules
         try {
             android.view.WindowManager.LayoutParams lp = activity.getWindow().getAttributes();
@@ -631,6 +736,10 @@ public class QuickPanelController implements QuickPanelView.Listener {
         endGesture();
         unregisterReceivers();
         handler.removeCallbacksAndMessages(null);
+        if (edgeOverlay != null) {
+            edgeOverlay.remove();
+            edgeOverlay = null;
+        }
         if (panelView != null && panelView.getParent() instanceof ViewGroup) {
             ((ViewGroup) panelView.getParent()).removeView(panelView);
         }
