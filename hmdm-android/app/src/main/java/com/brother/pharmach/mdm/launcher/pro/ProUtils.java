@@ -173,7 +173,7 @@ public class ProUtils {
 
         applyDevicePolicyStatusBarLock(activity);
 
-        if (isKioskModeRunning(activity)) {
+        if (kioskModeRequired(activity)) {
             return null;
         }
 
