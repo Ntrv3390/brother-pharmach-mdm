@@ -1060,6 +1060,14 @@ angular
         );
         $scope.app24h = {};
         $scope.policyAppsSearchText = "";
+        // A saved "All" selection is stored as the bare wildcard "*" with no individual
+        // packages. Expand it over whatever app list is currently loaded BEFORE
+        // syncAllAppsFlags(), which otherwise recomputes the "*" flag from the individual
+        // checkboxes (all still unchecked) and wipes the wildcard — so re-opening the
+        // editor lost an all-apps selection. The async per-device load re-expands it
+        // against the fresh list when it arrives.
+        applyWildcardSelection($scope.selectedAppsDuringWork);
+        applyWildcardSelection($scope.selectedAppsOutsideWork);
         syncAllAppsFlags();
         $scope.exceptionSaving = false;
         $scope.editingException = createDefaultHolidayDraft();
@@ -1488,6 +1496,55 @@ angular
           URL.revokeObjectURL(url);
         } catch (e) {
           console.error("Failed to generate sample CSV", e);
+        }
+      };
+
+      // Exports the configured holidays in the same CSV format the import accepts
+      // (headers: name,from,to — dates DD/MM/YYYY), so the file can be re-imported as-is.
+      $scope.exportHolidaysCsv = function () {
+        var formatCsvDate = function (value) {
+          var date = parseLocalDate(value);
+          if (!date) {
+            return "";
+          }
+          return (
+            padTimePart(date.getDate()) +
+            "/" +
+            padTimePart(date.getMonth() + 1) +
+            "/" +
+            date.getFullYear()
+          );
+        };
+        var escapeCsvField = function (value) {
+          var text = value == null ? "" : String(value);
+          return /[",\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+        };
+
+        var lines = ["name,from,to"];
+        ($scope.holidays || []).forEach(function (holiday) {
+          lines.push(
+            escapeCsvField(holiday.name) +
+              "," +
+              formatCsvDate(holiday.startDate) +
+              "," +
+              formatCsvDate(holiday.endDate),
+          );
+        });
+
+        try {
+          var blob = new Blob([lines.join("\n") + "\n"], {
+            type: "text/csv;charset=utf-8",
+          });
+          var url = URL.createObjectURL(blob);
+          var link = document.createElement("a");
+          link.href = url;
+          link.download = "holidays.csv";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          console.error("Failed to export holidays CSV", e);
         }
       };
 

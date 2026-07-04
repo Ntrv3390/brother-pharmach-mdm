@@ -1426,6 +1426,15 @@ Christmas,25/12/2026,25/12/2026</pre>
     <div class="worktime-modal-footer">
       <button type="button" class="worktime-btn-secondary" ng-click="closeViewHolidaysModal()">Close</button>
       <button type="button" class="worktime-btn-primary" ng-click="closeViewHolidaysModal(); openAddHolidayModal()" ng-disabled="!canEdit">Add Holiday</button>
+      <button
+        type="button"
+        class="worktime-btn-secondary"
+        ng-click="exportHolidaysCsv()"
+        ng-disabled="holidaysLoading || !holidays || holidays.length === 0"
+        title="Download all holidays as a CSV file (same format as the import)"
+      >
+        <i class="glyphicon glyphicon-download-alt"></i> Save as CSV
+      </button>
     </div>
   </script>
 </div>
