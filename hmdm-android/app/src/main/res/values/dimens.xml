@@ -38,4 +38,17 @@
     <dimen name="title_text_size">16dp</dimen>
     <dimen name="app_icon_size">50dp</dimen>
     <dimen name="status_bar_side_width">60dp</dimen>
+
+    <!-- Quick panel (top-edge swipe-down settings panel) -->
+    <dimen name="qp_edge_capture_height">40dp</dimen>
+    <dimen name="qp_panel_corner_radius">28dp</dimen>
+    <dimen name="qp_panel_padding">16dp</dimen>
+    <dimen name="qp_pill_height">64dp</dimen>
+    <dimen name="qp_pill_radius">32dp</dimen>
+    <dimen name="qp_tile_circle_size">56dp</dimen>
+    <dimen name="qp_tile_icon_size">26dp</dimen>
+    <dimen name="qp_slider_height">48dp</dimen>
+    <dimen name="qp_aux_button_size">48dp</dimen>
+    <dimen name="qp_label_text_size">14sp</dimen>
+    <dimen name="qp_header_text_size">20sp</dimen>
 </resources>

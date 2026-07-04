@@ -31,4 +31,16 @@
 
     <color name="statusBarLight">#aaffffff</color>
     <color name="statusBarDark">#aa000000</color>
+
+    <!-- Quick panel (top-edge swipe-down settings panel) -->
+    <color name="qpPanelBackground">#E61C1C24</color>
+    <color name="qpScrim">#66000000</color>
+    <color name="qpTileInactive">#33FFFFFF</color>
+    <color name="qpTileActive">#B39DDB</color>
+    <color name="qpGroupBackground">#26FFFFFF</color>
+    <color name="qpTextPrimary">#FFFFFFFF</color>
+    <color name="qpTextSecondary">#B3FFFFFF</color>
+    <color name="qpIconOnActive">#FF1C1C24</color>
+    <color name="qpSliderTrack">#33FFFFFF</color>
+    <color name="qpSliderFill">#D1C4E9</color>
 </resources>

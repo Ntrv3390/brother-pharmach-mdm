@@ -112,6 +112,7 @@ import com.brother.pharmach.mdm.launcher.service.StatusControlService;
 import com.brother.pharmach.mdm.launcher.task.GetServerConfigTask;
 import com.brother.pharmach.mdm.launcher.task.SendDeviceInfoTask;
 import com.brother.pharmach.mdm.launcher.ui.custom.StatusBarUpdater;
+import com.brother.pharmach.mdm.launcher.ui.quickpanel.QuickPanelController;
 import com.brother.pharmach.mdm.launcher.util.AppInfo;
 import com.brother.pharmach.mdm.launcher.util.CrashLoopProtection;
 import com.brother.pharmach.mdm.launcher.util.DeviceInfoProvider;
@@ -430,6 +431,9 @@ public class MainActivity
     private View statusBarView;
     private View rightToolbarView;
 
+    // Swipe-down quick settings panel (in-app overlay, kiosk-safe)
+    private QuickPanelController quickPanelController;
+
     private boolean firstStartAfterProvisioning = false;
 
     @Override
@@ -614,6 +618,8 @@ public class MainActivity
         // On some Android firmwares, onResume is called before onCreate, so the fields are not initialized
         // Here we initialize all required fields to avoid crash at startup
         reinitApp();
+
+        initQuickPanel();
 
         statusBarUpdater.startUpdating(this, binding.clock, binding.batteryState);
 
@@ -2336,6 +2342,11 @@ public class MainActivity
     protected void onDestroy() {
         super.onDestroy();
 
+        if (quickPanelController != null) {
+            quickPanelController.destroy();
+            quickPanelController = null;
+        }
+
         settingsHelper.setMainActivityRunning(false);
 
         WindowManager manager = ((WindowManager)getApplicationContext().getSystemService(Context.WINDOW_SERVICE));
@@ -2384,6 +2395,12 @@ public class MainActivity
         super.onPause();
 
         isBackground = true;
+
+        // Never leave the quick panel open across pause/screen-off; its open state
+        // is intentionally not persisted so kiosk re-entry always starts closed
+        if (quickPanelController != null) {
+            quickPanelController.close();
+        }
 
         statusBarUpdater.stopUpdating();
 
@@ -3069,7 +3086,32 @@ public class MainActivity
     }
 
     @Override
-    public void onBackPressed() {}
+    public void onBackPressed() {
+        // Only dismisses the quick panel; deliberately never calls super so the
+        // kiosk/back-press lockdown behavior is unchanged
+        if (quickPanelController != null) {
+            quickPanelController.close();
+        }
+    }
+
+    // Lazily creates the swipe-down quick settings panel and (re-)attaches it to
+    // the current root view. Idempotent; called from onResume because the binding
+    // may be recreated there on some firmwares (see reinitApp).
+    private void initQuickPanel() {
+        if (binding == null) {
+            return;
+        }
+        if (quickPanelController == null) {
+            quickPanelController = new QuickPanelController(this,
+                    this::createAndShowEnterPasswordDialog);
+        }
+        try {
+            quickPanelController.attach((ViewGroup) binding.getRoot());
+        } catch (Exception e) {
+            // The panel is a convenience layer; never let it break launcher startup
+            Log.w(Const.LOG_TAG, "Failed to attach quick panel: " + e.getMessage());
+        }
+    }
 
     @Override
     public void onAppChoose( @NonNull AppInfo resolveInfo ) {

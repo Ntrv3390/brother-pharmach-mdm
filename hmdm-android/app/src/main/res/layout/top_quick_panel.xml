@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Brother Pharmamach MDM: Open Source Android MDM Software
+  ~ https://h-mdm.com
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~      http://www.apache.org/licenses/LICENSE-2.0
+  -->
+
+<!-- Inflated into QuickPanelView (a full-screen FrameLayout child of the
+     MainActivity root), so the panel stays inside the lock-task window. -->
+<merge xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <View
+        android:id="@+id/qp_scrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/qpScrim"
+        android:visibility="invisible"/>
+
+    <ScrollView
+        android:id="@+id/qp_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_qp_panel"
+        android:overScrollMode="never"
+        android:scrollbars="none"
+        android:visibility="invisible">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingLeft="@dimen/qp_panel_padding"
+            android:paddingRight="@dimen/qp_panel_padding"
+            android:paddingTop="12dp"
+            android:paddingBottom="8dp">
+
+            <!-- Section A: status row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/qp_carrier"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textColor="@color/qpTextPrimary"
+                    android:textSize="@dimen/qp_header_text_size"
+                    android:singleLine="true"
+                    android:ellipsize="end"/>
+
+                <TextView
+                    android:id="@+id/qp_network_type"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginRight="6dp"
+                    android:textColor="@color/qpTextSecondary"
+                    android:textSize="12sp"/>
+
+                <ImageView
+                    android:id="@+id/qp_signal"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_marginRight="8dp"
+                    android:src="@drawable/ic_qp_signal"
+                    android:alpha="0.8"/>
+
+                <TextView
+                    android:id="@+id/qp_battery"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_qp_battery_badge"
+                    android:paddingLeft="8dp"
+                    android:paddingRight="8dp"
+                    android:paddingTop="2dp"
+                    android:paddingBottom="2dp"
+                    android:textColor="@color/qpTextPrimary"
+                    android:textSize="12sp"/>
+            </LinearLayout>
+
+            <!-- Section A: edit / power / settings action row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal"
+                android:gravity="right|center_vertical">
+
+                <ImageView
+                    android:id="@+id/qp_edit"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_qp_edit"
+                    android:alpha="0.45"/>
+
+                <ImageView
+                    android:id="@+id/qp_power"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginLeft="16dp"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_qp_power"
+                    android:alpha="0.45"/>
+
+                <ImageView
+                    android:id="@+id/qp_settings_button"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginLeft="16dp"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_qp_settings"
+                    android:contentDescription="@string/qp_settings"/>
+            </LinearLayout>
+
+            <!-- Section B: Wi-Fi / Bluetooth pills -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:id="@+id/qp_pill_wifi"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/qp_pill_height"
+                    android:layout_weight="1"
+                    android:layout_marginRight="6dp"
+                    android:background="@drawable/bg_qp_pill_inactive"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingLeft="18dp"
+                    android:paddingRight="12dp">
+
+                    <ImageView
+                        android:id="@+id/qp_pill_wifi_icon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_qp_wifi"/>
+
+                    <TextView
+                        android:id="@+id/qp_pill_wifi_label"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginLeft="14dp"
+                        android:text="@string/qp_wifi"
+                        android:textColor="@color/qpTextPrimary"
+                        android:textSize="16sp"
+                        android:singleLine="true"/>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/qp_pill_bluetooth"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/qp_pill_height"
+                    android:layout_weight="1"
+                    android:layout_marginLeft="6dp"
+                    android:background="@drawable/bg_qp_pill_inactive"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingLeft="18dp"
+                    android:paddingRight="12dp">
+
+                    <ImageView
+                        android:id="@+id/qp_pill_bluetooth_icon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_qp_bluetooth"/>
+
+                    <TextView
+                        android:id="@+id/qp_pill_bluetooth_label"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginLeft="14dp"
+                        android:text="@string/qp_bluetooth"
+                        android:textColor="@color/qpTextPrimary"
+                        android:textSize="16sp"
+                        android:singleLine="true"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Section B: quick tile grid, populated by QuickPanelController -->
+            <GridLayout
+                android:id="@+id/qp_tile_grid"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_qp_group"
+                android:columnCount="4"
+                android:paddingTop="14dp"
+                android:paddingBottom="14dp"
+                android:paddingLeft="4dp"
+                android:paddingRight="4dp"/>
+
+            <!-- Section C: brightness slider -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <com.brother.pharmach.mdm.launcher.ui.quickpanel.PillSliderView
+                    android:id="@+id/qp_brightness_slider"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/qp_slider_height"
+                    android:layout_weight="1"/>
+
+                <ImageView
+                    android:id="@+id/qp_auto_brightness"
+                    android:layout_width="@dimen/qp_aux_button_size"
+                    android:layout_height="@dimen/qp_aux_button_size"
+                    android:layout_marginLeft="10dp"
+                    android:background="@drawable/bg_qp_tile_inactive"
+                    android:padding="12dp"
+                    android:src="@drawable/ic_qp_moon"/>
+            </LinearLayout>
+
+            <!-- Section C: volume slider -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <com.brother.pharmach.mdm.launcher.ui.quickpanel.PillSliderView
+                    android:id="@+id/qp_volume_slider"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/qp_slider_height"
+                    android:layout_weight="1"/>
+
+                <ImageView
+                    android:id="@+id/qp_mute"
+                    android:layout_width="@dimen/qp_aux_button_size"
+                    android:layout_height="@dimen/qp_aux_button_size"
+                    android:layout_marginLeft="10dp"
+                    android:background="@drawable/bg_qp_tile_active"
+                    android:padding="12dp"
+                    android:src="@drawable/ic_qp_volume"/>
+            </LinearLayout>
+
+            <!-- Drag handle -->
+            <View
+                android:id="@+id/qp_handle"
+                android:layout_width="40dp"
+                android:layout_height="4dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="4dp"
+                android:background="@drawable/bg_qp_handle"/>
+        </LinearLayout>
+    </ScrollView>
+</merge>
