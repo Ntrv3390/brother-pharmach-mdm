@@ -21,9 +21,13 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ResolveInfo;
 import android.database.ContentObserver;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.graphics.PorterDuff;
 import android.graphics.RenderEffect;
 import android.graphics.Shader;
+import android.widget.ScrollView;
+import androidx.core.graphics.ColorUtils;
 import android.location.LocationManager;
 import android.net.ConnectivityManager;
 import android.net.wifi.WifiManager;
@@ -89,6 +93,7 @@ public class QuickPanelController implements QuickPanelView.Listener {
     private QuickPanelView panelView;
     private QuickPanelEdgeOverlay edgeOverlay;
     private View blurTarget;
+    private ScrollView panelScrollView;
 
     private TextView carrierView;
     private View pillWifi, pillBluetooth, pillTorch, torchRow;
@@ -158,6 +163,9 @@ public class QuickPanelController implements QuickPanelView.Listener {
         }
         edgeOverlay.show();
         edgeOverlay.setCaptureEnabled(!isOpen());
+
+        // Re-apply server theme every time we attach (covers config refreshes on resume).
+        applyServerTheme();
     }
 
     /** Bridges the status-bar overlay's swipe to the panel's external-drag API. */
@@ -201,6 +209,13 @@ public class QuickPanelController implements QuickPanelView.Listener {
             return true;
         }
         return false;
+    }
+
+    public void onPause() {
+        close();
+        if (edgeOverlay != null) {
+            edgeOverlay.remove();
+        }
     }
 
     // ------------------------------------------------------------------ top-edge gesture
@@ -389,6 +404,7 @@ public class QuickPanelController implements QuickPanelView.Listener {
 
     private void bindViews() {
         carrierView = panelView.findViewById(R.id.qp_carrier);
+        panelScrollView = panelView.findViewById(R.id.qp_panel);
         pillWifi = panelView.findViewById(R.id.qp_pill_wifi);
         pillBluetooth = panelView.findViewById(R.id.qp_pill_bluetooth);
         pillTorch = panelView.findViewById(R.id.qp_pill_torch);
@@ -491,6 +507,42 @@ public class QuickPanelController implements QuickPanelView.Listener {
             refreshSliders();
             refreshAuxButtons();
         });
+
+        applyServerTheme();
+    }
+
+    /**
+     * Reads the server-configured background color and applies a tinted,
+     * semi-opaque version of it as the quick panel background.
+     * Falls back to the static XML drawable if no color is configured.
+     */
+    private void applyServerTheme() {
+        if (panelScrollView == null) {
+            return;
+        }
+        ServerConfig c = config();
+        if (c == null || c.getBackgroundColor() == null || c.getBackgroundColor().isEmpty()) {
+            // No server color — leave the XML drawable in place.
+            return;
+        }
+        try {
+            int serverColor = Color.parseColor(c.getBackgroundColor());
+            // Blend the server color heavily toward black (90% black, 10% server hue)
+            // so the panel always reads as a dark surface regardless of server choice,
+            // then apply ~91% opacity (0xE6 alpha) to match the original style.
+            int panelBg = ColorUtils.blendARGB(serverColor, Color.BLACK, 0.80f);
+            panelBg = ColorUtils.setAlphaComponent(panelBg, 0xE6);
+
+            float cornerPx = activity.getResources()
+                    .getDimension(R.dimen.qp_panel_corner_radius);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setColor(panelBg);
+            bg.setCornerRadii(new float[]{0, 0, 0, 0,
+                    cornerPx, cornerPx, cornerPx, cornerPx});
+            panelScrollView.setBackground(bg);
+        } catch (Exception ignored) {
+            // Bad color string from server — leave the static drawable.
+        }
     }
 
     // ------------------------------------------------------------------ state -> UI

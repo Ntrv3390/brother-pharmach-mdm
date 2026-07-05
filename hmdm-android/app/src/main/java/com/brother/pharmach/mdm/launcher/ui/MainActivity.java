@@ -2400,7 +2400,7 @@ public class MainActivity
         // Never leave the quick panel open across pause/screen-off; its open state
         // is intentionally not persisted so kiosk re-entry always starts closed
         if (quickPanelController != null) {
-            quickPanelController.close();
+            quickPanelController.onPause();
         }
 
         statusBarUpdater.stopUpdating();

@@ -20,6 +20,7 @@ import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
 import android.view.ViewConfiguration;
+import android.content.Context;
 import android.view.WindowManager;
 
 import com.brother.pharmach.mdm.launcher.Const;
@@ -83,7 +84,7 @@ public class QuickPanelEdgeOverlay {
         if (overlayView != null) {
             return;
         }
-        WindowManager wm = (WindowManager) activity.getSystemService(Activity.WINDOW_SERVICE);
+        WindowManager wm = (WindowManager) activity.getApplicationContext().getSystemService(Context.WINDOW_SERVICE);
         if (wm == null) {
             return;
         }
@@ -122,7 +123,7 @@ public class QuickPanelEdgeOverlay {
         if (overlayView == null) {
             return;
         }
-        WindowManager wm = (WindowManager) activity.getSystemService(Activity.WINDOW_SERVICE);
+        WindowManager wm = (WindowManager) activity.getApplicationContext().getSystemService(Context.WINDOW_SERVICE);
         if (wm == null) {
             return;
         }
@@ -145,7 +146,7 @@ public class QuickPanelEdgeOverlay {
         if (overlayView == null) {
             return;
         }
-        WindowManager wm = (WindowManager) activity.getSystemService(Activity.WINDOW_SERVICE);
+        WindowManager wm = (WindowManager) activity.getApplicationContext().getSystemService(Context.WINDOW_SERVICE);
         if (wm != null) {
             try {
                 wm.removeView(overlayView);

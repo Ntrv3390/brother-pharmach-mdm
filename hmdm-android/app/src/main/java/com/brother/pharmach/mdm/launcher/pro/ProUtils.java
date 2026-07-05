@@ -152,7 +152,7 @@ public class ProUtils {
         params.gravity = Gravity.TOP | Gravity.START;
         params.format = PixelFormat.TRANSPARENT;
 
-        WindowManager windowManager = (WindowManager) activity.getSystemService(Context.WINDOW_SERVICE);
+        WindowManager windowManager = (WindowManager) activity.getApplicationContext().getSystemService(Context.WINDOW_SERVICE);
         if (windowManager != null) {
             try {
                 windowManager.addView(blockingView, params);
