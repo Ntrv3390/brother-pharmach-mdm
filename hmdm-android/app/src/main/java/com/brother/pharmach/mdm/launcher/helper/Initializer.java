@@ -299,6 +299,9 @@ public class Initializer {
 
     // Used by InitialSetupActivity
     public static void applyEarlyNonInteractivePolicies(Context context, ServerConfig config) {
+        if (config == null) {
+            return;
+        }
         if (config.getSystemUpdateType() != null &&
                 config.getSystemUpdateType() != ServerConfig.SYSTEM_UPDATE_DEFAULT &&
                 Utils.isDeviceOwner(context)) {
