@@ -186,18 +186,10 @@
 
                 <com.brother.pharmach.mdm.launcher.ui.quickpanel.PillSliderView
                     android:id="@+id/qp_brightness_slider"
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="@dimen/qp_slider_height"
                     android:layout_weight="1"/>
 
-                <ImageView
-                    android:id="@+id/qp_auto_brightness"
-                    android:layout_width="@dimen/qp_aux_button_size"
-                    android:layout_height="@dimen/qp_aux_button_size"
-                    android:layout_marginLeft="10dp"
-                    android:background="@drawable/bg_qp_tile_inactive"
-                    android:padding="12dp"
-                    android:src="@drawable/ic_qp_moon"/>
             </LinearLayout>
 
             <!-- Volume slider -->
@@ -210,18 +202,10 @@
 
                 <com.brother.pharmach.mdm.launcher.ui.quickpanel.PillSliderView
                     android:id="@+id/qp_volume_slider"
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="@dimen/qp_slider_height"
                     android:layout_weight="1"/>
 
-                <ImageView
-                    android:id="@+id/qp_mute"
-                    android:layout_width="@dimen/qp_aux_button_size"
-                    android:layout_height="@dimen/qp_aux_button_size"
-                    android:layout_marginLeft="10dp"
-                    android:background="@drawable/bg_qp_tile_active"
-                    android:padding="12dp"
-                    android:src="@drawable/ic_qp_volume"/>
             </LinearLayout>
 
             <!-- Drag handle -->

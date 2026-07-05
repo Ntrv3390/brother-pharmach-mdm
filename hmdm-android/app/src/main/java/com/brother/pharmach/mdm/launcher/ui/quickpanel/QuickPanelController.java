@@ -101,8 +101,6 @@ public class QuickPanelController implements QuickPanelView.Listener {
     private TextView pillWifiLabel, pillBluetoothLabel, pillTorchLabel;
     private PillSliderView brightnessSlider;
     private PillSliderView volumeSlider;
-    private ImageView autoBrightnessButton;
-    private ImageView muteButton;
 
     private boolean receiversRegistered = false;
     private float lastNonZeroVolume = 0.5f;
@@ -417,8 +415,6 @@ public class QuickPanelController implements QuickPanelView.Listener {
         pillTorchLabel = panelView.findViewById(R.id.qp_pill_torch_label);
         brightnessSlider = panelView.findViewById(R.id.qp_brightness_slider);
         volumeSlider = panelView.findViewById(R.id.qp_volume_slider);
-        autoBrightnessButton = panelView.findViewById(R.id.qp_auto_brightness);
-        muteButton = panelView.findViewById(R.id.qp_mute);
 
         panelView.findViewById(R.id.qp_settings_button).setOnClickListener(v -> {
             panelView.close(true);
@@ -465,7 +461,6 @@ public class QuickPanelController implements QuickPanelView.Listener {
             } else {
                 handleResult(QuickTileActions.setBrightnessFraction(
                         activity, activity.getWindow(), fraction));
-                refreshAuxButtons();
             }
         });
 
@@ -476,36 +471,7 @@ public class QuickPanelController implements QuickPanelView.Listener {
                     lastNonZeroVolume = fraction;
                 }
                 handleResultQuiet(QuickTileActions.setVolumeFraction(activity, fraction), !dragging);
-                if (!dragging) {
-                    refreshAuxButtons();
-                }
             }
-        });
-
-        autoBrightnessButton.setOnClickListener(v -> {
-            if (isBrightnessManaged()) {
-                toastManaged();
-                return;
-            }
-            boolean target = !QuickTileActions.isAutoBrightness(activity);
-            handleResult(QuickTileActions.setAutoBrightness(activity, target));
-            refreshAuxButtons();
-        });
-
-        muteButton.setOnClickListener(v -> {
-            if (isVolumeLocked()) {
-                toastManaged();
-                return;
-            }
-            float current = QuickTileActions.getVolumeFraction(activity);
-            if (current > 0f) {
-                lastNonZeroVolume = current;
-                handleResult(QuickTileActions.setVolumeFraction(activity, 0f));
-            } else {
-                handleResult(QuickTileActions.setVolumeFraction(activity, lastNonZeroVolume));
-            }
-            refreshSliders();
-            refreshAuxButtons();
         });
 
         applyServerTheme();
@@ -551,7 +517,6 @@ public class QuickPanelController implements QuickPanelView.Listener {
         refreshStatusRow();
         refreshPills();
         refreshSliders();
-        refreshAuxButtons();
         applyPolicyLocks();
     }
 
@@ -560,13 +525,8 @@ public class QuickPanelController implements QuickPanelView.Listener {
         pillWifi.setAlpha(pinnedWifi() != null ? 0.55f : 1f);
         pillBluetooth.setAlpha(pinnedBluetooth() != null ? 0.55f : 1f);
 
-        boolean brightnessManaged = isBrightnessManaged();
-        brightnessSlider.setUserInteractionEnabled(!brightnessManaged, this::toastManaged);
-        autoBrightnessButton.setAlpha(brightnessManaged ? 0.55f : 1f);
-
-        boolean volumeLocked = isVolumeLocked();
-        volumeSlider.setUserInteractionEnabled(!volumeLocked, this::toastManaged);
-        muteButton.setAlpha(volumeLocked ? 0.55f : 1f);
+        brightnessSlider.setUserInteractionEnabled(!isBrightnessManaged(), this::toastManaged);
+        volumeSlider.setUserInteractionEnabled(!isVolumeLocked(), this::toastManaged);
 
         torchRow.setVisibility(QuickTileActions.isTorchAvailable(activity) ?
                 View.VISIBLE : View.GONE);
@@ -597,20 +557,6 @@ public class QuickPanelController implements QuickPanelView.Listener {
         volumeSlider.setFraction(QuickTileActions.getVolumeFraction(activity));
     }
 
-    private void refreshAuxButtons() {
-        boolean auto = QuickTileActions.isAutoBrightness(activity);
-        autoBrightnessButton.setBackgroundResource(auto ?
-                R.drawable.bg_qp_tile_active : R.drawable.bg_qp_tile_inactive);
-        autoBrightnessButton.setColorFilter(ContextCompat.getColor(activity,
-                auto ? R.color.qpIconOnActive : R.color.qpTextPrimary), PorterDuff.Mode.SRC_IN);
-
-        boolean audible = QuickTileActions.getVolumeFraction(activity) > 0f;
-        muteButton.setImageResource(audible ? R.drawable.ic_qp_volume : R.drawable.ic_qp_mute);
-        muteButton.setBackgroundResource(audible ?
-                R.drawable.bg_qp_tile_active : R.drawable.bg_qp_tile_inactive);
-        muteButton.setColorFilter(ContextCompat.getColor(activity,
-                audible ? R.color.qpIconOnActive : R.color.qpTextPrimary), PorterDuff.Mode.SRC_IN);
-    }
 
     private void refreshStatusRow() {
         String carrier = "";
