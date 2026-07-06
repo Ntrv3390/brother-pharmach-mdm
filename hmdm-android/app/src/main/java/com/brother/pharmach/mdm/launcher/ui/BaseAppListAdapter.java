@@ -290,12 +290,38 @@ public class BaseAppListAdapter extends RecyclerView.Adapter<BaseAppListAdapter.
             case AppInfo.TYPE_APP:
                 Intent launchIntent = parentActivity.getPackageManager().getLaunchIntentForPackage(
                         appInfo.packageName);
+
+                if (launchIntent == null) {
+                    // Package may be suspended or hidden by MDM (WorkTime enforcement).
+                    // Proactively unsuspend/unhide it now so we can get a valid launch intent.
+                    Log.w(Const.LOG_TAG, "chooseApp: getLaunchIntentForPackage returned null for "
+                            + appInfo.packageName + " — attempting to unsuspend/unhide");
+                    Utils.ensureAppUnsuspended(parentActivity, appInfo.packageName);
+                    // Retry after unsuspend
+                    launchIntent = parentActivity.getPackageManager().getLaunchIntentForPackage(
+                            appInfo.packageName);
+                }
+
                 if (launchIntent != null) {
+                    Log.i(Const.LOG_TAG, "chooseApp: launching " + appInfo.packageName);
                     // These magic flags are found in the source code of the default Android launcher
                     // These flags preserve the app activity stack (otherwise a launch activity appears at the top which is not correct)
                     launchIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK |
                             Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
-                    parentActivity.startActivity(launchIntent);
+                    try {
+                        parentActivity.startActivity(launchIntent);
+                    } catch (Exception e) {
+                        Log.e(Const.LOG_TAG, "chooseApp: startActivity failed for " + appInfo.packageName, e);
+                        Toast.makeText(parentActivity,
+                                "Cannot open " + appInfo.name + ": " + e.getMessage(),
+                                Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Log.e(Const.LOG_TAG, "chooseApp: still null intent after unsuspend for "
+                            + appInfo.packageName + " — app may not be installed");
+                    Toast.makeText(parentActivity,
+                            "Cannot open " + appInfo.name + " — app is not available",
+                            Toast.LENGTH_SHORT).show();
                 }
                 break;
             case AppInfo.TYPE_WEB:

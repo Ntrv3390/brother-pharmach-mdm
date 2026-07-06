@@ -1429,4 +1429,50 @@ public class Utils {
 
         return false;
     }
+
+    /**
+     * Ensures a package is unsuspended and unhidden so it can be launched immediately.
+     * Call this before getLaunchIntentForPackage() when the intent returns null for an icon that
+     * should be launchable (e.g. after WorkTime transitions).
+     */
+    public static void ensureAppUnsuspended(Context context, String packageName) {
+        if (packageName == null || packageName.trim().isEmpty()) {
+            return;
+        }
+
+        DevicePolicyManager dpm = (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+        ComponentName adminComponent = LegacyUtils.getAdminComponentName(context);
+        boolean isDeviceOwner = dpm != null && dpm.isDeviceOwnerApp(context.getPackageName());
+
+        if (!isDeviceOwner || dpm == null || adminComponent == null) {
+            Log.w("Utils", "ensureAppUnsuspended: not device owner, cannot unsuspend " + packageName);
+            return;
+        }
+
+        // Unsuspend via DPM (API 24+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                String[] suspended = dpm.setPackagesSuspended(adminComponent, new String[]{packageName}, false);
+                if (suspended != null && suspended.length == 0) {
+                    Log.i("Utils", "ensureAppUnsuspended: unsuspended " + packageName);
+                } else {
+                    Log.w("Utils", "ensureAppUnsuspended: setPackagesSuspended may have failed for " + packageName);
+                }
+            } catch (Exception e) {
+                Log.e("Utils", "ensureAppUnsuspended: exception unsuspending " + packageName, e);
+            }
+        }
+
+        // Unhide via DPM (API 21+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                if (dpm.isApplicationHidden(adminComponent, packageName)) {
+                    boolean result = dpm.setApplicationHidden(adminComponent, packageName, false);
+                    Log.i("Utils", "ensureAppUnsuspended: unhide result=" + result + " for " + packageName);
+                }
+            } catch (Exception e) {
+                Log.e("Utils", "ensureAppUnsuspended: exception unhiding " + packageName, e);
+            }
+        }
+    }
 }
