@@ -364,18 +364,19 @@ public class BaseAppListAdapter extends RecyclerView.Adapter<BaseAppListAdapter.
     }
 
     private boolean isShortcutAllowedNow(AppInfo appInfo) {
-        com.brother.pharmach.mdm.launcher.util.WorkTimeManager wm =
-                com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance();
-
-        // For explicit app shortcuts, enforce by package.
+        // App shortcuts are already filtered against WorkTimeManager's allow-list when the
+        // adapter's item list is built (see AppShortcutManager#getConfiguredApps). Re-checking
+        // isAppAllowed() here races against WorkTimeManager's async policy refresh (fired on
+        // every TIME_TICK/unlock/config push) and can deny a tap on an icon that is currently
+        // visible on screen. Trust the render-time filter instead.
         if (appInfo.packageName != null && !appInfo.packageName.trim().isEmpty()) {
-            return wm.isAppAllowed(appInfo.packageName);
+            return true;
         }
 
         // Strict mode for non-package shortcuts: when WorkTime is active, disallow intents/web links
-        // because they can open external apps via deep links.
+        // because they can open external apps via deep links. These aren't filtered at render time.
         if (appInfo.type == AppInfo.TYPE_WEB || appInfo.type == AppInfo.TYPE_INTENT) {
-            return !wm.isWorkTimeActive();
+            return !com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance().isWorkTimeActive();
         }
 
         return true;
