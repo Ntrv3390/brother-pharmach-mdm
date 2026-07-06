@@ -503,7 +503,7 @@ public class WorkTimeManager {
             }
 
             // Only enforce on apps that are launchable (have an icon) to avoid breaking core system services
-            if (pm.getLaunchIntentForPackage(pkg) == null) {
+            if (!Utils.isAppLaunchable(context, pkg)) {
                 continue;
             }
 

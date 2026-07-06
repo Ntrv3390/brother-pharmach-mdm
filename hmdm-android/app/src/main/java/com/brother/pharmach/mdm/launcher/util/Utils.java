@@ -1388,4 +1388,45 @@ public class Utils {
             }
         }
     }
+
+    /**
+     * Checks if a package is launchable (i.e. has a launcher activity/icon or is currently suspended/hidden).
+     */
+    public static boolean isAppLaunchable(Context context, String packageName) {
+        if (packageName == null || packageName.trim().isEmpty()) {
+            return false;
+        }
+        PackageManager pm = context.getPackageManager();
+
+        // If it has a launch intent, it's launchable
+        if (pm.getLaunchIntentForPackage(packageName) != null) {
+            return true;
+        }
+
+        // If it is suspended, it was suspended by the MDM and is launchable
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                if (pm.isPackageSuspended(packageName)) {
+                    return true;
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
+        }
+
+        // If it is hidden, it was hidden by the MDM and is launchable
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                DevicePolicyManager dpm = (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+                ComponentName adminComponent = LegacyUtils.getAdminComponentName(context);
+                if (dpm != null && adminComponent != null && dpm.isApplicationHidden(adminComponent, packageName)) {
+                    return true;
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
+        }
+
+        return false;
+    }
 }

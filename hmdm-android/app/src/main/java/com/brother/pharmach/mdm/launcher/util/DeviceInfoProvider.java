@@ -84,7 +84,7 @@ public class DeviceInfoProvider {
             List<ApplicationInfo> installedApps = packageManager.getInstalledApplications(0);
             for (ApplicationInfo appInfo : installedApps) {
                 try {
-                    if (packageManager.getLaunchIntentForPackage(appInfo.packageName) == null) {
+                    if (!Utils.isAppLaunchable(context, appInfo.packageName)) {
                         continue;
                     }
 

@@ -37,7 +37,7 @@ public class AppShortcutManager {
         int packageCount = 0;
         for (int i = 0; i < packs.size(); i++) {
             ApplicationInfo p = packs.get(i);
-            if (context.getPackageManager().getLaunchIntentForPackage(p.packageName) != null) {
+            if (com.brother.pharmach.mdm.launcher.util.Utils.isAppLaunchable(context, p.packageName)) {
                 if (requiredPackages.containsKey(p.packageName)) {
                     packageCount++;
                 } else if (!bottom
@@ -62,7 +62,7 @@ public class AppShortcutManager {
         // First we display app icons
         for (int i = 0; i < packs.size(); i++) {
             ApplicationInfo p = packs.get(i);
-            if (context.getPackageManager().getLaunchIntentForPackage(p.packageName) != null) {
+            if (com.brother.pharmach.mdm.launcher.util.Utils.isAppLaunchable(context, p.packageName)) {
                 if (requiredPackages.containsKey(p.packageName)) {
                     Application app = requiredPackages.get(p.packageName);
                     AppInfo newInfo = new AppInfo();

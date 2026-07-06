@@ -1845,6 +1845,7 @@ public class MainActivity
 
     @Override
     public void onConfigUpdateComplete() {
+        configInitialized = true;
         settingsHelper.setStartupSyncComplete(true);
         SharedPreferences preferences = getApplicationContext().getSharedPreferences(Const.PREFERENCES, MODE_PRIVATE);
         String deviceAdminLog = PreferenceLogger.getLogString(preferences);
