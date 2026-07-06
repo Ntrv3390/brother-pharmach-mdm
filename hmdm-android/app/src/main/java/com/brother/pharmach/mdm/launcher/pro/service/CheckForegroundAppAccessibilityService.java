@@ -67,6 +67,10 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
         if (pkg.isEmpty() || pkg.equals(getPackageName())) {
             return;
         }
+        if (WorkTimeManager.getInstance().isWithinUserLaunchGrace(pkg)) {
+            // The user just tapped this app in the launcher — don't fight their intent.
+            return;
+        }
         if (!WorkTimeManager.getInstance().isAppAllowed(this, pkg)) {
             Log.d(TAG, "Blocking restricted app: " + pkg);
             Intent blockIntent = new Intent(Const.ACTION_HIDE_SCREEN);

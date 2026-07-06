@@ -266,22 +266,30 @@ public class LocationService extends Service {
         } catch (Exception ignored) {
         }
 
-        if (location == null || (location.getLatitude() == 0.0 && location.getLongitude() == 0.0)) {
-            RemoteLogger.log(this, Const.LOG_WARN, "LocationService: capture found no location to upload");
-        } else {
-            LocationTable.Location tableLocation = new LocationTable.Location(location);
-            tableLocation.setTs(System.currentTimeMillis());
+        // This runs on the main thread from the once-a-minute periodic tick. The upload/DB/log
+        // tail below can throw (SQLiteException on a locked/full/corrupt DB, uploader errors);
+        // an uncaught throw would reach the global handler → System.exit(0) → periodic
+        // "crash then recover". Guard it so a bad capture can never crash the process.
+        try {
+            if (location == null || (location.getLatitude() == 0.0 && location.getLongitude() == 0.0)) {
+                RemoteLogger.log(this, Const.LOG_WARN, "LocationService: capture found no location to upload");
+            } else {
+                LocationTable.Location tableLocation = new LocationTable.Location(location);
+                tableLocation.setTs(System.currentTimeMillis());
 
-            boolean sent = LocationUploader.sendUrgentLocation(getApplicationContext(), tableLocation, true);
-            if (!sent) {
-                DatabaseHelper helper = DatabaseHelper.instance(getApplicationContext());
-                if (helper != null) {
-                    LocationTable.insert(helper.getWritableDatabase(), tableLocation);
+                boolean sent = LocationUploader.sendUrgentLocation(getApplicationContext(), tableLocation, true);
+                if (!sent) {
+                    DatabaseHelper helper = DatabaseHelper.instance(getApplicationContext());
+                    if (helper != null) {
+                        LocationTable.insert(helper.getWritableDatabase(), tableLocation);
+                    }
                 }
+                RemoteLogger.log(this, Const.LOG_INFO,
+                        "LocationService: location " + (sent ? "uploaded" : "queued offline")
+                                + " (provider=" + location.getProvider() + ")");
             }
-            RemoteLogger.log(this, Const.LOG_INFO,
-                    "LocationService: location " + (sent ? "uploaded" : "queued offline")
-                            + " (provider=" + location.getProvider() + ")");
+        } catch (Throwable t) {
+            android.util.Log.w(Const.LOG_TAG, "LocationService.finish: upload/persist failed", t);
         }
 
         requestInFlight.set(false);

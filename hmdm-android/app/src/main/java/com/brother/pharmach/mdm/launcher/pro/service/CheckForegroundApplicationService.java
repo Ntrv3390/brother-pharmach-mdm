@@ -79,6 +79,13 @@ public class CheckForegroundApplicationService extends Service {
             String pkg = recentStat.getPackageName();
             if (pkg.equals(getPackageName())) return;
 
+            if (WorkTimeManager.getInstance().isWithinUserLaunchGrace(pkg)) {
+                // The user just tapped this app in the launcher — don't fight their intent.
+                lastForegroundPkg = pkg;
+                lastBlockedPkg = "";
+                return;
+            }
+
             boolean allowed = WorkTimeManager.getInstance().isAppAllowed(this, pkg);
             if (!allowed) {
                 // Debounce: only send ACTION_HIDE_SCREEN once per unique blocked package

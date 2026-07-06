@@ -288,19 +288,43 @@ public class BaseAppListAdapter extends RecyclerView.Adapter<BaseAppListAdapter.
 
         switch (appInfo.type) {
             case AppInfo.TYPE_APP:
-                Intent launchIntent = parentActivity.getPackageManager().getLaunchIntentForPackage(
-                        appInfo.packageName);
+                // Issue 2: reconcile the app's physical state with what the launcher rendered.
+                // A package suspended via DevicePolicyManager.setPackagesSuspended() still returns
+                // a NON-null launch intent, but startActivity() on it only shows the system
+                // "app paused" dialog — the app never opens. So we must unsuspend BEFORE launching,
+                // not only when the intent is null (the null case only covers *hidden* apps).
+                android.content.pm.PackageManager pm = parentActivity.getPackageManager();
+                boolean suspended = false;
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    try {
+                        suspended = pm.isPackageSuspended(appInfo.packageName);
+                    } catch (Exception ignored) {
+                    }
+                }
 
-                if (launchIntent == null) {
-                    // Package may be suspended or hidden by MDM (WorkTime enforcement).
-                    // Proactively unsuspend/unhide it now so we can get a valid launch intent.
-                    Log.w(Const.LOG_TAG, "chooseApp: getLaunchIntentForPackage returned null for "
-                            + appInfo.packageName + " — attempting to unsuspend/unhide");
+                Intent launchIntent = pm.getLaunchIntentForPackage(appInfo.packageName);
+
+                if (launchIntent == null || suspended) {
+                    // Package is suspended or hidden by MDM (WorkTime enforcement).
+                    // Proactively unsuspend/unhide it now so it can actually launch.
+                    Log.w(Const.LOG_TAG, "chooseApp: " + appInfo.packageName
+                            + " is suspended/hidden (nullIntent=" + (launchIntent == null)
+                            + ", suspended=" + suspended + ") — unsuspending before launch");
                     Utils.ensureAppUnsuspended(parentActivity, appInfo.packageName);
                     // Retry after unsuspend
-                    launchIntent = parentActivity.getPackageManager().getLaunchIntentForPackage(
-                            appInfo.packageName);
+                    launchIntent = pm.getLaunchIntentForPackage(appInfo.packageName);
                 }
+
+                // In kiosk (lock-task) mode the system silently refuses to launch any package that
+                // isn't in the lock-task whitelist. Make sure the target is whitelisted first.
+                com.brother.pharmach.mdm.launcher.pro.ProUtils.ensureLockTaskWhitelisted(
+                        parentActivity, appInfo.packageName);
+
+                // Grace window: tell the WorkTime enforcement services the user just launched this
+                // app on purpose, so the accessibility / UsageStats watchers don't immediately yank
+                // the launcher back to the front and kill it.
+                com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance()
+                        .markUserLaunched(appInfo.packageName);
 
                 if (launchIntent != null) {
                     Log.i(Const.LOG_TAG, "chooseApp: launching " + appInfo.packageName);

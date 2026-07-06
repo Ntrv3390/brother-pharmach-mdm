@@ -327,9 +327,103 @@ public class ProUtils {
         }
     }
 
-    // Update app list in the kiosk mode
+    // Update app list in the kiosk mode.
+    //
+    // ROOT CAUSE (Issue 2): when the launcher itself runs as the kiosk app it enters lock-task
+    // mode via startCosuKioskMode(), which whitelists ONLY the launcher package. In lock-task
+    // mode Android SILENTLY refuses to start any activity whose package is not whitelisted, so
+    // tapping any rendered app did nothing. This rebuilds the lock-task whitelist to include
+    // every app currently visible on the launcher (already filtered by WorkTimeManager at render
+    // time), keeping the whitelist in lockstep with what the user can tap.
     public static void updateKioskAllowedApps(String kioskApp, Activity activity, boolean enableSettings) {
-        // Stub
+        java.util.List<String> pkgs = new java.util.ArrayList<>();
+        if (kioskApp != null && !kioskApp.trim().isEmpty()) {
+            pkgs.add(kioskApp);
+        }
+        try {
+            for (com.brother.pharmach.mdm.launcher.util.AppInfo info :
+                    com.brother.pharmach.mdm.launcher.ui.AppShortcutManager.getInstance().getInstalledApps(activity, false)) {
+                if (info.type == com.brother.pharmach.mdm.launcher.util.AppInfo.TYPE_APP
+                        && info.packageName != null && !info.packageName.trim().isEmpty()) {
+                    pkgs.add(info.packageName);
+                }
+            }
+            for (com.brother.pharmach.mdm.launcher.util.AppInfo info :
+                    com.brother.pharmach.mdm.launcher.ui.AppShortcutManager.getInstance().getInstalledApps(activity, true)) {
+                if (info.type == com.brother.pharmach.mdm.launcher.util.AppInfo.TYPE_APP
+                        && info.packageName != null && !info.packageName.trim().isEmpty()) {
+                    pkgs.add(info.packageName);
+                }
+            }
+        } catch (Exception e) {
+            Log.w("ProUtils", "updateKioskAllowedApps: failed to enumerate launcher apps", e);
+        }
+        setKioskLockTaskWhitelist(activity, pkgs);
+    }
+
+    /**
+     * Rebuilds the lock-task whitelist as {launcher package} + the given allowed packages.
+     * Safe to call on every render; setLockTaskPackages() is a cheap, idempotent DPM call.
+     * The launcher package is always included so the home surface itself never gets locked out.
+     */
+    public static void setKioskLockTaskWhitelist(Activity activity, java.util.Collection<String> allowedPackages) {
+        try {
+            if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+                return;
+            }
+            DevicePolicyManager dpm = (DevicePolicyManager) activity.getSystemService(Context.DEVICE_POLICY_SERVICE);
+            ComponentName adminComponent = new ComponentName(activity, AdminReceiver.class);
+            if (dpm == null || !dpm.isDeviceOwnerApp(activity.getPackageName())) {
+                return;
+            }
+            java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+            set.add(activity.getPackageName());   // launcher must always remain launchable
+            if (allowedPackages != null) {
+                for (String p : allowedPackages) {
+                    if (p != null && !p.trim().isEmpty()) {
+                        set.add(p);
+                    }
+                }
+            }
+            dpm.setLockTaskPackages(adminComponent, set.toArray(new String[0]));
+            Log.i("ProUtils", "Kiosk lock-task whitelist updated: " + set.size() + " packages");
+        } catch (Exception e) {
+            Log.e("ProUtils", "setKioskLockTaskWhitelist failed", e);
+        }
+    }
+
+    /**
+     * Ensures a single package is present in the lock-task whitelist right before launching it.
+     * Belt-and-suspenders for the race where a worktime transition re-rendered an app but the
+     * whitelist rebuild hasn't run yet. No-op when not device owner / not in lock-task mode.
+     */
+    public static void ensureLockTaskWhitelisted(Activity activity, String packageName) {
+        try {
+            if (activity == null || packageName == null || packageName.trim().isEmpty()
+                    || Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+                return;
+            }
+            if (!isKioskModeRunning(activity)) {
+                return;
+            }
+            DevicePolicyManager dpm = (DevicePolicyManager) activity.getSystemService(Context.DEVICE_POLICY_SERVICE);
+            ComponentName adminComponent = new ComponentName(activity, AdminReceiver.class);
+            if (dpm == null || !dpm.isDeviceOwnerApp(activity.getPackageName())) {
+                return;
+            }
+            String[] current = dpm.getLockTaskPackages(adminComponent);
+            java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+            set.add(activity.getPackageName());
+            if (current != null) {
+                java.util.Collections.addAll(set, current);
+            }
+            if (set.add(packageName)) {
+                dpm.setLockTaskPackages(adminComponent, set.toArray(new String[0]));
+                Log.i("ProUtils", "ensureLockTaskWhitelisted: added " + packageName + " to lock-task whitelist");
+            }
+        } catch (Exception e) {
+            Log.w("ProUtils", "ensureLockTaskWhitelisted failed for " + packageName, e);
+        }
     }
 
     public static void unlockKiosk(Activity activity) {

@@ -72,20 +72,34 @@ public class RemoteLogger {
     }
 
     public static void postLog(Context context, RemoteLogItem item) {
-        DatabaseHelper dbHelper = DatabaseHelper.instance(context);
-        SQLiteDatabase db = dbHelper.getReadableDatabase();
-        if (LogConfigTable.match(db, item)) {
-            db = dbHelper.getWritableDatabase();
-            LogTable.insert(db, item);
-            sendLogsToServer(context);
-        }
+        // NOTE: This method is invoked from many periodic paths (TIME_TICK enforcement on
+        // POLICY_EXECUTOR, the 60s LocationService tick on the main thread, config updates, etc.)
+        // that share a single SQLite database. A transient SQLiteException (lock contention,
+        // disk-full, "database disk image is malformed") thrown from here would otherwise
+        // propagate to the global uncaught-exception handler, which calls System.exit(0) and
+        // restarts the app — appearing as a periodic "crash then recover". Swallow DB faults so
+        // logging can never crash the process.
+        try {
+            DatabaseHelper dbHelper = DatabaseHelper.instance(context);
+            if (dbHelper == null) {
+                return;
+            }
+            SQLiteDatabase db = dbHelper.getReadableDatabase();
+            if (LogConfigTable.match(db, item)) {
+                db = dbHelper.getWritableDatabase();
+                LogTable.insert(db, item);
+                sendLogsToServer(context);
+            }
 
-        // Remove old logs once per hour
-        long now = System.currentTimeMillis();
-        if (now > lastLogRemoval + 3600000L) {
-            db = dbHelper.getWritableDatabase();
-            LogTable.deleteOldItems(db);
-            lastLogRemoval = now;
+            // Remove old logs once per hour
+            long now = System.currentTimeMillis();
+            if (now > lastLogRemoval + 3600000L) {
+                db = dbHelper.getWritableDatabase();
+                LogTable.deleteOldItems(db);
+                lastLogRemoval = now;
+            }
+        } catch (Throwable t) {
+            Log.w(Const.LOG_TAG, "postLog: failed to persist remote log item", t);
         }
     }
 

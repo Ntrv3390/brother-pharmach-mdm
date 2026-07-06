@@ -35,6 +35,15 @@ public class WorkTimeManager {
     private static final ExecutorService NETWORK_EXECUTOR = Executors.newSingleThreadExecutor();
     private static final ScheduledExecutorService RETRY_EXECUTOR = Executors.newSingleThreadScheduledExecutor();
 
+    // Issue 2 grace window: when the user deliberately taps an app in the launcher, suppress the
+    // enforcement watchers (accessibility service, UsageStats poller, ACTION_HIDE_SCREEN) for that
+    // package for a few seconds. This prevents a transient policy/time disagreement (e.g. a minute
+    // rollover or an in-flight policy refresh right after the tap) from yanking the launcher back
+    // to the front and killing an app the user legitimately opened.
+    private static final long USER_LAUNCH_GRACE_MS = 5_000;
+    private final java.util.concurrent.ConcurrentHashMap<String, Long> userLaunchGrace =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     private static WorkTimeManager instance;
     private volatile Context appContext;
     private volatile EffectiveWorkTimePolicy policy;
@@ -68,6 +77,30 @@ public class WorkTimeManager {
             return true;
         }
         return false;
+    }
+
+    /** Records a deliberate user launch of {@code packageName} to open a short grace window. */
+    public void markUserLaunched(String packageName) {
+        if (packageName == null || packageName.trim().isEmpty()) {
+            return;
+        }
+        userLaunchGrace.put(packageName, System.currentTimeMillis() + USER_LAUNCH_GRACE_MS);
+    }
+
+    /** True while a recent user-initiated launch of {@code packageName} should not be blocked. */
+    public boolean isWithinUserLaunchGrace(String packageName) {
+        if (packageName == null) {
+            return false;
+        }
+        Long expiry = userLaunchGrace.get(packageName);
+        if (expiry == null) {
+            return false;
+        }
+        if (System.currentTimeMillis() > expiry) {
+            userLaunchGrace.remove(packageName);
+            return false;
+        }
+        return true;
     }
 
     public void updatePolicy(Context context) {
@@ -488,44 +521,62 @@ public class WorkTimeManager {
         android.app.ActivityManager am = (android.app.ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
         android.content.pm.PackageManager pm = context.getPackageManager();
 
-        java.util.List<android.content.pm.ApplicationInfo> installedApps = pm.getInstalledApplications(0);
+        java.util.List<android.content.pm.ApplicationInfo> installedApps;
+        try {
+            // getInstalledApplications() marshals the full app list across a Binder transaction and
+            // can throw a RuntimeException wrapping TransactionTooLargeException/DeadObjectException
+            // when the buffer overflows (many apps) or system_server is transiently busy. Guard it
+            // so a transient failure doesn't reach the global uncaught handler (System.exit).
+            installedApps = pm.getInstalledApplications(0);
+        } catch (Throwable t) {
+            Log.e(TAG, "enforceWorkTimeRestrictions: getInstalledApplications failed, skipping this pass", t);
+            return;
+        }
+        if (installedApps == null) {
+            return;
+        }
         java.util.ArrayList<String> pkgsToSuspend = new java.util.ArrayList<>();
         java.util.ArrayList<String> pkgsToUnsuspend = new java.util.ArrayList<>();
 
         for (android.content.pm.ApplicationInfo appInfo : installedApps) {
-            String pkg = appInfo.packageName;
-            if (pkg.equals(context.getPackageName())) {
-                continue;
-            }
+            try {
+                String pkg = appInfo.packageName;
+                if (pkg == null || pkg.equals(context.getPackageName())) {
+                    continue;
+                }
 
-            if (isInfrastructurePackage(pkg)) {
-                continue;
-            }
+                if (isInfrastructurePackage(pkg)) {
+                    continue;
+                }
 
-            // Only enforce on apps that are launchable (have an icon) to avoid breaking core system services
-            if (!Utils.isAppLaunchable(context, pkg)) {
-                continue;
-            }
+                // Only enforce on apps that are launchable (have an icon) to avoid breaking core system services
+                if (!Utils.isAppLaunchable(context, pkg)) {
+                    continue;
+                }
 
-            boolean allowed = !enforcementActive || isAppAllowed(pkg);
+                boolean allowed = !enforcementActive || isAppAllowed(pkg);
 
-            if (allowed) {
-                pkgsToUnsuspend.add(pkg);
-            } else {
-                pkgsToSuspend.add(pkg);
-                // Fallback for non-device-owner
-                if (am != null) {
-                    try {
-                        java.lang.reflect.Method forceStopMethod = am.getClass().getMethod("forceStopPackage", String.class);
-                        forceStopMethod.invoke(am, pkg);
-                    } catch (Exception e) {
+                if (allowed) {
+                    pkgsToUnsuspend.add(pkg);
+                } else {
+                    pkgsToSuspend.add(pkg);
+                    // Fallback for non-device-owner
+                    if (am != null) {
                         try {
-                            am.killBackgroundProcesses(pkg);
-                        } catch (Exception ex) {
-                            Log.e(TAG, "Failed to kill background processes for " + pkg, ex);
+                            java.lang.reflect.Method forceStopMethod = am.getClass().getMethod("forceStopPackage", String.class);
+                            forceStopMethod.invoke(am, pkg);
+                        } catch (Exception e) {
+                            try {
+                                am.killBackgroundProcesses(pkg);
+                            } catch (Exception ex) {
+                                Log.e(TAG, "Failed to kill background processes for " + pkg, ex);
+                            }
                         }
                     }
                 }
+            } catch (Throwable t) {
+                // Never let a single problematic package abort the whole enforcement pass.
+                Log.w(TAG, "enforceWorkTimeRestrictions: skipping package due to error", t);
             }
         }
 

@@ -266,6 +266,13 @@ public class MainActivity
                                 "Ignoring stale ACTION_HIDE_SCREEN for now-allowed package: " + blockedPackage);
                         break;
                     }
+                    // Respect the user-launch grace window so a freshly-tapped app isn't yanked away.
+                    if (blockedPackage != null && com.brother.pharmach.mdm.launcher.util.WorkTimeManager
+                            .getInstance().isWithinUserLaunchGrace(blockedPackage)) {
+                        RemoteLogger.log(MainActivity.this, Const.LOG_DEBUG,
+                                "Ignoring ACTION_HIDE_SCREEN during user-launch grace for: " + blockedPackage);
+                        break;
+                    }
                         enforceWorkTimeAsync(context, true);
                     ServerConfig serverConfig = SettingsHelper.getInstance(MainActivity.this).getConfig();
                     if (serverConfig != null && serverConfig.getLock() != null && serverConfig.getLock()) {
@@ -392,7 +399,7 @@ public class MainActivity
             }
 
             // Log new connection type and flush queued locations on reconnect
-            if (intent.getAction().equals(ConnectivityManager.CONNECTIVITY_ACTION)) {
+            if (ConnectivityManager.CONNECTIVITY_ACTION.equals(intent.getAction())) {
                 ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
                 NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
                 if (null != activeNetwork) {
@@ -1964,13 +1971,29 @@ public class MainActivity
      */
     private void enforceWorkTimeAsync(Context context, boolean bringToFront) {
         POLICY_EXECUTOR.execute(() -> {
-            com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance()
-                    .enforceWorkTimeRestrictions(context);
+            // This lambda runs via ExecutorService.execute() (not a scheduled executor), so any
+            // uncaught exception here propagates to the global uncaught-exception handler, which
+            // calls System.exit(0). Because this fires every 60s (TIME_TICK), that would show up
+            // as a periodic "crash then recover". Guard the whole body defensively.
+            try {
+                com.brother.pharmach.mdm.launcher.util.WorkTimeManager.getInstance()
+                        .enforceWorkTimeRestrictions(context);
+            } catch (Throwable t) {
+                RemoteLogger.log(context, Const.LOG_ERROR,
+                        "enforceWorkTimeRestrictions failed: " + t.getClass().getSimpleName()
+                                + ": " + t.getMessage());
+                Log.e(Const.LOG_TAG, "enforceWorkTimeRestrictions failed", t);
+            }
             if (bringToFront) {
                 handler.post(() -> {
-                    Intent launchSelf = new Intent(MainActivity.this, MainActivity.class);
-                    launchSelf.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(launchSelf);
+                    try {
+                        Intent launchSelf = new Intent(MainActivity.this, MainActivity.class);
+                        launchSelf.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(launchSelf);
+                    } catch (Throwable t) {
+                        // Background-activity-start can be blocked/throw on Android 10+ and some OEMs.
+                        Log.w(Const.LOG_TAG, "enforceWorkTimeAsync: bringToFront startActivity failed", t);
+                    }
                 });
             }
         });
@@ -1988,6 +2011,19 @@ public class MainActivity
         }
         lastShowContentMs = now;
         showContent(config);
+    }
+
+    /** Collects the launchable package names currently shown by an adapter into {@code out}. */
+    private void collectPackages(BaseAppListAdapter adapter, java.util.Set<String> out) {
+        if (adapter == null || adapter.items == null) {
+            return;
+        }
+        for (com.brother.pharmach.mdm.launcher.util.AppInfo info : adapter.items) {
+            if (info != null && info.type == com.brother.pharmach.mdm.launcher.util.AppInfo.TYPE_APP
+                    && info.packageName != null && !info.packageName.trim().isEmpty()) {
+                out.add(info.packageName);
+            }
+        }
     }
 
     private void showContent(ServerConfig config ) {
@@ -2148,6 +2184,19 @@ public class MainActivity
             } else {
                 bottomAppListAdapter = null;
                 binding.activityBottomLayout.setVisibility(View.GONE);
+            }
+
+            // Issue 2: keep the kiosk lock-task whitelist in lockstep with the rendered app set.
+            // When the launcher itself is the kiosk app, lock-task mode silently blocks launching
+            // any package that isn't whitelisted. Rebuild the whitelist from exactly the apps the
+            // user can see/tap right now (already worktime-filtered), so taps always launch.
+            if (ProUtils.kioskModeRequired(this)
+                    && getPackageName().equals(config.getMainApp())
+                    && ProUtils.isKioskModeRunning(this)) {
+                java.util.LinkedHashSet<String> visiblePackages = new java.util.LinkedHashSet<>();
+                collectPackages(mainAppListAdapter, visiblePackages);
+                collectPackages(bottomAppListAdapter, visiblePackages);
+                ProUtils.setKioskLockTaskWhitelist(this, visiblePackages);
             }
         }
         binding.loading.setVisibility(View.GONE);
