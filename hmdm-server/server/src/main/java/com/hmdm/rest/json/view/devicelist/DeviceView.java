@@ -79,14 +79,20 @@ public class DeviceView {
         }
 
         if (info != null) {
-            // Treat internet status as stale if device hasn't reported in 10 minutes.
+            // Treat internet status as stale if device hasn't reported in 20 minutes.
             // A disconnected device stops sending updates, so silence = no internet.
-            // 10 min covers ~2x the typical sync interval; adjust if your interval is longer.
-            final long INTERNET_STALE_MS = 10 * 60 * 1000L;
+            // Keep this window in sync with RECENT_CONTACT_WINDOW_MS in devices.controller.js.
+            final long INTERNET_STALE_MS = 20 * 60 * 1000L;
             boolean internetDataStale = device.getLastUpdate() != null &&
                 (System.currentTimeMillis() - device.getLastUpdate()) > INTERNET_STALE_MS;
 
-            if ("red".equalsIgnoreCase(device.getStatusCode()) || internetDataStale) {
+            // Any contact with the server (sync, location ping, or log upload) more recent
+            // than the staleness window proves the device was online since its last full
+            // sync, even if that sync reported no internet.
+            boolean hasRecentContact = device.getLastContact() != null &&
+                (System.currentTimeMillis() - device.getLastContact()) < INTERNET_STALE_MS;
+
+            if (("red".equalsIgnoreCase(device.getStatusCode()) || internetDataStale) && !hasRecentContact) {
                 info.setInternetConnected(false);
                 info.setInternetType("OFFLINE");
             }
@@ -119,6 +125,11 @@ public class DeviceView {
     @ApiModelProperty("A date of last synchronization of device state (in milliseconds since epoch time)")
     public Long getLastUpdate() {
         return device.getLastUpdate();
+    }
+
+    @ApiModelProperty("A date of the last contact with the server via any channel - sync, location, or log upload (in milliseconds since epoch time)")
+    public Long getLastContact() {
+        return device.getLastContact();
     }
 
     @ApiModelProperty("An IMEI of device as set by the administrator")
