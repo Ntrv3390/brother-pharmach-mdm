@@ -519,7 +519,7 @@ angular.module('headwind-kiosk')
             return (Date.now() - device.lastUpdate) < (2 * 60 * 60 * 1000);
         };
 
-        var RECENT_CONTACT_WINDOW_MS = 10 * 60 * 1000;
+        var RECENT_CONTACT_WINDOW_MS = 20 * 60 * 1000;
 
         // True if the device has made ANY contact with the server (full sync, location
         // ping, or log upload) within the last 10 minutes, even if its last full sync
