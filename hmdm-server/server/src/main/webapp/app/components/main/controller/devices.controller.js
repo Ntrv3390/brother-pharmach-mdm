@@ -519,9 +519,21 @@ angular.module('headwind-kiosk')
             return (Date.now() - device.lastUpdate) < (2 * 60 * 60 * 1000);
         };
 
+        var RECENT_CONTACT_WINDOW_MS = 10 * 60 * 1000;
+
+        // True if the device has made ANY contact with the server (full sync, location
+        // ping, or log upload) within the last 10 minutes, even if its last full sync
+        // reported no internet - a more recent contact proves it was online since then.
+        var hasRecentContact = function (device) {
+            return !!(device && device.lastContact) && (Date.now() - device.lastContact) < RECENT_CONTACT_WINDOW_MS;
+        };
+
         var hasEffectiveInternetConnection = function (device) {
             var info = $scope.getDeviceInfo(device);
-            return isEffectivelyOnline(device) && info && info.internetConnected === true;
+            if (isEffectivelyOnline(device) && info && info.internetConnected === true) {
+                return true;
+            }
+            return hasRecentContact(device);
         };
 
         $scope.getInternetIndicatorImage = function (device) {
@@ -534,7 +546,7 @@ angular.module('headwind-kiosk')
         $scope.getInternetType = function (device) {
             var info = $scope.getDeviceInfo(device);
             if (hasEffectiveInternetConnection(device)) {
-                if (info.internetType && info.internetType.length > 0) {
+                if (info && info.internetType && info.internetType.length > 0) {
                     return info.internetType;
                 }
                 return 'ONLINE';
@@ -545,7 +557,7 @@ angular.module('headwind-kiosk')
         $scope.getInternetStatusTitle = function (device) {
             var info = $scope.getDeviceInfo(device);
             if (hasEffectiveInternetConnection(device)) {
-                var type = info.internetType && info.internetType.length > 0 ? info.internetType : 'ONLINE';
+                var type = info && info.internetType && info.internetType.length > 0 ? info.internetType : 'ONLINE';
                 return 'Internet connected (' + type + ')';
             }
             return 'No Internet connection';

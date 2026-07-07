@@ -185,6 +185,7 @@ public class DeviceInfoResource {
                 });
 
                 this.deviceInfoDAO.saveDeviceDynamicData(data);
+                this.unsecureDAO.touchLastContact(dbDevice.getId());
 
                 // Send locations to the location plugin
                 List<DeviceLocation> locations = new LinkedList<>();

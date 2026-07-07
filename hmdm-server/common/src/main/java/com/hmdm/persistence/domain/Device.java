@@ -43,6 +43,8 @@ public class Device implements CustomerData, Serializable {
     private String description;
     @ApiModelProperty("A date of last synchronization of device state")
     private Long lastUpdate;
+    @ApiModelProperty(hidden = true)
+    private Long lastContact;
     @ApiModelProperty("An ID of configuration for device")
     private Integer configurationId;
     @ApiModelProperty(hidden = true)
@@ -137,6 +139,14 @@ public class Device implements CustomerData, Serializable {
 
     public void setLastUpdate(Long lastUpdate) {
         this.lastUpdate = lastUpdate;
+    }
+
+    public Long getLastContact() {
+        return this.lastContact;
+    }
+
+    public void setLastContact(Long lastContact) {
+        this.lastContact = lastContact;
     }
 
     public Configuration getConfiguration() {
@@ -380,6 +390,7 @@ public class Device implements CustomerData, Serializable {
                 ", number='" + number + '\'' +
                 ", description='" + description + '\'' +
                 ", lastUpdate=" + lastUpdate +
+                ", lastContact=" + lastContact +
                 ", configurationId=" + configurationId +
                 ", oldConfigurationId=" + oldConfigurationId +
                 ", info='" + info + '\'' +

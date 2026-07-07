@@ -2680,4 +2680,26 @@
         <addUniqueConstraint tableName="device_apps" columnNames="device_id, pkg" constraintName="uk_device_apps_pkg"/>
     </changeSet>
 
+    <changeSet id="2026-07-07-device-last-contact" author="antigravity" context="common">
+        <comment>Add lastContact column to devices table to track any server contact (sync, location ping, log upload), independent of lastUpdate/status</comment>
+        <sql>
+            ALTER TABLE devices ADD COLUMN lastContact BIGINT;
+        </sql>
+        <rollback>
+            ALTER TABLE devices DROP COLUMN lastContact;
+        </rollback>
+    </changeSet>
+
+    <!-- Fallback for environments where context="common" change sets are not executed -->
+    <changeSet id="2026-07-07-device-last-contact-fallback" author="antigravity">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="devices" columnName="lastContact"/>
+            </not>
+        </preConditions>
+        <sql>
+            ALTER TABLE devices ADD COLUMN lastContact BIGINT;
+        </sql>
+    </changeSet>
+
 </databaseChangeLog>

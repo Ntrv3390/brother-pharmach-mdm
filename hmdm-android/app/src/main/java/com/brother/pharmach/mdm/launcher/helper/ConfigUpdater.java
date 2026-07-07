@@ -57,6 +57,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
 
 public class ConfigUpdater {
 
@@ -245,9 +246,15 @@ public class ConfigUpdater {
                 Log.i(Const.LOG_TAG, "updateRemoteLogConfig(): result=" + result);
                 boolean deviceOwner = Utils.isDeviceOwner(context);
                 RemoteLogger.log(context, Const.LOG_INFO, "Device owner: " + deviceOwner);
+                // setSelfPermissions() calls DPM.setPermissionGrantState() which on Android 13+
+                // internally calls CompletableFuture.get() — a blocking call. Running this on
+                // the main thread (onPostExecute) caused an ANR ("Input dispatching timed out").
+                // Move it to a background thread so the IPC completes without hanging the UI.
                 if (deviceOwner) {
-                    setSelfPermissions(
-                            settingsHelper.getConfig() != null ? settingsHelper.getConfig().getAppPermissions() : null);
+                    final String appPermissions = settingsHelper.getConfig() != null
+                            ? settingsHelper.getConfig().getAppPermissions() : null;
+                    Executors.newSingleThreadExecutor().execute(() ->
+                            setSelfPermissions(appPermissions));
                 }
                 try {
                     if (settingsHelper.getConfig() != null && uiNotifier != null) {

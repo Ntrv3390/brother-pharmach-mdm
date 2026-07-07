@@ -269,6 +269,7 @@ public class DeviceLogResource {
                 this.executor.submit(
                         new InsertDeviceLogRecordsTask(deviceNumber, httpRequest.getRemoteAddr(), logs, this.deviceLogDAO)
                 );
+                this.unsecureDAO.touchLastContact(dbDevice.getId());
                 return Response.OK();
             } finally {
                 SecurityContext.release();

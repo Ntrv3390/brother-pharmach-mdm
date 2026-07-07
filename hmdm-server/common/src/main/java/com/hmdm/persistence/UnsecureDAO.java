@@ -184,6 +184,10 @@ public class UnsecureDAO {
         this.deviceMapper.updateDeviceInfo(id, info, imeiUpdateTs, publicIp);
     }
 
+    public void touchLastContact(Integer id) {
+        this.deviceMapper.touchLastContact(id);
+    }
+
     @Transactional
     public void reconcileDeviceApps(Integer deviceId, List<Application> applications) {
         if (applications == null) {

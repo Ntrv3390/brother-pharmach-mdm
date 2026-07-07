@@ -40,6 +40,7 @@
         <result property="number" column="number"/>
         <result property="description" column="description"/>
         <result property="lastUpdate" column="lastUpdate"/>
+        <result property="lastContact" column="lastContact"/>
         <result property="configurationId" column="configurationId"/>
         <result property="info" column="info"/>
         <result property="imei" column="imei"/>
@@ -245,6 +246,7 @@
 
     <select id="getAllDevices" parameterType="DeviceSearchRequest" resultMap="deviceResult">
         SELECT devices.id AS deviceId, devices.number, devices.description, devices.lastUpdate,
+               devices.lastContact,
                devices.configurationId, devices.info, devices.imei, devices.phone, devices.customerId,
                devices.enrollTime, devices.publicIp,
                (devices.infojson ->> 'mdmMode')::BOOLEAN AS mdmMode,

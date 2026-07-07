@@ -105,6 +105,7 @@ public interface DeviceMapper {
             "  info = #{info}, " +
             "  infojson = #{info}::json, " +
             "  lastUpdate = CAST(EXTRACT(EPOCH FROM NOW()) * 1000 AS BIGINT), " +
+            "  lastContact = CAST(EXTRACT(EPOCH FROM NOW()) * 1000 AS BIGINT), " +
             "  enrollTime = COALESCE(enrollTime, CAST(EXTRACT(EPOCH FROM NOW()) * 1000 AS BIGINT)), " +
             "  imeiUpdateTs = #{imeiUpdateTs}, " +
             "  publicIp = #{publicIp} " +
@@ -113,6 +114,10 @@ public interface DeviceMapper {
                           @Param("info") String info,
                           @Param("imeiUpdateTs") Long imeiUpdateTs,
                           @Param("publicIp") String publicIp);
+
+    @Update({"UPDATE devices SET lastContact = CAST(EXTRACT(EPOCH FROM NOW()) * 1000 AS BIGINT) " +
+            "WHERE id = #{deviceId}"})
+    void touchLastContact(@Param("deviceId") Integer deviceId);
 
     @Update({"UPDATE devices SET " +
             "  custom1 = #{custom1}, " +
