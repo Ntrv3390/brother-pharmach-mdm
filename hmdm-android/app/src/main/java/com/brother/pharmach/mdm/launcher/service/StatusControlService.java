@@ -25,7 +25,15 @@ import android.os.Looper;
 import android.os.UserManager;
 import android.provider.Settings;
 import android.provider.Telephony;
+import android.telephony.PhoneStateListener;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
+import android.telephony.TelephonyCallback;
+import android.telephony.TelephonyManager;
 import android.util.Log;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
@@ -71,11 +79,17 @@ public class StatusControlService extends Service {
     public static final int MOBILE_DATA_NOTIFICATION_ID = 2001;
     private static final String MOBILE_DATA_CHANNEL_ID = "mdm_mobile_data_channel";
 
+    public static final int STATUS_CONTROL_NOTIFICATION_ID = 2002;
+    private static final String STATUS_CONTROL_CHANNEL_ID = "mdm_status_control_channel";
+
     private long lastSmsTriggerMs = 0;
     private ContentObserver smsObserver;
     private ContentObserver mobileDataObserver;
     private int mobileDataViolationTicks = 0;
     private long lastMobileDataEscalationMs = 0;
+
+    private List<TelephonyCallback> telephonyCallbacks = new ArrayList<>();
+    private List<PhoneStateListener> phoneStateListeners = new ArrayList<>();
 
     private static class PackageInfo {
         public String packageName;
@@ -106,6 +120,7 @@ public class StatusControlService extends Service {
         LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
         unregisterSmsObserver();
         unregisterMobileDataObserver();
+        unregisterMobileDataCallback();
         unregisterGpsStateReceiver();
 
         threadPoolExecutor.shutdownNow();
@@ -114,6 +129,163 @@ public class StatusControlService extends Service {
         Log.i(Const.LOG_TAG, "StatusControlService: service stopped");
 
         super.onDestroy();
+    }
+
+    public static void start(Context context) {
+        Intent intent = new Intent(context, StatusControlService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(intent);
+        } else {
+            context.startService(intent);
+        }
+    }
+
+    private Notification buildForegroundNotification() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    STATUS_CONTROL_CHANNEL_ID,
+                    "Device Management Status",
+                    NotificationManager.IMPORTANCE_LOW);
+            channel.setShowBadge(false);
+            channel.setSound(null, null);
+            channel.enableLights(false);
+            channel.enableVibration(false);
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) {
+                nm.createNotificationChannel(channel);
+            }
+        }
+
+        return new NotificationCompat.Builder(this, STATUS_CONTROL_CHANNEL_ID)
+                .setContentTitle(getString(R.string.app_name))
+                .setContentText("Device security policy is active")
+                .setSmallIcon(R.drawable.ic_mqtt_service)
+                .setOngoing(true)
+                .setSilent(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build();
+    }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        Utils.startStableForegroundService(this, STATUS_CONTROL_NOTIFICATION_ID, buildForegroundNotification());
+    }
+
+    private void registerMobileDataCallback() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            unregisterMobileDataCallback();
+            TelephonyManager tm = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
+            SubscriptionManager sm = (SubscriptionManager) getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+            if (tm != null && sm != null) {
+                try {
+                    List<SubscriptionInfo> subs = sm.getActiveSubscriptionInfoList();
+                    if (subs != null && !subs.isEmpty()) {
+                        for (SubscriptionInfo sub : subs) {
+                            int subId = sub.getSubscriptionId();
+                            TelephonyManager subTm = tm.createForSubscriptionId(subId);
+                            registerCallbackForManager(subTm);
+                        }
+                    } else {
+                        registerCallbackForManager(tm);
+                    }
+                } catch (SecurityException e) {
+                    registerCallbackForManager(tm);
+                } catch (Exception e) {
+                    registerCallbackForManager(tm);
+                }
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            unregisterMobileDataCallback();
+            TelephonyManager tm = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
+            SubscriptionManager sm = (SubscriptionManager) getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+            if (tm != null && sm != null) {
+                try {
+                    List<SubscriptionInfo> subs = sm.getActiveSubscriptionInfoList();
+                    if (subs != null && !subs.isEmpty()) {
+                        for (SubscriptionInfo sub : subs) {
+                            int subId = sub.getSubscriptionId();
+                            TelephonyManager subTm = tm.createForSubscriptionId(subId);
+                            registerListenerForManager(subTm);
+                        }
+                    } else {
+                        registerListenerForManager(tm);
+                    }
+                } catch (SecurityException e) {
+                    registerListenerForManager(tm);
+                } catch (Exception e) {
+                    registerListenerForManager(tm);
+                }
+            }
+        }
+    }
+
+    @androidx.annotation.RequiresApi(api = Build.VERSION_CODES.S)
+    private void registerCallbackForManager(TelephonyManager tm) {
+        class MobileDataCallback extends TelephonyCallback implements TelephonyCallback.UserMobileDataStateListener {
+            @Override
+            public void onUserMobileDataStateChanged(boolean enabled) {
+                try {
+                    threadPoolExecutor.execute(() -> enforceMobileDataPolicy());
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
+        }
+        MobileDataCallback callback = new MobileDataCallback();
+        try {
+            tm.registerTelephonyCallback(getMainExecutor(), callback);
+            telephonyCallbacks.add(callback);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void registerListenerForManager(TelephonyManager tm) {
+        PhoneStateListener listener = new PhoneStateListener() {
+            @Override
+            public void onUserMobileDataStateChanged(boolean enabled) {
+                try {
+                    threadPoolExecutor.execute(() -> enforceMobileDataPolicy());
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
+        };
+        try {
+            tm.listen(listener, 0x00080000);
+            phoneStateListeners.add(listener);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void unregisterMobileDataCallback() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            TelephonyManager tm = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
+            if (tm != null) {
+                for (TelephonyCallback callback : telephonyCallbacks) {
+                    try {
+                        tm.unregisterTelephonyCallback(callback);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            telephonyCallbacks.clear();
+        } else {
+            TelephonyManager tm = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
+            if (tm != null) {
+                for (PhoneStateListener listener : phoneStateListeners) {
+                    try {
+                        tm.listen(listener, PhoneStateListener.LISTEN_NONE);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            phoneStateListeners.clear();
+        }
     }
 
     @Override
@@ -144,6 +316,7 @@ public class StatusControlService extends Service {
 
         registerSmsObserverIfNeeded();
         registerMobileDataObserver();
+        registerMobileDataCallback();
         applyInitialGpsPolicy();
         registerGpsStateReceiver();
 
@@ -165,10 +338,8 @@ public class StatusControlService extends Service {
                 // "mobile_data<subId>", not "mobile_data" — that is why the old observer
                 // on the exact "mobile_data" URI never fired on Android 15.
                 if (uri != null) {
-                    String key = uri.getLastPathSegment();
-                    if (key == null
-                            || (!key.startsWith("mobile_data")
-                            && !key.startsWith("airplane_mode_on"))) {
+                    String uriStr = uri.toString();
+                    if (!uriStr.contains("mobile_data") && !uriStr.contains("airplane_mode")) {
                         return;
                     }
                 }

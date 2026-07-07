@@ -842,7 +842,7 @@ public class MainActivity
             preferences.getInt(Const.PREFERENCES_ACCESSIBILITY_SERVICE, Const.PREFERENCES_OFF) == Const.PREFERENCES_ON) {
             startService(new Intent(MainActivity.this, CheckForegroundAppAccessibilityService.class));
         }
-        startService(new Intent(MainActivity.this, StatusControlService.class));
+        StatusControlService.start(MainActivity.this);
 
         // Moved to onResume!
         // https://stackoverflow.com/questions/51863600/java-lang-illegalstateexception-not-allowed-to-start-service-intent-from-activ

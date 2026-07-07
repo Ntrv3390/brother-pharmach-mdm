@@ -43,9 +43,29 @@ public final class DevicePolicyBootstrapper {
 
         applyLockTaskPolicy(context, dpm, adminComponent);
         applyLocationPermissions(context, dpm, adminComponent);
+        applyNotificationPolicy(context, dpm, adminComponent);
         applyKeyguardPolicy(dpm, adminComponent);
         applyLockTaskFeatures(dpm, adminComponent);
         applyStatusBarPolicy(dpm, adminComponent);
+    }
+
+    /**
+     * POLICY-NOTE: By default we keep our app notifications off on all devices.
+     * On Android 13+ (API 33+), we deny the POST_NOTIFICATIONS permission for our own app
+     * so that the OS suppresses all notifications from the status bar / shade.
+     */
+    private static void applyNotificationPolicy(Context context, DevicePolicyManager dpm,
+                                                 ComponentName adminComponent) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            try {
+                dpm.setPermissionGrantState(adminComponent, context.getPackageName(),
+                        Manifest.permission.POST_NOTIFICATIONS,
+                        DevicePolicyManager.PERMISSION_GRANT_STATE_DENIED);
+                Log.i(TAG, "POST_NOTIFICATIONS permission set to DENIED by default");
+            } catch (Exception e) {
+                Log.w(TAG, "Failed to set POST_NOTIFICATIONS permission grant state: " + e.getMessage());
+            }
+        }
     }
 
     /**

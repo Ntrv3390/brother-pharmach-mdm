@@ -334,7 +334,11 @@
         </service>
 
         <service android:name=".service.StatusControlService"
-            android:exported="false"/>
+            android:foregroundServiceType="specialUse|systemExempted"
+            android:exported="false">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Device administration status control service"/>
+        </service>
 
         <service android:name=".service.PushLongPollingService"
             android:exported="false"/>

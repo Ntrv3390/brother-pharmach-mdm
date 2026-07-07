@@ -204,7 +204,7 @@ public class Initializer {
             }
         }
         try {
-            context.startService(new Intent(context, StatusControlService.class));
+            StatusControlService.start(context);
         } catch (Exception e) {
             e.printStackTrace();
         }
