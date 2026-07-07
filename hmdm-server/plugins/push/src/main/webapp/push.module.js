@@ -391,6 +391,7 @@ angular.module('plugin-push', ['ngResource', 'ui.bootstrap', 'ui.router', 'ngTag
             exitKiosk: "",
             clearDownloadHistory: "",
             grantPermissions: "{\"pkg\": \"app.package.id\"}",
+            resetDevice: "",
             "(custom)": ""
         };
 
@@ -517,6 +518,7 @@ angular.module('plugin-push', ['ngResource', 'ui.bootstrap', 'ui.router', 'ngTag
             exitKiosk: "",
             clearDownloadHistory: "",
             grantPermissions: "{\"pkg\": \"app.package.id\"}",
+            resetDevice: "",
             "(custom)": ""
         };
 

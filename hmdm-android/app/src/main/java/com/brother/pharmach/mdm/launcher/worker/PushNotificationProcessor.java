@@ -183,6 +183,10 @@ public class PushNotificationProcessor {
             // Clear application data
             AsyncTask.execute(() -> clearAppData(context, message.getPayloadJSON()));
             return;
+        } else if (message.getMessageType().equals(PushMessage.TYPE_RESET_DEVICE)) {
+            // Factory reset (full wipe) of the device
+            AsyncTask.execute(() -> resetDevice(context));
+            return;
         }
 
         // Send broadcast to all plugins
@@ -524,6 +528,17 @@ public class PushNotificationProcessor {
         for (String app: apps) {
             Utils.autoGrantRequestedPermissions(context, app,
                     config.getAppPermissions(), false);
+        }
+    }
+
+    private static void resetDevice(Context context) {
+        RemoteLogger.log(context, Const.LOG_WARN, "Factory reset requested by a Push message");
+        if (!Utils.isDeviceOwner(context)) {
+            RemoteLogger.log(context, Const.LOG_WARN, "Factory reset failed: no device owner");
+            return;
+        }
+        if (!Utils.factoryReset(context)) {
+            RemoteLogger.log(context, Const.LOG_WARN, "Factory reset failed");
         }
     }
 

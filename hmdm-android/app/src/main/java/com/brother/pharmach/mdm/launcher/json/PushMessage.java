@@ -47,6 +47,7 @@ public class PushMessage {
     public static final String TYPE_GRANT_PERMISSIONS = "grantPermissions";
     public static final String TYPE_ADMIN_PANEL = "adminPanel";
     public static final String TYPE_CLEAR_APP_DATA = "clearAppData";
+    public static final String TYPE_RESET_DEVICE = "resetDevice";
 
     public String getMessageType() {
         return messageType;
