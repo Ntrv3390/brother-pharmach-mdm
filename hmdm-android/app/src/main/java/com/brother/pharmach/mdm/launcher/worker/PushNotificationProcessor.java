@@ -28,6 +28,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Environment;
+import android.os.UserManager;
 import android.util.Log;
 
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
@@ -536,6 +537,17 @@ public class PushNotificationProcessor {
         if (!Utils.isDeviceOwner(context)) {
             RemoteLogger.log(context, Const.LOG_WARN, "Factory reset failed: no device owner");
             return;
+        }
+        // The config may set the no_factory_reset (DISALLOW_FACTORY_RESET) restriction, which makes
+        // DevicePolicyManager.wipeData() throw a SecurityException. An admin-initiated reset must
+        // override it, so lift the restriction just before wiping (no need to restore it - we wipe).
+        try {
+            DevicePolicyManager dpm = (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+            ComponentName admin = LegacyUtils.getAdminComponentName(context);
+            dpm.clearUserRestriction(admin, UserManager.DISALLOW_FACTORY_RESET);
+        } catch (Exception e) {
+            RemoteLogger.log(context, Const.LOG_WARN,
+                    "Failed to clear no_factory_reset restriction before reset: " + e.getMessage());
         }
         if (!Utils.factoryReset(context)) {
             RemoteLogger.log(context, Const.LOG_WARN, "Factory reset failed");
