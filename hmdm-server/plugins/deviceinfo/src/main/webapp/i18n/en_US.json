@@ -103,7 +103,7 @@
   "plugin.deviceinfo.title.group.wifiRssi": "Wi-Fi signal strength",
   "plugin.deviceinfo.title.group.wifiSsid": "SSID",
   "plugin.deviceinfo.title.group.wifiSecurity": "Network protection is enabled",
-  "plugin.deviceinfo.title.group.wifiState": "Connection status",
+  "plugin.deviceinfo.title.group.wifiState": "Wifi Connection Status",
   "plugin.deviceinfo.title.group.wifiIpAddress": "IP address of the Wi-Fi connection",
   "plugin.deviceinfo.title.group.wifiTx": "Bytes transferred",
   "plugin.deviceinfo.title.group.wifiRx": "Bytes received",
