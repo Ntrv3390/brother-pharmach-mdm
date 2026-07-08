@@ -2041,12 +2041,40 @@ public class MainActivity
     }
 
     /**
+     * Measures the real rendered height of one app-grid cell (icon at the configured size +
+     * a worst-case 2-line label + its margins/padding), so the page row count fits the available
+     * height exactly on any device/density instead of relying on a fixed estimate.
+     */
+    private int measureAppCellHeight(int cellWidth, int iconPx) {
+        View sample = getLayoutInflater().inflate(R.layout.item_app, binding.activityMainPager, false);
+        ImageView iv = sample.findViewById(R.id.imageView);
+        if (iv != null && iconPx > 0) {
+            iv.getLayoutParams().width = iconPx;
+            iv.getLayoutParams().height = iconPx;
+        }
+        android.widget.TextView tv = sample.findViewById(R.id.textView);
+        if (tv != null) {
+            tv.setLines(2);
+        }
+        sample.measure(
+                View.MeasureSpec.makeMeasureSpec(cellWidth, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        int height = sample.getMeasuredHeight();
+        ViewGroup.LayoutParams lp = sample.getLayoutParams();
+        if (lp instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) lp;
+            height += mlp.topMargin + mlp.bottomMargin;
+        }
+        return Math.max(1, height);
+    }
+
+    /**
      * (Re)builds the page-indicator dots. Hidden entirely when there is only a single page.
      */
     private void buildPageIndicator(int count) {
         android.widget.LinearLayout indicator = binding.pageIndicator;
         indicator.removeAllViews();
-        if (count <= 1) {
+        if (count < 1) {
             indicator.setVisibility(View.GONE);
             return;
         }
@@ -2226,12 +2254,10 @@ public class MainActivity
             mainAppItems = AppShortcutManager.getInstance().getInstalledApps(this, false);
 
             final int columns = spanCount;
-            // Icon-aware row height so pages stay responsive when the server scales the icon size.
+            // Icon-aware cell size so pages stay responsive when the server scales the icon size.
             Integer iconScaleCfg = config.getIconSize();
             int iconScale = iconScaleCfg == null ? ServerConfig.DEFAULT_ICON_SIZE : iconScaleCfg;
-            int iconPx = getResources().getDimensionPixelOffset(R.dimen.app_icon_size) * iconScale / 100;
-            final int rowHeightPx = Math.max(itemWidth,
-                    iconPx + (int) (40 * getResources().getDisplayMetrics().density));
+            final int iconPx = getResources().getDimensionPixelOffset(R.dimen.app_icon_size) * iconScale / 100;
 
             pagedAppListAdapter = new PagedAppListAdapter(this, this, this);
             final ViewPager2 pager = binding.activityMainPager;
@@ -2253,13 +2279,20 @@ public class MainActivity
                 pagerCallbackRegistered = true;
             }
 
-            // The pager must be laid out before we can read its height to compute the row count.
+            // The pager must be laid out before we can read its real size, which we need to
+            // compute how many rows actually fit — an estimate overshoots and spills an extra
+            // scrollable row. We measure a real item at the current icon size (worst-case 2-line
+            // label) so the row count fits every screen size and density exactly.
             final int fallbackHeight = (int) (size.y * 0.8f);
+            final int screenWidth = size.x;
             pager.post(() -> {
                 int h = pager.getHeight();
                 if (h <= 0) {
                     h = fallbackHeight;
                 }
+                int pagerWidth = pager.getWidth() > 0 ? pager.getWidth() : screenWidth;
+                int cellWidth = Math.max(1, pagerWidth / columns);
+                int rowHeightPx = measureAppCellHeight(cellWidth, iconPx);
                 int rows = Math.max(1, h / rowHeightPx);
                 pagedAppListAdapter.setData(mainAppItems, columns, rows);
                 buildPageIndicator(pagedAppListAdapter.getPageCount());

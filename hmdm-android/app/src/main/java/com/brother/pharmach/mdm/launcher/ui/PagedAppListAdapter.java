@@ -95,7 +95,16 @@ public class PagedAppListAdapter extends RecyclerView.Adapter<PagedAppListAdapte
         MainAppListAdapter adapter = new MainAppListAdapter(
                 activity, appChooseListener, switchAdapterListener, pages.get(position));
         adapter.setSpanCount(spanCount);
-        holder.recyclerView.setLayoutManager(new GridLayoutManager(activity, spanCount));
+        // A page never scrolls: the row count is chosen so every item fits the visible height,
+        // and disabling vertical scroll also prevents a stray scroll gesture from fighting the
+        // swipe-down-to-open-status-bar gesture.
+        GridLayoutManager lm = new GridLayoutManager(activity, spanCount) {
+            @Override
+            public boolean canScrollVertically() {
+                return false;
+            }
+        };
+        holder.recyclerView.setLayoutManager(lm);
         holder.recyclerView.setAdapter(adapter);
         pageAdapters.put(position, adapter);
     }
