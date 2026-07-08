@@ -90,7 +90,7 @@
     <string name="reboot_failed">Diritti insufficienti per riavviare il dispositivo.</string>
     <string name="message_turn_on_gps">Si aprirà la schermata delle impostazioni. Attiva la posizione GPS in questa schermata e fai clic su Indietro.</string>
     <string name="message_turn_off_gps">Si aprirà la schermata delle impostazioni. DISATTIVARE la posizione GPS in questa schermata e fai clic su Indietro.</string>
-    <string name="message_turn_on_mobile_data">I dati mobili sono disabilitati! Apri la barra di stato e attiva i dati mobili.</string>
+    <string name="message_turn_on_mobile_data">Mobile data is disabled! Tap the button below to open mobile network settings and turn on mobile data.</string>
     <string name="message_turn_off_mobile_data">I dati mobili sono abilitati. Apri la barra di stato e DISATTIVARE i dati mobili.</string>
     <string name="message_set_password">La qualità della tua password non è sufficientemente buona. Si aprirà la schermata delle impostazioni. Cambia la password e fai clic su Indietro.</string>
     <string name="switch_off_blockings">Disattivazione delle restrizioni...</string>

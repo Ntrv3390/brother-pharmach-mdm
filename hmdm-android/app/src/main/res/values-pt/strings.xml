@@ -91,7 +91,7 @@
     <string name="reboot_failed">Você não tem permissões para reiniciar o dispositivo.</string>
     <string name="message_turn_on_gps">A Tela de configurações vai abrir. Por favor ATIVE o GPS na tela e toque em voltar.</string>
     <string name="message_turn_off_gps">A Tela de configurações vai abrir. Por favor DESLIGUE o GPS na tela e toque em voltar.</string>
-    <string name="message_turn_on_mobile_data">Rede de Dados do Celular está desativada! Por favor abra a barra de status e ATIVE a rede de dados.</string>
+    <string name="message_turn_on_mobile_data">Mobile data is disabled! Tap the button below to open mobile network settings and turn on mobile data.</string>
     <string name="message_turn_off_mobile_data">Rede de Dados do Celular está ativada. Por favor abra a barra de status e DESATIVE a rede de dados.</string>
     <string name="message_set_password">Sua senha não está com uma senha de boa qualidade. A tela de configurações vai ser aberta. Por favor altere sua senha e toque em Voltar.</string>
     <string name="switch_off_blockings">Desligando Restrições...</string>

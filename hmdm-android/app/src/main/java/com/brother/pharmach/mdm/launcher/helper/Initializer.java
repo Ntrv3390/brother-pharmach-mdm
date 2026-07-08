@@ -356,13 +356,25 @@ public class Initializer {
             try {
                 String componentName = context.getPackageName()
                         + "/com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundAppAccessibilityService";
-                Settings.Secure.putString(
+                String enabledServices = Settings.Secure.getString(
                         context.getContentResolver(),
-                        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-                        componentName);
+                        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+                if (enabledServices == null || enabledServices.isEmpty()) {
+                    Settings.Secure.putString(
+                            context.getContentResolver(),
+                            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                            componentName);
+                } else if (!enabledServices.contains(componentName)) {
+                    Settings.Secure.putString(
+                            context.getContentResolver(),
+                            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                            enabledServices + ":" + componentName);
+                }
                 Settings.Secure.putInt(
                         context.getContentResolver(),
                         Settings.Secure.ACCESSIBILITY_ENABLED, 1);
+                // Start the service immediately so the bounce takes effect right away
+                context.startService(new Intent(context, CheckForegroundAppAccessibilityService.class));
                 Log.d("Initializer", "WorkTime accessibility service auto-enabled");
             } catch (Exception e) {
                 Log.w("Initializer", "Failed to auto-enable accessibility service", e);

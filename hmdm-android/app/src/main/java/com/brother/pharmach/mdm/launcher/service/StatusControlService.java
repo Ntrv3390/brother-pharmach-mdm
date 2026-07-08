@@ -71,10 +71,19 @@ public class StatusControlService extends Service {
     // even if the user finds an OS path around the device-owner restrictions
     // (seen on Android 15: QS internet dialog / Settings toggle miss the restriction check).
     private final long MOBILE_DATA_WATCHDOG_INTERVAL_MS = 1000;
-    private final long MOBILE_DATA_ESCALATE_INTERVAL_MS = 30000;
-    // Give the platform a few watchdog ticks to apply an accepted re-enable call
-    // before bothering the user with the blocking dialog.
-    private final int MOBILE_DATA_ESCALATE_AFTER_TICKS = 3;
+    // Re-assert the prompt / bring-to-front quickly and constantly while data stays off.
+    private final long MOBILE_DATA_ESCALATE_INTERVAL_MS = 4000;
+    // Prompt almost immediately — one failed silent re-enable attempt is enough.
+    private final int MOBILE_DATA_ESCALATE_AFTER_TICKS = 1;
+
+    // True whenever the mobile-data policy is being violated right now (policy requires ON, a valid
+    // SIM is present, but data is OFF). Read by CheckForegroundAppAccessibilityService to bounce the
+    // user out of any app except the launcher and system Settings until data is turned back on.
+    private static volatile boolean sMobileDataViolationActive = false;
+
+    public static boolean isMobileDataViolationActive() {
+        return sMobileDataViolationActive;
+    }
 
     public static final int MOBILE_DATA_NOTIFICATION_ID = 2001;
     private static final String MOBILE_DATA_CHANNEL_ID = "mdm_mobile_data_channel";
@@ -465,6 +474,7 @@ public class StatusControlService extends Service {
         try {
             ServerConfig config = settingsHelper.getConfig();
             if (config == null || controlDisabled || !Boolean.TRUE.equals(config.getMobileData())) {
+                sMobileDataViolationActive = false;
                 relockMobileDataIfLifted("policy no longer requires mobile data ON");
                 mobileDataViolationTicks = 0;
                 // Diagnostic (throttled): the force-ON prompt only runs when the server policy
@@ -480,6 +490,7 @@ public class StatusControlService extends Service {
                 return;
             }
             if (!Utils.hasValidSim(this)) {
+                sMobileDataViolationActive = false;
                 relockMobileDataIfLifted("no valid SIM present");
                 mobileDataViolationTicks = 0;
                 long now = System.currentTimeMillis();
@@ -491,6 +502,7 @@ public class StatusControlService extends Service {
                 return;
             }
             if (Utils.isMobileDataEnabled(this)) {
+                sMobileDataViolationActive = false;
                 if (mobileDataViolationTicks > 0) {
                     RemoteLogger.log(this, Const.LOG_INFO,
                             "StatusControlService: mobile data is back ON (policy enforced)");
@@ -505,12 +517,19 @@ public class StatusControlService extends Service {
             mobileDataViolationTicks++;
             Utils.setMobileDataEnabled(this, true);
             if (Utils.isMobileDataEnabled(this)) {
+                sMobileDataViolationActive = false;
                 RemoteLogger.log(this, Const.LOG_INFO,
                         "StatusControlService: mobile data was disabled by user, re-enabled automatically");
                 relockMobileDataIfLifted("mobile data re-enabled automatically");
                 mobileDataViolationTicks = 0;
                 return;
             }
+
+            // Confirmed violation: data is OFF with a SIM present and policy requiring ON. Mark it
+            // active so the accessibility service bounces the user out of other apps, and lift the
+            // toggle lock so they can actually turn data on from the mobile-network settings screen.
+            sMobileDataViolationActive = true;
+            liftMobileDataLockForRemediation();
 
             // Safety: if the lock has been lifted for the user longer than the timeout and they
             // still have not complied, re-apply it so the device does not sit unlocked forever.

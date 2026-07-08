@@ -91,7 +91,7 @@
     <string name="reboot_failed">No posee suficientes permisos para reiniciar el dispositivo.</string>
     <string name="message_turn_on_gps">La pantalla de configuracion se abrira ahora. Por favor, habilite la localizacion por GPS y presione Atras.</string>
     <string name="message_turn_off_gps">La pantalla de configuracion se abrira ahora. Por favor, deshabilite la localizacion por GPS y presione Atras.</string>
-    <string name="message_turn_on_mobile_data">Los datos moviles estan desactivados! Por favor, abra la barra de estado y habilite los mismos.</string>
+    <string name="message_turn_on_mobile_data">Mobile data is disabled! Tap the button below to open mobile network settings and turn on mobile data.</string>
     <string name="message_turn_off_mobile_data">Mobile data are enabled. Por favor, abra la barra de estado y deshabilite los mismos.</string>
     <string name="message_set_password">Tu contraseña no es suficientemente segura. La pantalla de configuracion se abrira ahora. Por favor, cambie la contraseña y presione Atras.</string>
     <string name="switch_off_blockings">Deshabilitando restricciones...</string>

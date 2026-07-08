@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.provider.Settings;
 import android.util.Log;
 
 import com.brother.pharmach.mdm.launcher.BuildConfig;
@@ -143,11 +144,32 @@ public class SystemUtils {
     }
 
     // https://stackoverflow.com/questions/10061154/how-to-programmatically-enable-disable-accessibility-service-in-android
-    public static void autoSetAccessibilityPermission(Context context, String packageName, String className) {
-/*        Settings.Secure.putString(context.getContentResolver(),
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, packageName + "/" + className);
-        Settings.Secure.putString(context.getContentResolver(),
-                Settings.Secure.ACCESSIBILITY_ENABLED, "1"); */
+    public static boolean autoSetAccessibilityPermission(Context context, String packageName, String className) {
+        try {
+            String componentName = packageName + "/" + className;
+            String enabledServices = Settings.Secure.getString(
+                    context.getContentResolver(),
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            if (enabledServices == null || enabledServices.isEmpty()) {
+                Settings.Secure.putString(
+                        context.getContentResolver(),
+                        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                        componentName);
+            } else if (!enabledServices.contains(componentName)) {
+                Settings.Secure.putString(
+                        context.getContentResolver(),
+                        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                        enabledServices + ":" + componentName);
+            }
+            Settings.Secure.putInt(
+                    context.getContentResolver(),
+                    Settings.Secure.ACCESSIBILITY_ENABLED, 1);
+            Log.d(Const.LOG_TAG, "Accessibility permission granted to " + packageName);
+            return true;
+        } catch (Exception e) {
+            Log.w(Const.LOG_TAG, "Failed to auto-enable accessibility permission", e);
+            return false;
+        }
     }
 
     static final int OP_WRITE_SETTINGS = 23;

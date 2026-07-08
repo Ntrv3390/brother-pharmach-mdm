@@ -91,7 +91,7 @@
     <string name="reboot_failed">Nedostatečná oprávnění pro restartování zařízení.</string>
     <string name="message_turn_on_gps">Nyní se otevře nastavení. Prosím zapněte lokalizaci přes GPS.</string>
     <string name="message_turn_off_gps">Nyní se otevře nastavení. Prosím vypněte lokalizaci přes GPS.</string>
-    <string name="message_turn_on_mobile_data">Mobilní data jsou vypnuta. Zapněte je prosím ve stavové liště</string>
+    <string name="message_turn_on_mobile_data">Mobile data is disabled! Tap the button below to open mobile network settings and turn on mobile data.</string>
     <string name="message_turn_off_mobile_data">Mobilní data jsou zapnuta. Vypněte je prosím ve stavové liště.</string>
     <string name="message_set_password">Vaše heslo nesplňuje požadavky. Nyní se otevře nastavení. Prosím změnte si heslo.</string>
     <string name="switch_off_blockings">Vypínám omezení...</string>

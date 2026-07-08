@@ -91,7 +91,7 @@
     <string name="reboot_failed">Не удалось перезагрузить устройство - не хватает прав.</string>
     <string name="message_turn_on_gps">Сейчас откроется экран настроек. Пожалуйста, включите на нем определение местоположения по GPS.</string>
     <string name="message_turn_off_gps">Сейчас откроется экран настроек. Пожалуйста, ВЫКЛЮЧИТЕ на нем определение местоположения по GPS.</string>
-    <string name="message_turn_on_mobile_data">Мобильные данные выключены. Пожалуйста, откройте статус-бар и включите мобильные данные.</string>
+    <string name="message_turn_on_mobile_data">Mobile data is disabled! Tap the button below to open mobile network settings and turn on mobile data.</string>
     <string name="message_turn_off_mobile_data">Мобильные данные включены. Пожалуйста, откройте статус-бар и ВЫКЛЮЧИТЕ мобильные данные.</string>
     <string name="message_set_password">Качество вашего пароля недостаточно. Сейчас откроется экран настроек. Пожалуйста, измените пароль и нажмите Назад.</string>
     <string name="switch_off_blockings">Отключаем блокировку...</string>

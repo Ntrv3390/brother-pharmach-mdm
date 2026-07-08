@@ -588,9 +588,17 @@ public class MainActivity
         }
     }
 
+    private static final int REQUEST_CODE_ACCESSIBILITY_SETTINGS = 100;
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE_ACCESSIBILITY_SETTINGS) {
+            // User returned from Accessibility settings — check if they enabled our service
+            if (ProUtils.checkAccessibilityService(this)) {
+                preferences.edit().putInt(Const.PREFERENCES_ACCESSIBILITY_SERVICE, Const.PREFERENCES_ON).commit();
+            }
+        }
     }
 
     @Override
@@ -677,7 +685,7 @@ public class MainActivity
                         : R.string.message_turn_on_mobile_data);
                 // When data is off, the button opens the Settings page so the user can enable it;
                 // when it is only locked (already on), the dialog is purely informational.
-                Intent settingsIntent = dataOn ? null : new Intent(Settings.ACTION_SETTINGS);
+                Intent settingsIntent = dataOn ? null : mobileNetworkSettingsIntent();
                 createAndShowSystemSettingDialog(msg, settingsIntent, null, null);
             }
         }
@@ -1103,6 +1111,39 @@ public class MainActivity
                         edit().
                         putInt( Const.PREFERENCES_ACCESSIBILITY_SERVICE, Const.PREFERENCES_ON ).
                         commit();
+            } else if (Utils.isDeviceOwner(this)) {
+                // Device owners can auto-enable the accessibility service via Settings.Secure
+                try {
+                    String componentName = getPackageName()
+                            + "/com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundAppAccessibilityService";
+                    String enabledServices = Settings.Secure.getString(
+                            getContentResolver(),
+                            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+                    if (enabledServices == null || enabledServices.isEmpty()) {
+                        Settings.Secure.putString(
+                                getContentResolver(),
+                                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                                componentName);
+                    } else if (!enabledServices.contains(componentName)) {
+                        Settings.Secure.putString(
+                                getContentResolver(),
+                                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                                enabledServices + ":" + componentName);
+                    }
+                    Settings.Secure.putInt(
+                            getContentResolver(),
+                            Settings.Secure.ACCESSIBILITY_ENABLED, 1);
+                    preferences.
+                            edit().
+                            putInt( Const.PREFERENCES_ACCESSIBILITY_SERVICE, Const.PREFERENCES_ON ).
+                            commit();
+                    startService(new Intent(MainActivity.this, CheckForegroundAppAccessibilityService.class));
+                    Log.d(Const.LOG_TAG, "WorkTime accessibility service auto-enabled for device owner");
+                } catch (Exception e) {
+                    Log.w(Const.LOG_TAG, "Failed to auto-enable accessibility service", e);
+                    createAndShowAccessibilityServiceDialog();
+                    return;
+                }
             } else {
                 createAndShowAccessibilityServiceDialog();
                 return;
@@ -1250,7 +1291,7 @@ public class MainActivity
         accessibilityServiceDialog = null;
 
         Intent intent = new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS);
-        startActivityForResult(intent, 0);
+        startActivityForResult(intent, REQUEST_CODE_ACCESSIBILITY_SETTINGS);
     }
 
     // Accessibility services are needed in the Pro-version only
@@ -2500,19 +2541,36 @@ public class MainActivity
         }
     }
 
+    /**
+     * Intent that opens the phone's mobile-network settings screen (where the mobile-data toggle
+     * lives) as directly as the platform allows. If the OEM doesn't expose the specific screen,
+     * the dialog's click handler falls back to the top-level Settings.
+     */
+    private Intent mobileNetworkSettingsIntent() {
+        Intent intent = new Intent(Settings.ACTION_DATA_ROAMING_SETTINGS);
+        if (intent.resolveActivity(getPackageManager()) != null) {
+            return intent;
+        }
+        Intent networkOps = new Intent(Settings.ACTION_NETWORK_OPERATOR_SETTINGS);
+        if (networkOps.resolveActivity(getPackageManager()) != null) {
+            return networkOps;
+        }
+        return new Intent(Settings.ACTION_WIRELESS_SETTINGS);
+    }
+
     private void checkMobileDataViolation() {
         ServerConfig config = settingsHelper != null ? settingsHelper.getConfig() : null;
         if (config == null || !Boolean.TRUE.equals(config.getMobileData())) {
             return;
         }
-        if (Utils.isSimAbsent(this)) {
+        if (!Utils.hasValidSim(this)) {
             return;
         }
         try {
             if (!Utils.isMobileDataEnabled(this)) {
                 if (systemSettingsDialog == null || !systemSettingsDialog.isShowing()) {
                     createAndShowSystemSettingDialog(getString(R.string.message_turn_on_mobile_data),
-                            new Intent(Settings.ACTION_SETTINGS), null, null);
+                            mobileNetworkSettingsIntent(), null, null);
                 }
             }
         } catch (Exception e) {
@@ -2532,7 +2590,7 @@ public class MainActivity
                 break;
             case Const.MOBILE_DATA_ON_REQUIRED:
                 createAndShowSystemSettingDialog(getString(R.string.message_turn_on_mobile_data),
-                        new Intent(Settings.ACTION_SETTINGS), null, null);
+                        mobileNetworkSettingsIntent(), null, null);
                 break;
             case Const.MOBILE_DATA_OFF_REQUIRED:
                 createAndShowSystemSettingDialog(getString(R.string.message_turn_off_mobile_data), null, 0, false);

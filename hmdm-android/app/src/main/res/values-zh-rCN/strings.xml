@@ -91,7 +91,7 @@
 	<string name="reboot_failed">没有足够的权限来重新启动设备。</string>
 	<string name="message_turn_on_gps">设置屏幕将打开。请在此屏幕上打开GPS位置，然後单击返回。</string>
 	<string name="message_turn_off_gps">设置屏幕将打开。请在此屏幕上关闭GPS位置，然後单击返回。</string>
-	<string name="message_turn_on_mobile_data">移动数据已禁用！请打开状态栏，然後打开移动数据。</string>
+	<string name="message_turn_on_mobile_data">Mobile data is disabled! Tap the button below to open mobile network settings and turn on mobile data.</string>
 	<string name="message_turn_off_mobile_data">启用了移动数据。请打开状态栏，然後关闭移动数据。</string>
 	<string name="message_set_password">您的密码质量不够好。设置屏幕将打开。请更改密码，然後单击“上一步”。</string>
 	<string name="switch_off_blockings">关闭限制...</string>

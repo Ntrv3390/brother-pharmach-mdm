@@ -28,6 +28,7 @@ import android.view.accessibility.AccessibilityEvent;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.brother.pharmach.mdm.launcher.Const;
+import com.brother.pharmach.mdm.launcher.service.StatusControlService;
 import com.brother.pharmach.mdm.launcher.util.WorkTimeManager;
 
 /**
@@ -67,6 +68,21 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
         if (pkg.isEmpty() || pkg.equals(getPackageName())) {
             return;
         }
+
+        // Mobile-data enforcement: while the policy requires data ON, a SIM is present and data is
+        // OFF, the only apps the user may use are the launcher itself, the system Settings (to reach
+        // the mobile-network toggle) and the phone/emergency UIs (never block calls). Any other app
+        // is bounced immediately: return home (the launcher is the kiosk home) and raise the
+        // persistent "turn on mobile data" prompt.
+        if (StatusControlService.isMobileDataViolationActive() && !isAllowedDuringDataViolation(pkg)) {
+            Log.d(TAG, "Mobile data off — bouncing out of " + pkg);
+            performGlobalAction(GLOBAL_ACTION_HOME);
+            Intent violation = new Intent(Const.ACTION_POLICY_VIOLATION);
+            violation.putExtra(Const.POLICY_VIOLATION_CAUSE, Const.MOBILE_DATA_ON_REQUIRED);
+            LocalBroadcastManager.getInstance(this).sendBroadcast(violation);
+            return;
+        }
+
         if (WorkTimeManager.getInstance().isWithinUserLaunchGrace(pkg)) {
             // The user just tapped this app in the launcher — don't fight their intent.
             return;
@@ -82,5 +98,38 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
     @Override
     public void onInterrupt() {
         // Required by AccessibilityService — no-op
+    }
+
+    private String settingsPkg;
+
+    /**
+     * Packages the user is allowed to reach while mobile data is off:
+     *  - the system Settings (to turn data back on),
+     *  - the telephony stack and dialer / in-call / emergency UIs — calls must NEVER be blocked.
+     * Everything else is bounced back to the launcher.
+     */
+    private boolean isAllowedDuringDataViolation(String pkg) {
+        if (settingsPkg == null) {
+            try {
+                android.content.pm.ResolveInfo ri = getPackageManager().resolveActivity(
+                        new Intent(android.provider.Settings.ACTION_SETTINGS), 0);
+                if (ri != null && ri.activityInfo != null) {
+                    settingsPkg = ri.activityInfo.packageName;
+                }
+            } catch (Exception ignored) {
+            }
+            if (settingsPkg == null) {
+                settingsPkg = "com.android.settings";
+            }
+        }
+        if (pkg.equals(settingsPkg) || pkg.contains("settings")) {
+            return true;
+        }
+        // Never block calls / emergency / telephony UI.
+        return pkg.equals("com.android.phone")
+                || pkg.contains("dialer")
+                || pkg.contains("incall")
+                || pkg.contains("telecom")
+                || pkg.contains("emergency");
     }
 }

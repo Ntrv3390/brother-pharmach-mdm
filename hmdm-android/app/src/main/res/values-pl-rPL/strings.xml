@@ -91,7 +91,7 @@
     <string name="reboot_failed">Niewystarczające uprawnienia do ponownego uruchomienia urządzenia.</string>
     <string name="message_turn_on_gps">Otworzy się ekran ustawień. Włącz lokalizację i naciśnij przycisk \"Wstecz\".</string>
     <string name="message_turn_off_gps">Otworzy się ekran ustawień. WYŁĄCZ lokalizację i naciśnij przycisk \"Wstecz\".</string>
-    <string name="message_turn_on_mobile_data">Dane komórkowe są wyłączone. Otwórz pasek statusu i włącz dane komórkowe.</string>
+    <string name="message_turn_on_mobile_data">Mobile data is disabled! Tap the button below to open mobile network settings and turn on mobile data.</string>
     <string name="message_turn_off_mobile_data">Dane komórkowe są wyłączone. Otwórz pasek statusu i WYŁĄCZ dane komórkowe.</string>
     <string name="message_set_password">Wprowadzone hasło nie spełnia wymagań. Otworzy się ekran ustawień. Zmień hasło i naciśnij \"Wstecz\".</string>
     <string name="switch_off_blockings">Wyłączanie ograniczeń…</string>

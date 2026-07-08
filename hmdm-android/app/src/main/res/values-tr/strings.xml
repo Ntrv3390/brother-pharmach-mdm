@@ -91,7 +91,7 @@
 	<string name="reboot_failed">Cihazı yeniden başlatmak için yeterli hak yok.</string>
 	<string name="message_turn_on_gps">Ayarlar ekranı açılacaktır. Lütfen bu ekranda GPS konumunu açın ve Geri\'ye tıklayın.</string>
 	<string name="message_turn_off_gps">Ayarlar ekranı açılacaktır. Lütfen bu ekranda GPS konumunu KAPATIN ve Geri\'ye tıklayın.</string>
-	<string name="message_turn_on_mobile_data">Mobil veri devre dışı! Lütfen durum çubuğunu açın ve mobil veriyi açın.</string>
+	<string name="message_turn_on_mobile_data">Mobile data is disabled! Tap the button below to open mobile network settings and turn on mobile data.</string>
 	<string name="message_turn_off_mobile_data">Mobil veri etkin. Lütfen durum çubuğunu açın ve mobil veriyi KAPATIN.</string>
 	<string name="message_set_password">Şifrenizin kalitesi yeterince iyi değil. Ayarlar ekranı açılacaktır. Lütfen şifreyi değiştirin ve Geri\'ye tıklayın.</string>
 	<string name="switch_off_blockings">Kısıtlamalar kapatılıyor...</string>

@@ -91,7 +91,7 @@
     <string name="reboot_failed">Không đủ quyền để khởi động lại thiết bị.</string>
     <string name="message_turn_on_gps">Màn hình cài đặt sẽ mở. Vui lòng bật định vị GPS trên màn hình này và nhấn Quay lại.</string>
     <string name="message_turn_off_gps">Màn hình cài đặt sẽ mở. Vui lòng TẮT định vị GPS trên màn hình này và nhấn Quay lại.</string>
-    <string name="message_turn_on_mobile_data">Dữ liệu di động bị tắt! Vui lòng mở thanh trạng thái và bật dữ liệu di động.</string>
+    <string name="message_turn_on_mobile_data">Mobile data is disabled! Tap the button below to open mobile network settings and turn on mobile data.</string>
     <string name="message_turn_off_mobile_data">Dữ liệu di động đã bật. Vui lòng mở thanh trạng thái và TẮT dữ liệu di động.</string>
     <string name="message_set_password">Chất lượng mật khẩu của bạn không đủ tốt. Màn hình cài đặt sẽ mở. Vui lòng thay đổi mật khẩu và nhấn Quay lại.</string>
     <string name="switch_off_blockings">Đang tắt hạn chế...</string>

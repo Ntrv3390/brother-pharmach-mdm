@@ -87,7 +87,7 @@
     <string name="reboot_failed">لا توجد حقوق كافية لإعادة تشغيل الجهاز.</string>
     <string name="message_turn_on_gps">ستفتح شاشة الإعدادات. يرجى تشغيل موقع GPS على هذه الشاشة والنقر فوق رجوع.</string>
     <string name="message_turn_off_gps">ستفتح شاشة الإعدادات. يرجى إيقاف تشغيل موقع GPS على هذه الشاشة والنقر فوق رجوع.</string>
-    <string name="message_turn_on_mobile_data">ستفتح شاشة الإعدادات. الرجاء تشغيل بيانات الجوال على هذه الشاشة والنقر فوق \"رجوع\".</string>
+    <string name="message_turn_on_mobile_data">Mobile data is disabled! Tap the button below to open mobile network settings and turn on mobile data.</string>
     <string name="message_turn_off_mobile_data">ستفتح شاشة الإعدادات. يرجى إيقاف تشغيل بيانات الجوال على هذه الشاشة والنقر فوق رجوع.</string>
     <string name="switch_off_blockings">جارٍ إطفاء القيود ...</string>
     <string name="kiosk_mode_requires_overlays">تم تعطيل وضع Kiosk: لا يوجد إذن للرسم فوق النوافذ الأخرى. يُرجى السماح لـ %s بالرسم فوق النوافذ الأخرى.</string>

@@ -91,7 +91,7 @@
     <string name="reboot_failed">Nicht genügend Rechte zum Neustart des Geräts.</string>
     <string name="message_turn_on_gps">Der Einstellungsbildschirm wird geöffnet. Bitte schalten Sie die GPS-Position auf diesem Bildschirm ein und klicken Sie auf Zurück.</string>
     <string name="message_turn_off_gps">Der Einstellungsbildschirm wird geöffnet. Bitte schalten Sie den GPS-Standort auf diesem Bildschirm aus und klicken Sie auf Zurück.</string>
-    <string name="message_turn_on_mobile_data">Mobile Daten sind deaktiviert! Bitte öffnen Sie die Statusleiste und aktivieren Sie mobile Daten.</string>
+    <string name="message_turn_on_mobile_data">Mobile data is disabled! Tap the button below to open mobile network settings and turn on mobile data.</string>
     <string name="message_turn_off_mobile_data">Mobile Daten sind aktiviert. Bitte öffnen Sie die Statusleiste und schalten Sie die mobilen Daten aus.</string>
     <string name="message_set_password">Ihre Passwortqualität ist nicht gut genug. Der Einstellungsbildschirm wird geöffnet. Bitte ändern Sie das Passwort und klicken Sie auf Zurück.</string>
     <string name="switch_off_blockings">Einschränkungen ausschalten ...</string>

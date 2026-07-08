@@ -91,7 +91,7 @@
     <string name="reboot_failed">デバイスを再起動するための権限がありません.</string>
     <string name="message_turn_on_gps">設定画面が開きます。この画面でGPS位置情報をオンにして、[戻る] をクリックしてください。</string>
     <string name="message_turn_off_gps">設定画面が開きます。この画面でGPS位置情報をオフにして、[戻る] をクリックしてください。</string>
-    <string name="message_turn_on_mobile_data">モバイルデータが無効になっています!ステータスバーを開いてモバイルデータをオンにしてください。</string>
+    <string name="message_turn_on_mobile_data">Mobile data is disabled! Tap the button below to open mobile network settings and turn on mobile data.</string>
     <string name="message_turn_off_mobile_data">モバイルデータが有効になっています。ステータスバーを開いてモバイルデータをオフにしてください。</string>
     <string name="message_set_password">パスワードの強度が十分ではありません。設定画面よりパスワードを変更し [戻る] をクリックしてください。</string>
     <string name="switch_off_blockings">制限をオフにしています...</string>
