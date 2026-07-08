@@ -730,37 +730,43 @@ public class Utils {
      * SIM present in slot 2 only, or a locked SIM that reports "not absent".
      */
     public static boolean hasValidSim(Context context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
-            // Pre-22: no SubscriptionManager slot mapping — fall back to the single-SIM state.
-            return !isSimAbsent(context);
-        }
         try {
             TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
-            SubscriptionManager sm = (SubscriptionManager)
-                    context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
-            if (tm == null || sm == null) {
-                return !isSimAbsent(context);
-            }
-            List<SubscriptionInfo> subs = sm.getActiveSubscriptionInfoList();
-            if (subs == null || subs.isEmpty()) {
+            if (tm == null) {
                 return false;
             }
-            for (SubscriptionInfo sub : subs) {
-                int state;
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    // Per-slot state (API 26+) so we can tell slot 1 apart from slot 2.
-                    state = tm.getSimState(sub.getSimSlotIndex());
-                } else {
-                    state = tm.getSimState();
+            // Inspect each physical SIM slot's state directly. getSimState(slot) needs no special
+            // permission and reflects a physically-present, unlocked SIM, unlike
+            // getActiveSubscriptionInfoList() which requires READ_PHONE_STATE and can return
+            // empty even when a usable SIM is inserted (that earlier caused enforcement to idle
+            // and the "enable mobile data" prompt to never appear). SIM_STATE_READY excludes
+            // empty slots and PIN/PUK-locked SIMs, matching the "valid SIM" definition.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                int slots;
+                try {
+                    slots = tm.getPhoneCount();
+                } catch (Exception e) {
+                    slots = 1;
                 }
-                if (state == TelephonyManager.SIM_STATE_READY) {
-                    return true;
+                if (slots < 1) {
+                    slots = 1;
                 }
+                for (int slot = 0; slot < slots; slot++) {
+                    try {
+                        if (tm.getSimState(slot) == TelephonyManager.SIM_STATE_READY) {
+                            return true;
+                        }
+                    } catch (Exception ignored) {
+                        // Some OEMs throw on out-of-range slots — keep probing the rest.
+                    }
+                }
+                return false;
             }
-            return false;
+            // Pre-Oreo: only the aggregate SIM state is available.
+            return tm.getSimState() == TelephonyManager.SIM_STATE_READY;
         } catch (Exception e) {
-            // On any failure (missing permission, OEM quirk) fall back to the lenient check
-            // rather than falsely idling enforcement.
+            // On any failure fall back to the lenient "not absent" check rather than falsely
+            // idling enforcement on a device where a SIM really is present.
             return !isSimAbsent(context);
         }
     }

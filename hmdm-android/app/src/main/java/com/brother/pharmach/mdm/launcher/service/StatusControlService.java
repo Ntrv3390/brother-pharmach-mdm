@@ -87,6 +87,8 @@ public class StatusControlService extends Service {
     private ContentObserver mobileDataObserver;
     private int mobileDataViolationTicks = 0;
     private long lastMobileDataEscalationMs = 0;
+    private long lastMobileDataDiagMs = 0;
+    private final long MOBILE_DATA_DIAG_INTERVAL_MS = 60000;
 
     // Escalation lift-and-relock: DISALLOW_CONFIG_MOBILE_NETWORKS blocks the user from turning
     // data back ON via the Settings app just as it blocks turning it OFF. When we escalate to the
@@ -465,11 +467,27 @@ public class StatusControlService extends Service {
             if (config == null || controlDisabled || !Boolean.TRUE.equals(config.getMobileData())) {
                 relockMobileDataIfLifted("policy no longer requires mobile data ON");
                 mobileDataViolationTicks = 0;
+                // Diagnostic (throttled): the force-ON prompt only runs when the server policy
+                // mobileData == true. If it never appears, this is usually why.
+                long now = System.currentTimeMillis();
+                if (config != null && !controlDisabled
+                        && now - lastMobileDataDiagMs >= MOBILE_DATA_DIAG_INTERVAL_MS) {
+                    lastMobileDataDiagMs = now;
+                    RemoteLogger.log(this, Const.LOG_DEBUG,
+                            "StatusControlService: mobile data enforcement idle — server policy mobileData="
+                            + config.getMobileData());
+                }
                 return;
             }
             if (!Utils.hasValidSim(this)) {
                 relockMobileDataIfLifted("no valid SIM present");
                 mobileDataViolationTicks = 0;
+                long now = System.currentTimeMillis();
+                if (now - lastMobileDataDiagMs >= MOBILE_DATA_DIAG_INTERVAL_MS) {
+                    lastMobileDataDiagMs = now;
+                    RemoteLogger.log(this, Const.LOG_DEBUG,
+                            "StatusControlService: mobile data policy ON but no READY SIM detected — enforcement idle");
+                }
                 return;
             }
             if (Utils.isMobileDataEnabled(this)) {
@@ -659,30 +677,32 @@ public class StatusControlService extends Service {
             }
         }
 
-        if (Utils.hasValidSim(this)) {
-            try {
-                if (Boolean.TRUE.equals(config.getMobileData())) {
-                    // Lock the toggle (Settings + Quick Settings become read-only) and block
-                    // the airplane-mode bypass. Turning data back on if it is off is handled
-                    // by the 1-second watchdog in enforceMobileDataPolicy().
-                    // Skip while the lock is deliberately lifted for user remediation, otherwise
-                    // this 10s loop would fight enforceMobileDataPolicy and re-lock too early.
-                    if (!mobileDataRestrictionLifted) {
-                        Utils.setMobileDataLocked(true, this);
-                    }
-                } else if (Boolean.FALSE.equals(config.getMobileData())) {
-                    // Policy says OFF — unlock so we can read the real state, then warn if on.
-                    Utils.setMobileDataLocked(false, this);
-                    if (Utils.isMobileDataEnabled(this)) {
-                        notifyStatusViolation(Const.MOBILE_DATA_OFF_REQUIRED);
-                    }
-                } else {
-                    // No policy — remove the lock so the user can freely configure.
-                    Utils.setMobileDataLocked(false, this);
+        // Mobile data policy. The toggle LOCK is applied based purely on the server policy and
+        // device-owner status — INDEPENDENT of SIM presence — so the user can never flip the
+        // Settings/Quick-Settings toggle, including in a window where the SIM is briefly not
+        // detected or before it is inserted. Only the force-ON prompt (enforceMobileDataPolicy)
+        // depends on a live SIM.
+        try {
+            if (Boolean.TRUE.equals(config.getMobileData())) {
+                // Lock the toggle (Settings + Quick Settings become read-only) and block the
+                // airplane-mode bypass. Skip only while the lock is deliberately lifted for user
+                // remediation, otherwise this 10s loop would fight enforceMobileDataPolicy and
+                // re-lock too early.
+                if (!mobileDataRestrictionLifted) {
+                    Utils.setMobileDataLocked(true, this);
                 }
-            } catch (Exception e) {
-                // Some problem accessing private API
+            } else if (Boolean.FALSE.equals(config.getMobileData())) {
+                // Policy says OFF — unlock so the user/we can read the real state, then warn if on.
+                Utils.setMobileDataLocked(false, this);
+                if (Utils.hasValidSim(this) && Utils.isMobileDataEnabled(this)) {
+                    notifyStatusViolation(Const.MOBILE_DATA_OFF_REQUIRED);
+                }
+            } else {
+                // No policy — remove the lock so the user can freely configure.
+                Utils.setMobileDataLocked(false, this);
             }
+        } catch (Exception e) {
+            // Some problem accessing private API
         }
     }
 
