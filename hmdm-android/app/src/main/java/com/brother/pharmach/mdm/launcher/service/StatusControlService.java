@@ -1,6 +1,7 @@
 package com.brother.pharmach.mdm.launcher.service;
 
 import android.Manifest;
+import android.app.ActivityManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -757,6 +758,12 @@ public class StatusControlService extends Service {
     private void enforceMobileDataAndBringToFront() {
         Utils.setMobileDataEnabled(this, true);
 
+        // Don't interrupt the user if they're already in a settings app where they can fix the issue.
+        if (isUserInAllowedSettingsApp()) {
+            Log.d(Const.LOG_TAG, "StatusControlService: user is in settings app, skipping bring-to-front");
+            return;
+        }
+
         Intent launchIntent = new Intent(this, MainActivity.class);
         launchIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         launchIntent.putExtra(Const.POLICY_VIOLATION_CAUSE, Const.MOBILE_DATA_ON_REQUIRED);
@@ -776,6 +783,30 @@ public class StatusControlService extends Service {
                 Log.w(Const.LOG_TAG, "StatusControlService: startActivity failed: " + e.getMessage());
                 notifyStatusViolation(Const.MOBILE_DATA_ON_REQUIRED);
             }
+        }
+    }
+
+    // Check if the current foreground app is a settings/telephony app where the user can
+    // resolve the mobile data violation without being interrupted.
+    private boolean isUserInAllowedSettingsApp() {
+        try {
+            ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+            if (am == null) return false;
+            List<ActivityManager.RunningTaskInfo> tasks = am.getRunningTasks(1);
+            if (tasks == null || tasks.isEmpty()) return false;
+            String foregroundPkg = tasks.get(0).topActivity.getPackageName();
+            if (foregroundPkg == null) return false;
+            // Allow Settings apps (any package containing "settings")
+            if (foregroundPkg.contains("settings")) return true;
+            // Allow telephony / dialer / emergency UIs (calls must never be blocked)
+            if (foregroundPkg.equals("com.android.phone")
+                    || foregroundPkg.contains("dialer")
+                    || foregroundPkg.contains("incall")
+                    || foregroundPkg.contains("telecom")
+                    || foregroundPkg.contains("emergency")) return true;
+            return false;
+        } catch (Exception e) {
+            return false;
         }
     }
 

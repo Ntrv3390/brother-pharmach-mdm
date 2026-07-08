@@ -2547,14 +2547,18 @@ public class MainActivity
      * the dialog's click handler falls back to the top-level Settings.
      */
     private Intent mobileNetworkSettingsIntent() {
-        Intent intent = new Intent(Settings.ACTION_DATA_ROAMING_SETTINGS);
-        if (intent.resolveActivity(getPackageManager()) != null) {
-            return intent;
-        }
+        // First: open the mobile network settings page for the default data subscription.
+        // On Android 10+ this typically shows the SIM's mobile network page with the data toggle.
         Intent networkOps = new Intent(Settings.ACTION_NETWORK_OPERATOR_SETTINGS);
         if (networkOps.resolveActivity(getPackageManager()) != null) {
             return networkOps;
         }
+        // Second: data usage settings also has a mobile data toggle at the top on most devices.
+        Intent dataUsage = new Intent(Settings.ACTION_DATA_USAGE_SETTINGS);
+        if (dataUsage.resolveActivity(getPackageManager()) != null) {
+            return dataUsage;
+        }
+        // Last resort: wireless settings (may or may not have the data toggle).
         return new Intent(Settings.ACTION_WIRELESS_SETTINGS);
     }
 
