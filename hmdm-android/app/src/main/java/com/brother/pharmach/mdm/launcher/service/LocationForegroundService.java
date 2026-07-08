@@ -201,10 +201,20 @@ public class LocationForegroundService extends Service {
 
     public static void start(Context context) {
         Intent intent = new Intent(context, LocationForegroundService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent);
-        } else {
-            context.startService(intent);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent);
+            } else {
+                context.startService(intent);
+            }
+        } catch (Exception e) {
+            // ForegroundServiceStartNotAllowedException (API 31+) is thrown when
+            // startForegroundService() is called from a background context (e.g. the 15-minute
+            // AlarmManager watchdog or a connectivity callback at boot). Swallow it so the alarm
+            // chain survives — an uncaught throw here would kill the process and drop the user to
+            // the system launcher. The periodic watchdog and worker fallbacks will retry.
+            RemoteLogger.log(context, Const.LOG_WARN,
+                    "LocationForegroundService: start blocked (" + e.getClass().getSimpleName() + ")");
         }
     }
 

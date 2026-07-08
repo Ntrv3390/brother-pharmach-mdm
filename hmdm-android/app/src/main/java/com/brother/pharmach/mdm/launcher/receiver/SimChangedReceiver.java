@@ -59,17 +59,21 @@ public class SimChangedReceiver extends BroadcastReceiver {
         } catch (Exception e) {
         }
 
-        String simState = intent.getExtras().getString("ss");
+        // Some OEM/AOSP builds broadcast SIM_STATE_CHANGED with null extras or without the "ss"
+        // string. Read defensively — an NPE here would be uncaught on the main thread and kill
+        // the process (dropping the user back to the system launcher).
+        android.os.Bundle extras = intent.getExtras();
+        String simState = extras != null ? extras.getString("ss") : null;
 
         String message = null;
-        if (simState.equals("LOADED")) {
+        if ("LOADED".equals(simState)) {
             message = "SIM card loaded";
             if (phoneNumber != null && phoneNumber.length() > 0) {
                 message += ". New phone number: " + phoneNumber;
             }
             // Upload fresh device info so the server gets the phone number
             uploadDeviceInfoAsync(context);
-        } else if (simState.equals("ABSENT")) {
+        } else if ("ABSENT".equals(simState)) {
             message = "SIM card removed";
         }
 

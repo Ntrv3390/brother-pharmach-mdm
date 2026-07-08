@@ -131,8 +131,20 @@ public class StatusControlService extends Service {
      * A SIM was inserted/removed/switched. Re-bind the per-subscription telephony callbacks
      * (they are pinned to subscription IDs that are now stale) and re-run enforcement so a
      * freshly-inserted SIM is locked and forced-on without waiting for the polling watchdog.
+     *
+     * SubscriptionManager fires this repeatedly during a dual-SIM/eSIM switch, so we debounce:
+     * a burst collapses into a single re-registration ~300ms after it settles. The registration
+     * itself stays on the main thread on purpose — the pre-API-31 PhoneStateListener must be
+     * constructed on a thread that owns a Looper. Only the debounce prevents the storm; a single
+     * bounded registration on the main thread is cheap.
      */
     private void onSimStateChanged() {
+        mainHandler.removeCallbacks(simChangeRunnable);
+        mainHandler.postDelayed(simChangeRunnable, 300);
+    }
+
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final Runnable simChangeRunnable = () -> {
         try {
             registerMobileDataCallback();
             threadPoolExecutor.execute(() -> {
@@ -142,11 +154,12 @@ public class StatusControlService extends Service {
         } catch (Exception e) {
             // executor shut down during service stop — ignore
         }
-    }
+    };
 
     @Override
     public void onDestroy() {
         LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
+        mainHandler.removeCallbacks(simChangeRunnable);
         unregisterSmsObserver();
         unregisterMobileDataObserver();
         unregisterMobileDataCallback();

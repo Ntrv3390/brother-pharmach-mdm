@@ -32,6 +32,8 @@ import com.brother.pharmach.mdm.launcher.json.RemoteLogItem;
 import com.brother.pharmach.mdm.launcher.worker.RemoteLogWorker;
 
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Remote logging engine which uses SQLite for configuration
@@ -39,6 +41,12 @@ import java.util.List;
  */
 public class RemoteLogger {
     public static long lastLogRemoval = 0;
+
+    // Single background thread for all log persistence. RemoteLogger.log() is called from many
+    // main-thread paths (broadcast receivers, periodic ticks); doing the SQLite read/write there
+    // blocked the UI thread under DB contention. A single-thread executor keeps insertion order
+    // while moving the work off the main thread.
+    private static final ExecutorService logExecutor = Executors.newSingleThreadExecutor();
 
     public static void updateConfig(Context context, List<RemoteLogConfig> rules) {
         LogConfigTable.replaceAll(DatabaseHelper.instance(context).getWritableDatabase(), rules);
@@ -72,13 +80,23 @@ public class RemoteLogger {
     }
 
     public static void postLog(Context context, RemoteLogItem item) {
-        // NOTE: This method is invoked from many periodic paths (TIME_TICK enforcement on
-        // POLICY_EXECUTOR, the 60s LocationService tick on the main thread, config updates, etc.)
-        // that share a single SQLite database. A transient SQLiteException (lock contention,
-        // disk-full, "database disk image is malformed") thrown from here would otherwise
-        // propagate to the global uncaught-exception handler, which calls System.exit(0) and
-        // restarts the app — appearing as a periodic "crash then recover". Swallow DB faults so
-        // logging can never crash the process.
+        // Persist on a background thread — see logExecutor. This method is invoked from many
+        // periodic and broadcast paths that share a single SQLite database; doing the read/write
+        // inline blocked the caller's thread (often the main thread) under DB contention.
+        final Context appContext = context.getApplicationContext();
+        try {
+            logExecutor.execute(() -> persistLog(appContext, item));
+        } catch (Exception e) {
+            // Executor rejected (shutdown) — fall back to inline persistence so nothing is lost.
+            persistLog(appContext, item);
+        }
+    }
+
+    private static void persistLog(Context context, RemoteLogItem item) {
+        // A transient SQLiteException (lock contention, disk-full, "database disk image is
+        // malformed") must never propagate: on the main-thread callers it would reach the global
+        // uncaught-exception handler, which calls System.exit(0). Swallow DB faults so logging can
+        // never crash the process.
         try {
             DatabaseHelper dbHelper = DatabaseHelper.instance(context);
             if (dbHelper == null) {

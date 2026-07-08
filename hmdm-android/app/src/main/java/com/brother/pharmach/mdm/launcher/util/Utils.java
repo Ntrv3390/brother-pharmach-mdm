@@ -1425,10 +1425,26 @@ public class Utils {
             try {
                 service.startForeground(notificationId, notification, serviceType);
             } catch (/* ForegroundServiceTypeNotAllowed*/Exception e) {
-                service.startForeground(notificationId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+                // The first failure is usually a service-type mismatch — retry with SPECIAL_USE.
+                // But if the real cause was a background-start restriction (Android 12+
+                // ForegroundServiceStartNotAllowedException), the retry throws the same thing, and
+                // an uncaught throw inside a service onCreate kills the process. Swallow the second
+                // failure: the service simply runs without foreground status until it is next
+                // (re)started from an allowed context.
+                try {
+                    service.startForeground(notificationId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+                } catch (Exception e2) {
+                    Log.w(Const.LOG_TAG, "startStableForegroundService: startForeground blocked ("
+                            + e2.getClass().getSimpleName() + ")");
+                }
             }
         } else {
-            service.startForeground(notificationId, notification);
+            try {
+                service.startForeground(notificationId, notification);
+            } catch (Exception e) {
+                Log.w(Const.LOG_TAG, "startStableForegroundService: startForeground blocked ("
+                        + e.getClass().getSimpleName() + ")");
+            }
         }
     }
 

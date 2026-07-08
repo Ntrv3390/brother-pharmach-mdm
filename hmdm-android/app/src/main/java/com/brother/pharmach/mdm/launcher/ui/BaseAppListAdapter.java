@@ -103,9 +103,13 @@ public class BaseAppListAdapter extends RecyclerView.Adapter<BaseAppListAdapter.
         holder.binding.rootLinearLayout.setTag(appInfo);
         holder.binding.textView.setText(appInfo.name);
 
-        if (settingsHelper.getConfig().getTextColor() != null && !settingsHelper.getConfig().getTextColor().trim().equals("")) {
+        // Config can momentarily be null while it is being re-fetched/cleared. An unguarded
+        // getConfig() dereference here would crash while binding a row (main thread).
+        ServerConfig config = settingsHelper.getConfig();
+
+        if (config != null && config.getTextColor() != null && !config.getTextColor().trim().equals("")) {
             try {
-                holder.binding.textView.setTextColor(Color.parseColor(settingsHelper.getConfig().getTextColor()));
+                holder.binding.textView.setTextColor(Color.parseColor(config.getTextColor()));
             } catch (Exception e) {
                 // Invalid color
                 e.printStackTrace();
@@ -113,7 +117,7 @@ public class BaseAppListAdapter extends RecyclerView.Adapter<BaseAppListAdapter.
         }
 
         try {
-            Integer iconScale = settingsHelper.getConfig().getIconSize();
+            Integer iconScale = config != null ? config.getIconSize() : null;
             if (iconScale == null) {
                 iconScale = ServerConfig.DEFAULT_ICON_SIZE;
             }

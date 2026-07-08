@@ -196,6 +196,8 @@ public class MainActivity
     private PagedAppListAdapter pagedAppListAdapter;
     private java.util.List<com.brother.pharmach.mdm.launcher.util.AppInfo> mainAppItems;
     private boolean pagerCallbackRegistered = false;
+    private volatile boolean contentLoadInProgress = false;
+    private boolean pendingContentReload = false;
     private int spanCount;
     private StatusBarUpdater statusBarUpdater = new StatusBarUpdater();
     private Boolean settingsLockedByWorkTime = null;
@@ -2248,95 +2250,149 @@ public class MainActivity
                 spanCount = 1;
             }
 
-            // Full app list (work-time filtering is applied per-icon at tap time). We slice it into
-            // horizontally-swipeable pages below, once the pager has been measured and we know how
-            // many rows fit the available height.
-            mainAppItems = AppShortcutManager.getInstance().getInstalledApps(this, false);
-
             final int columns = spanCount;
             // Icon-aware cell size so pages stay responsive when the server scales the icon size.
             Integer iconScaleCfg = config.getIconSize();
             int iconScale = iconScaleCfg == null ? ServerConfig.DEFAULT_ICON_SIZE : iconScaleCfg;
             final int iconPx = getResources().getDimensionPixelOffset(R.dimen.app_icon_size) * iconScale / 100;
-
-            pagedAppListAdapter = new PagedAppListAdapter(this, this, this);
-            final ViewPager2 pager = binding.activityMainPager;
-            pager.setAdapter(pagedAppListAdapter);
-
-            if (!pagerCallbackRegistered) {
-                pager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
-                    @Override
-                    public void onPageSelected(int position) {
-                        updatePageIndicator(position);
-                        if (pagedAppListAdapter != null) {
-                            MainAppListAdapter pageAdapter = pagedAppListAdapter.getPageAdapter(position);
-                            if (pageAdapter != null) {
-                                mainAppListAdapter = pageAdapter;
-                            }
-                        }
-                    }
-                });
-                pagerCallbackRegistered = true;
-            }
-
-            // The pager must be laid out before we can read its real size, which we need to
-            // compute how many rows actually fit — an estimate overshoots and spills an extra
-            // scrollable row. We measure a real item at the current icon size (worst-case 2-line
-            // label) so the row count fits every screen size and density exactly.
             final int fallbackHeight = (int) (size.y * 0.8f);
             final int screenWidth = size.x;
-            pager.post(() -> {
-                int h = pager.getHeight();
-                if (h <= 0) {
-                    h = fallbackHeight;
-                }
-                int pagerWidth = pager.getWidth() > 0 ? pager.getWidth() : screenWidth;
-                int cellWidth = Math.max(1, pagerWidth / columns);
-                int rowHeightPx = measureAppCellHeight(cellWidth, iconPx);
-                int rows = Math.max(1, h / rowHeightPx);
-                pagedAppListAdapter.setData(mainAppItems, columns, rows);
-                buildPageIndicator(pagedAppListAdapter.getPageCount());
-                updatePageIndicator(pager.getCurrentItem());
-                // Route hardware-key navigation at the page currently on screen.
-                pager.post(() -> {
-                    MainAppListAdapter pageAdapter = pagedAppListAdapter.getPageAdapter(pager.getCurrentItem());
-                    if (pageAdapter != null) {
-                        mainAppListAdapter = pageAdapter;
+            final ServerConfig renderConfig = config;
+
+            // Enumerating installed apps (PackageManager scan + per-app IPC + label loading) is
+            // expensive and used to run on the main thread here, freezing the UI — the classic
+            // "app becomes unresponsive" ANR. Do it on a background thread, then hop back to the
+            // main thread to build the adapters/pager/dock (all view work stays on the UI thread).
+            if (!contentLoadInProgress) {
+                contentLoadInProgress = true;
+                new Thread(() -> {
+                    List<com.brother.pharmach.mdm.launcher.util.AppInfo> mainItems;
+                    List<com.brother.pharmach.mdm.launcher.util.AppInfo> bottomItems;
+                    try {
+                        mainItems = AppShortcutManager.getInstance().getInstalledApps(this, false);
+                        bottomItems = AppShortcutManager.getInstance().getInstalledApps(this, true);
+                    } catch (Exception e) {
+                        mainItems = new java.util.ArrayList<>();
+                        bottomItems = new java.util.ArrayList<>();
                     }
-                });
-            });
-
-            int bottomAppCount = AppShortcutManager.getInstance().getInstalledAppCount(this, true);
-            if (bottomAppCount > 0) {
-                bottomAppListAdapter = new BottomAppListAdapter(this, this, this);
-                bottomAppListAdapter.setSpanCount(spanCount);
-
-                binding.activityBottomLayout.setVisibility(View.VISIBLE);
-                binding.activityBottomLine.setLayoutManager(new GridLayoutManager(this, bottomAppCount < spanCount ? bottomAppCount : spanCount));
-                binding.activityBottomLine.setAdapter(bottomAppListAdapter);
-                bottomAppListAdapter.notifyDataSetChanged();
+                    final List<com.brother.pharmach.mdm.launcher.util.AppInfo> fMain = mainItems;
+                    final List<com.brother.pharmach.mdm.launcher.util.AppInfo> fBottom = bottomItems;
+                    runOnUiThread(() -> {
+                        try {
+                            if (!isFinishing() && !isDestroyed()) {
+                                renderAppContent(renderConfig, columns, iconPx, fallbackHeight, screenWidth, fMain, fBottom);
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        } finally {
+                            contentLoadInProgress = false;
+                            // If a config change / rotation arrived mid-load (which would otherwise
+                            // render with stale columns), re-render once now with fresh data.
+                            if (pendingContentReload) {
+                                pendingContentReload = false;
+                                ServerConfig latest = settingsHelper != null ? settingsHelper.getConfig() : null;
+                                if (latest != null && !isFinishing() && !isDestroyed()) {
+                                    needRedrawContentAfterReconfigure = true;
+                                    showContent(latest);
+                                }
+                            }
+                        }
+                    });
+                }, "app-list-load").start();
             } else {
-                bottomAppListAdapter = null;
-                binding.activityBottomLayout.setVisibility(View.GONE);
-            }
-
-            // Issue 2: keep the kiosk lock-task whitelist in lockstep with the rendered app set.
-            // When the launcher itself is the kiosk app, lock-task mode silently blocks launching
-            // any package that isn't whitelisted. Rebuild the whitelist from exactly the apps the
-            // user can see/tap right now (already worktime-filtered), so taps always launch.
-            if (ProUtils.kioskModeRequired(this)
-                    && getPackageName().equals(config.getMainApp())
-                    && ProUtils.isKioskModeRunning(this)) {
-                java.util.LinkedHashSet<String> visiblePackages = new java.util.LinkedHashSet<>();
-                collectPackages(mainAppItems, visiblePackages);
-                collectPackages(bottomAppListAdapter, visiblePackages);
-                ProUtils.setKioskLockTaskWhitelist(this, visiblePackages);
+                // A load is already running; remember that another redraw was requested so we
+                // reconcile once it finishes.
+                pendingContentReload = true;
             }
         }
         binding.loading.setVisibility(View.GONE);
         binding.setShowContent(true);
         // We can now sleep, uh
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    /**
+     * Builds the paged app grid, the page-indicator dots, the bottom dock and (in kiosk mode) the
+     * lock-task whitelist from already-enumerated app lists. Runs on the UI thread; the expensive
+     * package enumeration was done on a background thread by showContent().
+     */
+    private void renderAppContent(ServerConfig config, int columns, int iconPx,
+                                  int fallbackHeight, int screenWidth,
+                                  List<com.brother.pharmach.mdm.launcher.util.AppInfo> mainItems,
+                                  List<com.brother.pharmach.mdm.launcher.util.AppInfo> bottomItems) {
+        mainAppItems = mainItems;
+
+        pagedAppListAdapter = new PagedAppListAdapter(this, this, this);
+        final ViewPager2 pager = binding.activityMainPager;
+        pager.setAdapter(pagedAppListAdapter);
+
+        if (!pagerCallbackRegistered) {
+            pager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
+                @Override
+                public void onPageSelected(int position) {
+                    updatePageIndicator(position);
+                    if (pagedAppListAdapter != null) {
+                        MainAppListAdapter pageAdapter = pagedAppListAdapter.getPageAdapter(position);
+                        if (pageAdapter != null) {
+                            mainAppListAdapter = pageAdapter;
+                        }
+                    }
+                }
+            });
+            pagerCallbackRegistered = true;
+        }
+
+        // The pager must be laid out before we can read its real size, which we need to compute
+        // how many rows actually fit — an estimate overshoots and spills an extra scrollable row.
+        // We measure a real item at the current icon size (worst-case 2-line label) so the row
+        // count fits every screen size and density exactly.
+        pager.post(() -> {
+            int h = pager.getHeight();
+            if (h <= 0) {
+                h = fallbackHeight;
+            }
+            int pagerWidth = pager.getWidth() > 0 ? pager.getWidth() : screenWidth;
+            int cellWidth = Math.max(1, pagerWidth / columns);
+            int rowHeightPx = measureAppCellHeight(cellWidth, iconPx);
+            int rows = Math.max(1, h / rowHeightPx);
+            pagedAppListAdapter.setData(mainAppItems, columns, rows);
+            buildPageIndicator(pagedAppListAdapter.getPageCount());
+            updatePageIndicator(pager.getCurrentItem());
+            // Route hardware-key navigation at the page currently on screen.
+            pager.post(() -> {
+                MainAppListAdapter pageAdapter = pagedAppListAdapter.getPageAdapter(pager.getCurrentItem());
+                if (pageAdapter != null) {
+                    mainAppListAdapter = pageAdapter;
+                }
+            });
+        });
+
+        int bottomAppCount = bottomItems != null ? bottomItems.size() : 0;
+        if (bottomAppCount > 0) {
+            bottomAppListAdapter = new BottomAppListAdapter(this, this, this, bottomItems);
+            bottomAppListAdapter.setSpanCount(columns);
+
+            binding.activityBottomLayout.setVisibility(View.VISIBLE);
+            binding.activityBottomLine.setLayoutManager(new GridLayoutManager(this, bottomAppCount < columns ? bottomAppCount : columns));
+            binding.activityBottomLine.setAdapter(bottomAppListAdapter);
+            bottomAppListAdapter.notifyDataSetChanged();
+        } else {
+            bottomAppListAdapter = null;
+            binding.activityBottomLayout.setVisibility(View.GONE);
+        }
+
+        // Issue 2: keep the kiosk lock-task whitelist in lockstep with the rendered app set.
+        // When the launcher itself is the kiosk app, lock-task mode silently blocks launching
+        // any package that isn't whitelisted. Rebuild the whitelist from exactly the apps the
+        // user can see/tap right now (already worktime-filtered), so taps always launch.
+        if (ProUtils.kioskModeRequired(this)
+                && getPackageName().equals(config.getMainApp())
+                && ProUtils.isKioskModeRunning(this)) {
+            java.util.LinkedHashSet<String> visiblePackages = new java.util.LinkedHashSet<>();
+            collectPackages(mainAppItems, visiblePackages);
+            collectPackages(bottomAppListAdapter, visiblePackages);
+            ProUtils.setKioskLockTaskWhitelist(this, visiblePackages);
+        }
     }
 
     // Added an option to delay restarting the kiosk app
@@ -2437,9 +2493,32 @@ public class MainActivity
     private void sendDeviceInfoAfterReconfigure() {
         if (needSendDeviceInfoAfterReconfigure) {
             needSendDeviceInfoAfterReconfigure = false;
-            SendDeviceInfoTask sendDeviceInfoTask = new SendDeviceInfoTask(this);
-            DeviceInfo deviceInfo = DeviceInfoProvider.getDeviceInfo(this, true, true);
-            sendDeviceInfoTask.execute(deviceInfo);
+            // Building DeviceInfo enumerates all packages and checksums configured files — heavy
+            // work that used to run on the main thread here and could ANR. Build it on a background
+            // thread (safe: getDeviceInfo is already invoked off-main by SimChangedReceiver and
+            // SendDeviceInfoWorker, and collects the same GPS/app/file payload regardless of
+            // thread), then hand it to SendDeviceInfoTask on the main thread. AsyncTask.execute()
+            // must be called on the main thread; the network send still happens in the task's
+            // doInBackground, exactly as before — the send/retry path is unchanged.
+            new Thread(() -> {
+                final DeviceInfo deviceInfo;
+                try {
+                    deviceInfo = DeviceInfoProvider.getDeviceInfo(this, true, true);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    return;
+                }
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) {
+                        return;
+                    }
+                    try {
+                        new SendDeviceInfoTask(MainActivity.this).execute(deviceInfo);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+            }, "device-info-build").start();
         }
     }
 
