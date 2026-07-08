@@ -198,6 +198,7 @@ public class MainActivity
     private boolean pagerCallbackRegistered = false;
     private volatile boolean contentLoadInProgress = false;
     private boolean pendingContentReload = false;
+    private String lastContentSignature = null;
     private int spanCount;
     private StatusBarUpdater statusBarUpdater = new StatusBarUpdater();
     private Boolean settingsLockedByWorkTime = null;
@@ -2071,7 +2072,37 @@ public class MainActivity
     }
 
     /**
-     * (Re)builds the page-indicator dots. Hidden entirely when there is only a single page.
+     * A compact fingerprint of a rendered app list — order-sensitive and includes label/icon so
+     * any real change is detected, but ignores volatile state so identical lists compare equal.
+     * Used to skip needless re-renders.
+     */
+    private String appsSignature(List<com.brother.pharmach.mdm.launcher.util.AppInfo> apps) {
+        if (apps == null || apps.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(apps.size() * 24);
+        for (com.brother.pharmach.mdm.launcher.util.AppInfo a : apps) {
+            if (a != null) {
+                sb.append(a.signature()).append(';');
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Updates the dots only when the page count actually changed, so a smooth in-place content
+     * update doesn't rebuild (flash) the indicator.
+     */
+    private void syncPageIndicator(int count) {
+        int shown = binding.pageIndicator.getChildCount();
+        int expected = count <= 1 ? (count == 1 ? 1 : 0) : count;
+        if (shown != expected) {
+            buildPageIndicator(count);
+        }
+    }
+
+    /**
+     * (Re)builds the page-indicator dots. Hidden entirely when there are no pages.
      */
     private void buildPageIndicator(int count) {
         android.widget.LinearLayout indicator = binding.pageIndicator;
@@ -2280,7 +2311,16 @@ public class MainActivity
                     runOnUiThread(() -> {
                         try {
                             if (!isFinishing() && !isDestroyed()) {
-                                renderAppContent(renderConfig, columns, iconPx, fallbackHeight, screenWidth, fMain, fBottom);
+                                // Skip re-rendering entirely when the visible app set (and column
+                                // count) is unchanged — most triggers (worktime ticks that don't
+                                // change the allowed set, unrelated config refreshes) produce an
+                                // identical list, and re-rendering those is the "keeps refreshing"
+                                // bad UX. Render only on a real change, and then smoothly (diff).
+                                String sig = appsSignature(fMain) + "##" + appsSignature(fBottom) + "##" + columns;
+                                if (pagedAppListAdapter == null || !sig.equals(lastContentSignature)) {
+                                    lastContentSignature = sig;
+                                    renderAppContent(renderConfig, columns, iconPx, fallbackHeight, screenWidth, fMain, fBottom);
+                                }
                             }
                         } catch (Exception e) {
                             e.printStackTrace();
@@ -2322,24 +2362,30 @@ public class MainActivity
                                   List<com.brother.pharmach.mdm.launcher.util.AppInfo> bottomItems) {
         mainAppItems = mainItems;
 
-        pagedAppListAdapter = new PagedAppListAdapter(this, this, this);
+        // Reuse the pager adapter across renders. Recreating it + setAdapter() resets the whole
+        // ViewPager2 and is the visible "refresh" flash; instead we build it once and thereafter
+        // update its data in place (DiffUtil), so unchanged icons never reload.
+        final boolean firstBuild = (pagedAppListAdapter == null);
         final ViewPager2 pager = binding.activityMainPager;
-        pager.setAdapter(pagedAppListAdapter);
+        if (firstBuild) {
+            pagedAppListAdapter = new PagedAppListAdapter(this, this, this);
+            pager.setAdapter(pagedAppListAdapter);
 
-        if (!pagerCallbackRegistered) {
-            pager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
-                @Override
-                public void onPageSelected(int position) {
-                    updatePageIndicator(position);
-                    if (pagedAppListAdapter != null) {
-                        MainAppListAdapter pageAdapter = pagedAppListAdapter.getPageAdapter(position);
-                        if (pageAdapter != null) {
-                            mainAppListAdapter = pageAdapter;
+            if (!pagerCallbackRegistered) {
+                pager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
+                    @Override
+                    public void onPageSelected(int position) {
+                        updatePageIndicator(position);
+                        if (pagedAppListAdapter != null) {
+                            MainAppListAdapter pageAdapter = pagedAppListAdapter.getPageAdapter(position);
+                            if (pageAdapter != null) {
+                                mainAppListAdapter = pageAdapter;
+                            }
                         }
                     }
-                }
-            });
-            pagerCallbackRegistered = true;
+                });
+                pagerCallbackRegistered = true;
+            }
         }
 
         // The pager must be laid out before we can read its real size, which we need to compute
@@ -2355,8 +2401,12 @@ public class MainActivity
             int cellWidth = Math.max(1, pagerWidth / columns);
             int rowHeightPx = measureAppCellHeight(cellWidth, iconPx);
             int rows = Math.max(1, h / rowHeightPx);
-            pagedAppListAdapter.setData(mainAppItems, columns, rows);
-            buildPageIndicator(pagedAppListAdapter.getPageCount());
+            if (firstBuild) {
+                pagedAppListAdapter.setData(mainAppItems, columns, rows);
+            } else {
+                pagedAppListAdapter.updateData(mainAppItems, columns, rows);
+            }
+            syncPageIndicator(pagedAppListAdapter.getPageCount());
             updatePageIndicator(pager.getCurrentItem());
             // Route hardware-key navigation at the page currently on screen.
             pager.post(() -> {
@@ -2369,15 +2419,24 @@ public class MainActivity
 
         int bottomAppCount = bottomItems != null ? bottomItems.size() : 0;
         if (bottomAppCount > 0) {
-            bottomAppListAdapter = new BottomAppListAdapter(this, this, this, bottomItems);
-            bottomAppListAdapter.setSpanCount(columns);
-
+            int bottomSpan = bottomAppCount < columns ? bottomAppCount : columns;
+            if (bottomAppListAdapter == null) {
+                bottomAppListAdapter = new BottomAppListAdapter(this, this, this, bottomItems);
+                bottomAppListAdapter.setSpanCount(columns);
+                binding.activityBottomLine.setLayoutManager(new GridLayoutManager(this, bottomSpan));
+                binding.activityBottomLine.setAdapter(bottomAppListAdapter);
+            } else {
+                // Update in place so the dock doesn't flash either.
+                bottomAppListAdapter.setSpanCount(columns);
+                if (binding.activityBottomLine.getLayoutManager() instanceof GridLayoutManager) {
+                    ((GridLayoutManager) binding.activityBottomLine.getLayoutManager()).setSpanCount(bottomSpan);
+                }
+                bottomAppListAdapter.updateItems(bottomItems);
+            }
             binding.activityBottomLayout.setVisibility(View.VISIBLE);
-            binding.activityBottomLine.setLayoutManager(new GridLayoutManager(this, bottomAppCount < columns ? bottomAppCount : columns));
-            binding.activityBottomLine.setAdapter(bottomAppListAdapter);
-            bottomAppListAdapter.notifyDataSetChanged();
         } else {
             bottomAppListAdapter = null;
+            binding.activityBottomLine.setAdapter(null);
             binding.activityBottomLayout.setVisibility(View.GONE);
         }
 

@@ -18,7 +18,10 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.core.content.FileProvider;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.ArrayList;
 
 import com.brother.pharmach.mdm.launcher.BuildConfig;
 import com.brother.pharmach.mdm.launcher.Const;
@@ -87,6 +90,30 @@ public class BaseAppListAdapter extends RecyclerView.Adapter<BaseAppListAdapter.
                 shortcuts.put(item.keyCode, item);
             }
         }
+    }
+
+    /**
+     * Smoothly updates the shortcut list in place using DiffUtil, so only added/removed/moved
+     * icons animate and unchanged icons are never rebound (no icon reload / flash). Replaces the
+     * old approach of recreating the whole adapter, which caused the visible "refresh" flash on
+     * every worktime transition.
+     */
+    public void updateItems(List<AppInfo> newItems) {
+        final List<AppInfo> oldItems = items != null ? items : new ArrayList<>();
+        final List<AppInfo> next = newItems != null ? newItems : new ArrayList<>();
+        DiffUtil.DiffResult result = DiffUtil.calculateDiff(new DiffUtil.Callback() {
+            @Override public int getOldListSize() { return oldItems.size(); }
+            @Override public int getNewListSize() { return next.size(); }
+            @Override public boolean areItemsTheSame(int o, int n) {
+                return oldItems.get(o).identity().equals(next.get(n).identity());
+            }
+            @Override public boolean areContentsTheSame(int o, int n) {
+                return oldItems.get(o).signature().equals(next.get(n).signature());
+            }
+        });
+        items = next;
+        initShortcuts();
+        result.dispatchUpdatesTo(this);
     }
 
     @Override

@@ -40,6 +40,31 @@ public class AppInfo implements Parcelable {
 
     public AppInfo(){}
 
+    /**
+     * Stable identity of this shortcut (what it points to), independent of its label/icon.
+     * Used by DiffUtil to tell "same app, maybe moved" from "different app".
+     */
+    public String identity() {
+        switch (type) {
+            case TYPE_WEB:
+                return "web:" + url;
+            case TYPE_INTENT:
+                return "intent:" + intent + ":" + (name != null ? name : "");
+            default:
+                return "app:" + packageName;
+        }
+    }
+
+    /**
+     * Full display signature — changes only when something the grid actually renders changes.
+     * Used both for change detection (skip needless re-renders) and DiffUtil content equality.
+     */
+    public String signature() {
+        return type + "|" + identity() + "|" + (name != null ? name : "") + "|"
+                + (iconUrl != null ? iconUrl : "") + "|" + longTap + "|" + useKiosk + "|"
+                + (keyCode != null ? keyCode : "") + "|" + (screenOrder != null ? screenOrder : "");
+    }
+
     protected AppInfo(Parcel in) {
         type = in.readInt();
         keyCode = (Integer)in.readSerializable();

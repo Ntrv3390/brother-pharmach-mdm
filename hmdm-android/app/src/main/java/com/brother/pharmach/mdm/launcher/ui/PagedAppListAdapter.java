@@ -55,23 +55,55 @@ public class PagedAppListAdapter extends RecyclerView.Adapter<PagedAppListAdapte
         this.switchAdapterListener = switchAdapterListener;
     }
 
+    private List<List<AppInfo>> slicePages(List<AppInfo> allApps, int span, int rows) {
+        int perPage = Math.max(1, span * Math.max(1, rows));
+        List<List<AppInfo>> result = new ArrayList<>();
+        if (allApps != null) {
+            for (int i = 0; i < allApps.size(); i += perPage) {
+                result.add(new ArrayList<>(allApps.subList(i, Math.min(i + perPage, allApps.size()))));
+            }
+        }
+        if (result.isEmpty()) {
+            result.add(new ArrayList<>());
+        }
+        return result;
+    }
+
     /**
-     * Splits the full app list into pages of {@code spanCount * rows} items and refreshes the pager.
+     * Splits the full app list into pages and does a full (re)bind. Used for the first render.
      */
     public void setData(List<AppInfo> allApps, int spanCount, int rows) {
         this.spanCount = Math.max(1, spanCount);
-        int perPage = Math.max(1, this.spanCount * Math.max(1, rows));
-        pages = new ArrayList<>();
-        if (allApps != null) {
-            for (int i = 0; i < allApps.size(); i += perPage) {
-                pages.add(new ArrayList<>(allApps.subList(i, Math.min(i + perPage, allApps.size()))));
-            }
-        }
-        if (pages.isEmpty()) {
-            pages.add(new ArrayList<>());
-        }
+        pages = slicePages(allApps, this.spanCount, rows);
         pageAdapters.clear();
         notifyDataSetChanged();
+    }
+
+    /**
+     * Smoothly updates the pages in place. When the page count and column count are unchanged,
+     * each visible page diffs its own items (only added/removed icons animate). Only a change in
+     * the number of pages or columns falls back to a full rebind. This avoids the whole-screen
+     * "refresh" flash that recreating the adapter used to cause on every worktime transition.
+     */
+    public void updateData(List<AppInfo> allApps, int columns, int rows) {
+        int newSpan = Math.max(1, columns);
+        List<List<AppInfo>> newPages = slicePages(allApps, newSpan, rows);
+        boolean structureChanged = newSpan != this.spanCount || newPages.size() != pages.size();
+        this.spanCount = newSpan;
+        this.pages = newPages;
+        if (structureChanged) {
+            pageAdapters.clear();
+            notifyDataSetChanged();
+        } else {
+            for (int i = 0; i < pages.size(); i++) {
+                MainAppListAdapter pageAdapter = pageAdapters.get(i);
+                if (pageAdapter != null) {
+                    pageAdapter.updateItems(pages.get(i));
+                } else {
+                    notifyItemChanged(i);
+                }
+            }
+        }
     }
 
     public int getPageCount() {
