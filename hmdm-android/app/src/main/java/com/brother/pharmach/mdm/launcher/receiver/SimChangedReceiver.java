@@ -23,11 +23,14 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+
 import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.json.DeviceInfo;
 import com.brother.pharmach.mdm.launcher.server.ServerService;
 import com.brother.pharmach.mdm.launcher.server.ServerServiceKeeper;
+import com.brother.pharmach.mdm.launcher.service.StatusControlService;
 import com.brother.pharmach.mdm.launcher.util.DeviceInfoProvider;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
@@ -38,6 +41,17 @@ public class SimChangedReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(final Context context, final Intent intent) {
+        // A SIM was inserted, removed, locked or (on eSIM) switched. Kick the enforcement
+        // engine so it re-binds its per-subscription telephony callbacks (which are pinned to
+        // subscription IDs that go stale on a swap) and re-evaluates the mobile-data policy
+        // immediately, instead of waiting up to a second for the watchdog to notice.
+        try {
+            StatusControlService.start(context);
+            LocalBroadcastManager.getInstance(context)
+                    .sendBroadcast(new Intent(Const.ACTION_SIM_STATE_CHANGED));
+        } catch (Exception ignored) {
+        }
+
         // SIM card changed, log the new IMSI and number
         String phoneNumber = null;
         try {

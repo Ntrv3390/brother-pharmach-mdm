@@ -62,6 +62,7 @@ import android.view.LayoutInflater;
 import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
+import androidx.viewpager2.widget.ViewPager2;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ImageView;
@@ -192,6 +193,9 @@ public class MainActivity
 
     private MainAppListAdapter mainAppListAdapter;
     private BottomAppListAdapter bottomAppListAdapter;
+    private PagedAppListAdapter pagedAppListAdapter;
+    private java.util.List<com.brother.pharmach.mdm.launcher.util.AppInfo> mainAppItems;
+    private boolean pagerCallbackRegistered = false;
     private int spanCount;
     private StatusBarUpdater statusBarUpdater = new StatusBarUpdater();
     private Boolean settingsLockedByWorkTime = null;
@@ -668,7 +672,10 @@ public class MainActivity
                 String msg = getString(dataOn
                         ? R.string.message_mobile_data_locked
                         : R.string.message_turn_on_mobile_data);
-                createAndShowSystemSettingDialog(msg, null, null, dataOn ? null : Boolean.TRUE);
+                // When data is off, the button opens the Settings page so the user can enable it;
+                // when it is only locked (already on), the dialog is purely informational.
+                Intent settingsIntent = dataOn ? null : new Intent(Settings.ACTION_SETTINGS);
+                createAndShowSystemSettingDialog(msg, settingsIntent, null, null);
             }
         }
     }
@@ -2015,13 +2022,57 @@ public class MainActivity
 
     /** Collects the launchable package names currently shown by an adapter into {@code out}. */
     private void collectPackages(BaseAppListAdapter adapter, java.util.Set<String> out) {
-        if (adapter == null || adapter.items == null) {
+        if (adapter == null) {
             return;
         }
-        for (com.brother.pharmach.mdm.launcher.util.AppInfo info : adapter.items) {
+        collectPackages(adapter.items, out);
+    }
+
+    private void collectPackages(java.util.List<com.brother.pharmach.mdm.launcher.util.AppInfo> apps, java.util.Set<String> out) {
+        if (apps == null) {
+            return;
+        }
+        for (com.brother.pharmach.mdm.launcher.util.AppInfo info : apps) {
             if (info != null && info.type == com.brother.pharmach.mdm.launcher.util.AppInfo.TYPE_APP
                     && info.packageName != null && !info.packageName.trim().isEmpty()) {
                 out.add(info.packageName);
+            }
+        }
+    }
+
+    /**
+     * (Re)builds the page-indicator dots. Hidden entirely when there is only a single page.
+     */
+    private void buildPageIndicator(int count) {
+        android.widget.LinearLayout indicator = binding.pageIndicator;
+        indicator.removeAllViews();
+        if (count <= 1) {
+            indicator.setVisibility(View.GONE);
+            return;
+        }
+        indicator.setVisibility(View.VISIBLE);
+        int dot = (int) (8 * getResources().getDisplayMetrics().density);
+        int gap = (int) (4 * getResources().getDisplayMetrics().density);
+        for (int i = 0; i < count; i++) {
+            ImageView iv = new ImageView(this);
+            android.widget.LinearLayout.LayoutParams lp =
+                    new android.widget.LinearLayout.LayoutParams(dot, dot);
+            lp.leftMargin = gap;
+            lp.rightMargin = gap;
+            iv.setLayoutParams(lp);
+            iv.setImageResource(R.drawable.page_dot_unselected);
+            indicator.addView(iv);
+        }
+    }
+
+    private void updatePageIndicator(int selected) {
+        android.widget.LinearLayout indicator = binding.pageIndicator;
+        for (int i = 0; i < indicator.getChildCount(); i++) {
+            View child = indicator.getChildAt(i);
+            if (child instanceof ImageView) {
+                ((ImageView) child).setImageResource(i == selected
+                        ? R.drawable.page_dot_selected
+                        : R.drawable.page_dot_unselected);
             }
         }
     }
@@ -2165,12 +2216,62 @@ public class MainActivity
             int itemWidth = getResources().getDimensionPixelSize(R.dimen.app_list_item_size);
 
             spanCount = (int) (width * 1.0f / itemWidth);
-            mainAppListAdapter = new MainAppListAdapter(this, this, this);
-            mainAppListAdapter.setSpanCount(spanCount);
+            if (spanCount < 1) {
+                spanCount = 1;
+            }
 
-            binding.activityMainContent.setLayoutManager(new GridLayoutManager(this, spanCount));
-            binding.activityMainContent.setAdapter(mainAppListAdapter);
-            mainAppListAdapter.notifyDataSetChanged();
+            // Full app list (work-time filtering is applied per-icon at tap time). We slice it into
+            // horizontally-swipeable pages below, once the pager has been measured and we know how
+            // many rows fit the available height.
+            mainAppItems = AppShortcutManager.getInstance().getInstalledApps(this, false);
+
+            final int columns = spanCount;
+            // Icon-aware row height so pages stay responsive when the server scales the icon size.
+            Integer iconScaleCfg = config.getIconSize();
+            int iconScale = iconScaleCfg == null ? ServerConfig.DEFAULT_ICON_SIZE : iconScaleCfg;
+            int iconPx = getResources().getDimensionPixelOffset(R.dimen.app_icon_size) * iconScale / 100;
+            final int rowHeightPx = Math.max(itemWidth,
+                    iconPx + (int) (40 * getResources().getDisplayMetrics().density));
+
+            pagedAppListAdapter = new PagedAppListAdapter(this, this, this);
+            final ViewPager2 pager = binding.activityMainPager;
+            pager.setAdapter(pagedAppListAdapter);
+
+            if (!pagerCallbackRegistered) {
+                pager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
+                    @Override
+                    public void onPageSelected(int position) {
+                        updatePageIndicator(position);
+                        if (pagedAppListAdapter != null) {
+                            MainAppListAdapter pageAdapter = pagedAppListAdapter.getPageAdapter(position);
+                            if (pageAdapter != null) {
+                                mainAppListAdapter = pageAdapter;
+                            }
+                        }
+                    }
+                });
+                pagerCallbackRegistered = true;
+            }
+
+            // The pager must be laid out before we can read its height to compute the row count.
+            final int fallbackHeight = (int) (size.y * 0.8f);
+            pager.post(() -> {
+                int h = pager.getHeight();
+                if (h <= 0) {
+                    h = fallbackHeight;
+                }
+                int rows = Math.max(1, h / rowHeightPx);
+                pagedAppListAdapter.setData(mainAppItems, columns, rows);
+                buildPageIndicator(pagedAppListAdapter.getPageCount());
+                updatePageIndicator(pager.getCurrentItem());
+                // Route hardware-key navigation at the page currently on screen.
+                pager.post(() -> {
+                    MainAppListAdapter pageAdapter = pagedAppListAdapter.getPageAdapter(pager.getCurrentItem());
+                    if (pageAdapter != null) {
+                        mainAppListAdapter = pageAdapter;
+                    }
+                });
+            });
 
             int bottomAppCount = AppShortcutManager.getInstance().getInstalledAppCount(this, true);
             if (bottomAppCount > 0) {
@@ -2194,7 +2295,7 @@ public class MainActivity
                     && getPackageName().equals(config.getMainApp())
                     && ProUtils.isKioskModeRunning(this)) {
                 java.util.LinkedHashSet<String> visiblePackages = new java.util.LinkedHashSet<>();
-                collectPackages(mainAppListAdapter, visiblePackages);
+                collectPackages(mainAppItems, visiblePackages);
                 collectPackages(bottomAppListAdapter, visiblePackages);
                 ProUtils.setKioskLockTaskWhitelist(this, visiblePackages);
             }
@@ -2262,7 +2363,8 @@ public class MainActivity
         try {
             if (!Utils.isMobileDataEnabled(this)) {
                 if (systemSettingsDialog == null || !systemSettingsDialog.isShowing()) {
-                    createAndShowSystemSettingDialog(getString(R.string.message_turn_on_mobile_data), null, null, true);
+                    createAndShowSystemSettingDialog(getString(R.string.message_turn_on_mobile_data),
+                            new Intent(Settings.ACTION_SETTINGS), null, null);
                 }
             }
         } catch (Exception e) {
@@ -2281,7 +2383,8 @@ public class MainActivity
                         new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS), REQUEST_CODE_GPS_STATE_CHANGE);
                 break;
             case Const.MOBILE_DATA_ON_REQUIRED:
-                createAndShowSystemSettingDialog(getString(R.string.message_turn_on_mobile_data), null, 0, true);
+                createAndShowSystemSettingDialog(getString(R.string.message_turn_on_mobile_data),
+                        new Intent(Settings.ACTION_SETTINGS), null, null);
                 break;
             case Const.MOBILE_DATA_OFF_REQUIRED:
                 createAndShowSystemSettingDialog(getString(R.string.message_turn_off_mobile_data), null, 0, false);

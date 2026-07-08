@@ -229,7 +229,12 @@ public class QuickPanelController implements QuickPanelView.Listener {
 
         switch (ev.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
-                if (ev.getY() <= edgeCaptureHeight && !panelView.isAnimating()) {
+                // Track from anywhere on screen (not just the top edge band) so a downward swipe
+                // starting on any part of the launcher pulls the custom status/quick panel down.
+                // This only starts *tracking* — the gesture is not stolen from child views until it
+                // commits as a clear downward drag below (dy >= slop && dy >= absDx*0.6), so taps
+                // still launch apps and horizontal swipes still page the app grid.
+                if (!panelView.isAnimating()) {
                     gestureState = GESTURE_TRACKING;
                     gestureDownX = ev.getX();
                     gestureDownY = ev.getY();

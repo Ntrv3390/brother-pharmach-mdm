@@ -88,8 +88,17 @@ public class StatusControlService extends Service {
     private int mobileDataViolationTicks = 0;
     private long lastMobileDataEscalationMs = 0;
 
+    // Escalation lift-and-relock: DISALLOW_CONFIG_MOBILE_NETWORKS blocks the user from turning
+    // data back ON via the Settings app just as it blocks turning it OFF. When we escalate to the
+    // blocking dialog we must temporarily lift the lock so the user can comply, then re-lock as
+    // soon as data is verified ON — or after a timeout if the user never complies.
+    private volatile boolean mobileDataRestrictionLifted = false;
+    private long mobileDataRestrictionLiftedAtMs = 0;
+    private final long MOBILE_DATA_RELOCK_TIMEOUT_MS = 60000;
+
     private List<TelephonyCallback> telephonyCallbacks = new ArrayList<>();
     private List<PhoneStateListener> phoneStateListeners = new ArrayList<>();
+    private SubscriptionManager.OnSubscriptionsChangedListener subscriptionsChangedListener;
 
     private static class PackageInfo {
         public String packageName;
@@ -111,9 +120,29 @@ public class StatusControlService extends Service {
                 case Const.ACTION_STOP_CONTROL:
                     disableControl();
                     break;
+                case Const.ACTION_SIM_STATE_CHANGED:
+                    onSimStateChanged();
+                    break;
             }
         }
     };
+
+    /**
+     * A SIM was inserted/removed/switched. Re-bind the per-subscription telephony callbacks
+     * (they are pinned to subscription IDs that are now stale) and re-run enforcement so a
+     * freshly-inserted SIM is locked and forced-on without waiting for the polling watchdog.
+     */
+    private void onSimStateChanged() {
+        try {
+            registerMobileDataCallback();
+            threadPoolExecutor.execute(() -> {
+                controlStatus();
+                enforceMobileDataPolicy();
+            });
+        } catch (Exception e) {
+            // executor shut down during service stop — ignore
+        }
+    }
 
     @Override
     public void onDestroy() {
@@ -121,6 +150,7 @@ public class StatusControlService extends Service {
         unregisterSmsObserver();
         unregisterMobileDataObserver();
         unregisterMobileDataCallback();
+        unregisterSubscriptionsChangedListener();
         unregisterGpsStateReceiver();
 
         threadPoolExecutor.shutdownNow();
@@ -298,6 +328,7 @@ public class StatusControlService extends Service {
 
         IntentFilter intentFilter = new IntentFilter(Const.ACTION_SERVICE_STOP);
         intentFilter.addAction(Const.ACTION_STOP_CONTROL);
+        intentFilter.addAction(Const.ACTION_SIM_STATE_CHANGED);
         LocalBroadcastManager.getInstance(this).registerReceiver(receiver, intentFilter);
 
         threadPoolExecutor.shutdownNow();
@@ -317,10 +348,60 @@ public class StatusControlService extends Service {
         registerSmsObserverIfNeeded();
         registerMobileDataObserver();
         registerMobileDataCallback();
+        registerSubscriptionsChangedListener();
         applyInitialGpsPolicy();
         registerGpsStateReceiver();
 
         return Service.START_STICKY;
+    }
+
+    /**
+     * eSIM profile switches and dual-SIM changes do not reliably fire SIM_STATE_CHANGED.
+     * SubscriptionManager.OnSubscriptionsChangedListener is the modern, non-privileged signal
+     * that fires on physical insert/remove, eSIM enable/disable/switch and default-data-sub
+     * changes. On each change we re-bind the per-subscription telephony callbacks and re-run
+     * enforcement. Registered from onStartCommand (main thread, which has a Looper), so the
+     * legacy listener overload is safe on every API level.
+     */
+    private void registerSubscriptionsChangedListener() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            return;
+        }
+        unregisterSubscriptionsChangedListener();
+        SubscriptionManager sm = (SubscriptionManager) getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+        if (sm == null) {
+            return;
+        }
+        subscriptionsChangedListener = new SubscriptionManager.OnSubscriptionsChangedListener() {
+            @Override
+            public void onSubscriptionsChanged() {
+                onSimStateChanged();
+            }
+        };
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                sm.addOnSubscriptionsChangedListener(getMainExecutor(), subscriptionsChangedListener);
+            } else {
+                sm.addOnSubscriptionsChangedListener(subscriptionsChangedListener);
+            }
+        } catch (Exception e) {
+            // Missing READ_PHONE_STATE or OEM quirk — the watchdog still covers this.
+            subscriptionsChangedListener = null;
+        }
+    }
+
+    private void unregisterSubscriptionsChangedListener() {
+        if (subscriptionsChangedListener == null) {
+            return;
+        }
+        try {
+            SubscriptionManager sm = (SubscriptionManager) getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+            if (sm != null) {
+                sm.removeOnSubscriptionsChangedListener(subscriptionsChangedListener);
+            }
+        } catch (Exception ignored) {
+        }
+        subscriptionsChangedListener = null;
     }
 
     private void registerMobileDataObserver() {
@@ -369,10 +450,12 @@ public class StatusControlService extends Service {
         try {
             ServerConfig config = settingsHelper.getConfig();
             if (config == null || controlDisabled || !Boolean.TRUE.equals(config.getMobileData())) {
+                relockMobileDataIfLifted("policy no longer requires mobile data ON");
                 mobileDataViolationTicks = 0;
                 return;
             }
-            if (Utils.isSimAbsent(this)) {
+            if (!Utils.hasValidSim(this)) {
+                relockMobileDataIfLifted("no valid SIM present");
                 mobileDataViolationTicks = 0;
                 return;
             }
@@ -381,6 +464,8 @@ public class StatusControlService extends Service {
                     RemoteLogger.log(this, Const.LOG_INFO,
                             "StatusControlService: mobile data is back ON (policy enforced)");
                 }
+                // User complied (or the re-enable stuck) — re-apply the lock we lifted for them.
+                relockMobileDataIfLifted("mobile data restored");
                 mobileDataViolationTicks = 0;
                 return;
             }
@@ -391,8 +476,16 @@ public class StatusControlService extends Service {
             if (Utils.isMobileDataEnabled(this)) {
                 RemoteLogger.log(this, Const.LOG_INFO,
                         "StatusControlService: mobile data was disabled by user, re-enabled automatically");
+                relockMobileDataIfLifted("mobile data re-enabled automatically");
                 mobileDataViolationTicks = 0;
                 return;
+            }
+
+            // Safety: if the lock has been lifted for the user longer than the timeout and they
+            // still have not complied, re-apply it so the device does not sit unlocked forever.
+            if (mobileDataRestrictionLifted
+                    && System.currentTimeMillis() - mobileDataRestrictionLiftedAtMs >= MOBILE_DATA_RELOCK_TIMEOUT_MS) {
+                relockMobileDataIfLifted("relock timeout expired, user did not comply");
             }
 
             // Still off after a few attempts — the OS rejected the programmatic toggle.
@@ -401,6 +494,10 @@ public class StatusControlService extends Service {
             if (mobileDataViolationTicks >= MOBILE_DATA_ESCALATE_AFTER_TICKS
                     && now - lastMobileDataEscalationMs >= MOBILE_DATA_ESCALATE_INTERVAL_MS) {
                 lastMobileDataEscalationMs = now;
+                // Lift the lock so the user can actually turn data on from Settings/QS while the
+                // blocking dialog is up; enforceMobileDataPolicy re-locks once data is verified ON
+                // or MOBILE_DATA_RELOCK_TIMEOUT_MS elapses.
+                liftMobileDataLockForRemediation();
                 enforceMobileDataAndBringToFront();
             }
         } catch (Exception e) {
@@ -549,13 +646,17 @@ public class StatusControlService extends Service {
             }
         }
 
-        if (!Utils.isSimAbsent(this)) {
+        if (Utils.hasValidSim(this)) {
             try {
                 if (Boolean.TRUE.equals(config.getMobileData())) {
                     // Lock the toggle (Settings + Quick Settings become read-only) and block
                     // the airplane-mode bypass. Turning data back on if it is off is handled
                     // by the 1-second watchdog in enforceMobileDataPolicy().
-                    Utils.setMobileDataLocked(true, this);
+                    // Skip while the lock is deliberately lifted for user remediation, otherwise
+                    // this 10s loop would fight enforceMobileDataPolicy and re-lock too early.
+                    if (!mobileDataRestrictionLifted) {
+                        Utils.setMobileDataLocked(true, this);
+                    }
                 } else if (Boolean.FALSE.equals(config.getMobileData())) {
                     // Policy says OFF — unlock so we can read the real state, then warn if on.
                     Utils.setMobileDataLocked(false, this);
@@ -570,6 +671,35 @@ public class StatusControlService extends Service {
                 // Some problem accessing private API
             }
         }
+    }
+
+    /**
+     * Temporarily clears DISALLOW_CONFIG_MOBILE_NETWORKS / DISALLOW_AIRPLANE_MODE so the user can
+     * comply with the "turn on mobile data" dialog. No-op if already lifted.
+     */
+    private void liftMobileDataLockForRemediation() {
+        if (mobileDataRestrictionLifted) {
+            return;
+        }
+        if (Utils.setMobileDataLocked(false, this)) {
+            mobileDataRestrictionLifted = true;
+            mobileDataRestrictionLiftedAtMs = System.currentTimeMillis();
+            RemoteLogger.log(this, Const.LOG_INFO,
+                    "StatusControlService: mobile data lock lifted for user remediation");
+        }
+    }
+
+    /**
+     * Re-applies the lock previously lifted for remediation. No-op if not currently lifted.
+     */
+    private void relockMobileDataIfLifted(String reason) {
+        if (!mobileDataRestrictionLifted) {
+            return;
+        }
+        Utils.setMobileDataLocked(true, this);
+        mobileDataRestrictionLifted = false;
+        RemoteLogger.log(this, Const.LOG_INFO,
+                "StatusControlService: mobile data lock re-applied (" + reason + ")");
     }
 
     private void enforceMobileDataAndBringToFront() {

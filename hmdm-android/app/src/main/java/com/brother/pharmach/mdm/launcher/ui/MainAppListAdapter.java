@@ -21,6 +21,10 @@ package com.brother.pharmach.mdm.launcher.ui;
 
 import android.app.Activity;
 
+import com.brother.pharmach.mdm.launcher.util.AppInfo;
+
+import java.util.List;
+
 /**
  * Created by Ivan Lozenko on 21.02.2017.
  */
@@ -30,6 +34,16 @@ public class MainAppListAdapter extends BaseAppListAdapter {
     public MainAppListAdapter(Activity parentActivity, OnAppChooseListener appChooseListener, SwitchAdapterListener switchAdapterListener) {
         super(parentActivity, appChooseListener, switchAdapterListener);
         items = AppShortcutManager.getInstance().getInstalledApps(parentActivity, false);
+        initShortcuts();
+    }
+
+    /**
+     * Builds an adapter over a pre-sliced list of apps — used to render a single page of the
+     * paged home screen (see {@link PagedAppListAdapter}) instead of rebuilding the whole list.
+     */
+    public MainAppListAdapter(Activity parentActivity, OnAppChooseListener appChooseListener, SwitchAdapterListener switchAdapterListener, List<AppInfo> items) {
+        super(parentActivity, appChooseListener, switchAdapterListener);
+        this.items = items;
         initShortcuts();
     }
 }

@@ -134,12 +134,31 @@
                     android:layout_marginRight="5dp"/>
             </LinearLayout>
 
-            <androidx.recyclerview.widget.RecyclerView
+            <LinearLayout
                 android:id="@+id/activity_main_content"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:orientation="vertical"
                 android:layout_above="@+id/activity_bottom_layout"
-                android:layout_below="@+id/status_header" />
+                android:layout_below="@+id/status_header">
+
+                <androidx.viewpager2.widget.ViewPager2
+                    android:id="@+id/activity_main_pager"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <LinearLayout
+                    android:id="@+id/page_indicator"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginTop="4dp"
+                    android:layout_marginBottom="6dp"
+                    android:gravity="center"
+                    android:orientation="horizontal" />
+
+            </LinearLayout>
 
             <RelativeLayout
                 android:id="@+id/activity_bottom_layout"

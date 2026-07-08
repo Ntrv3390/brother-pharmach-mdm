@@ -40,6 +40,9 @@ public class Const {
     public static final String ACTION_ADMIN = "ADMIN";
     public static final String ACTION_INSTALL_COMPLETE = "INSTALL_COMPLETE";
     public static final String ACTION_DISABLE_BLOCK_WINDOW = "DISABLE_BLOCK_WINDOW";
+    // Fired when a SIM is inserted/removed/switched so StatusControlService re-binds its
+    // per-subscription telephony callbacks and re-runs mobile-data enforcement immediately.
+    public static final String ACTION_SIM_STATE_CHANGED = "SIM_STATE_CHANGED_INTERNAL";
 
     public static final String EXTRA_ENABLED = "ENABLED";
 

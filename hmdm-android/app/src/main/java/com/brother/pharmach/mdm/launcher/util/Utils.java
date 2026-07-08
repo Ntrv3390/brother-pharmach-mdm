@@ -569,6 +569,25 @@ public class Utils {
                     if (dataSubId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
                         return tm.createForSubscriptionId(dataSubId).isDataEnabled();
                     }
+                    // No default data subscription (common mid-swap on dual-SIM / eSIM devices).
+                    // Consider data enabled if ANY active subscription has it enabled, so the
+                    // watchdog does not fire a false violation during the switch window.
+                    try {
+                        SubscriptionManager sm = (SubscriptionManager)
+                                context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+                        List<SubscriptionInfo> subs =
+                                sm != null ? sm.getActiveSubscriptionInfoList() : null;
+                        if (subs != null && !subs.isEmpty()) {
+                            for (SubscriptionInfo sub : subs) {
+                                if (tm.createForSubscriptionId(sub.getSubscriptionId()).isDataEnabled()) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        }
+                    } catch (Exception ignored) {
+                        // Fall back to the default-manager reading below.
+                    }
                     return tm.isDataEnabled();
                 }
             } catch (Exception e) {
@@ -695,6 +714,54 @@ public class Utils {
             return tm != null && tm.getSimState() == TelephonyManager.SIM_STATE_ABSENT;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /**
+     * Returns true if at least one usable SIM (physical or eSIM, either slot) is present.
+     *
+     * A SIM counts as "valid" only when it is both active (present AND enabled — this excludes
+     * empty slots and downloaded-but-disabled eSIM profiles, which never appear in
+     * getActiveSubscriptionInfoList()) and its slot is in a READY/LOADED state. PIN/PUK-locked,
+     * NOT_READY, CARD_IO_ERROR and PERM_DISABLED SIMs are treated as not-yet-valid so the
+     * enforcement engine idles instead of nagging the user behind a PIN prompt.
+     *
+     * This is stricter than isSimAbsent(), which only inspects the default slot and so misses a
+     * SIM present in slot 2 only, or a locked SIM that reports "not absent".
+     */
+    public static boolean hasValidSim(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            // Pre-22: no SubscriptionManager slot mapping — fall back to the single-SIM state.
+            return !isSimAbsent(context);
+        }
+        try {
+            TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+            SubscriptionManager sm = (SubscriptionManager)
+                    context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+            if (tm == null || sm == null) {
+                return !isSimAbsent(context);
+            }
+            List<SubscriptionInfo> subs = sm.getActiveSubscriptionInfoList();
+            if (subs == null || subs.isEmpty()) {
+                return false;
+            }
+            for (SubscriptionInfo sub : subs) {
+                int state;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    // Per-slot state (API 26+) so we can tell slot 1 apart from slot 2.
+                    state = tm.getSimState(sub.getSimSlotIndex());
+                } else {
+                    state = tm.getSimState();
+                }
+                if (state == TelephonyManager.SIM_STATE_READY) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            // On any failure (missing permission, OEM quirk) fall back to the lenient check
+            // rather than falsely idling enforcement.
+            return !isSimAbsent(context);
         }
     }
 
