@@ -86,17 +86,6 @@ public class StatusControlService extends Service {
         return sMobileDataViolationActive;
     }
 
-    // When the user taps "open mobile-network settings" we suppress all mobile-data enforcement
-    // (no bounce, no bring-to-front) for a grace window, so the settings screen can open and stay
-    // long enough for them to flip the toggle instead of being yanked straight back.
-    private static volatile long sEnforcementSuppressedUntil = 0;
-    public static void suppressEnforcement(long ms) {
-        sEnforcementSuppressedUntil = System.currentTimeMillis() + ms;
-    }
-    public static boolean isEnforcementSuppressed() {
-        return System.currentTimeMillis() < sEnforcementSuppressedUntil;
-    }
-
     public static final int MOBILE_DATA_NOTIFICATION_ID = 2001;
     private static final String MOBILE_DATA_CHANNEL_ID = "mdm_mobile_data_channel";
 
@@ -537,49 +526,30 @@ public class StatusControlService extends Service {
                 return;
             }
 
-            // Accessibility is a hard prerequisite for the lockdown. Until it is enabled, the UI
-            // shows its own mandatory "allow accessibility" gate and sends the user to the
-            // accessibility settings screen. If we enforced mobile data now (bring-to-front / the
-            // full-screen notification), we would repeatedly yank the user OUT of that settings
-            // screen — they could never finish enabling it, and the two prompts would flicker.
-            // So while accessibility is off, mobile-data enforcement stays completely dormant.
-            if (!com.brother.pharmach.mdm.launcher.pro.ProUtils.checkAccessibilityService(this)) {
-                sMobileDataViolationActive = false;
-                mobileDataViolationTicks = 0;
-                return;
-            }
-
             // Confirmed violation: data is OFF with a SIM present and policy requiring ON. Mark it
             // active so the accessibility service bounces the user out of other apps, and lift the
             // toggle lock so they can actually turn data on from the mobile-network settings screen.
-            // The lock is deliberately kept lifted for the whole violation (no relock timeout) — the
-            // only way out is to turn data on, and enforceMobileDataPolicy re-locks the instant it is.
             sMobileDataViolationActive = true;
             liftMobileDataLockForRemediation();
 
-            // Grace window right after the user tapped "open mobile-network settings": do nothing,
-            // so the settings screen opens and stays put instead of being yanked away.
-            if (isEnforcementSuppressed()) {
-                return;
+            // Safety: if the lock has been lifted for the user longer than the timeout and they
+            // still have not complied, re-apply it so the device does not sit unlocked forever.
+            if (mobileDataRestrictionLifted
+                    && System.currentTimeMillis() - mobileDataRestrictionLiftedAtMs >= MOBILE_DATA_RELOCK_TIMEOUT_MS) {
+                relockMobileDataIfLifted("relock timeout expired, user did not comply");
             }
 
-            // If the user is parked in a blocked app (no window-change event fires in that case),
-            // force them back to the launcher every tick. The accessibility service ignores this
-            // while they are on the launcher / mobile-network settings, so it won't fight them.
-            com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundAppAccessibilityService
-                    .reassertIfViolating();
-
-            // Bring-to-front is ONLY needed when the launcher is in the background. When it is
-            // already foreground the popup is on screen (shown by onResume) — firing startActivity /
-            // the full-screen notification again just makes the popup flash. The accessibility
-            // bounce already handles returning the user when they switch to another app.
-            if (!com.brother.pharmach.mdm.launcher.ui.MainActivity.isForeground()) {
-                long now = System.currentTimeMillis();
-                if (mobileDataViolationTicks >= MOBILE_DATA_ESCALATE_AFTER_TICKS
-                        && now - lastMobileDataEscalationMs >= MOBILE_DATA_ESCALATE_INTERVAL_MS) {
-                    lastMobileDataEscalationMs = now;
-                    enforceMobileDataAndBringToFront();
-                }
+            // Still off after a few attempts — the OS rejected the programmatic toggle.
+            // Force the user to turn it back on via the blocking dialog.
+            long now = System.currentTimeMillis();
+            if (mobileDataViolationTicks >= MOBILE_DATA_ESCALATE_AFTER_TICKS
+                    && now - lastMobileDataEscalationMs >= MOBILE_DATA_ESCALATE_INTERVAL_MS) {
+                lastMobileDataEscalationMs = now;
+                // Lift the lock so the user can actually turn data on from Settings/QS while the
+                // blocking dialog is up; enforceMobileDataPolicy re-locks once data is verified ON
+                // or MOBILE_DATA_RELOCK_TIMEOUT_MS elapses.
+                liftMobileDataLockForRemediation();
+                enforceMobileDataAndBringToFront();
             }
         } catch (Exception e) {
             // ignore

@@ -45,7 +45,7 @@
     <string name="main_activity_cancel">Annuler</string>
     <string name="main_activity_details">Détails</string>
     <string name="select_system_launcher">Choisissez %s comme lanceur par défaut et vérifiez \"Toujours\":</string>
-    <string name="dialog_network_error_title">Error connecting to the server. Please check the Internet connection and try again.</string>
+    <string name="dialog_network_error_title">Erreur de connexion au serveur %s. Veuillez vérifier la connexion Internet et réessayer.</string>
     <string name="main_activity_update_config">Demander le fichier de configuration au serveur</string>
     <string name="main_activity_applications_update">Mise à jour des applications</string>
     <string name="dialog_overlay_settings_title">Veuillez autoriser l\'app à dessiner sur d\'autres fenêtres.\n\nCette option permet de mieux bloquer les applications indésirables et permet le déverrouillage d\'urgence du mode kiosque.\n\nAppuyez sur \"Continuer\" pour ouvrir une feuille de paramètres. Recherchez l\'élément \"%s\", accordez l\'autorisation et appuyez sur \"Retour\".</string>
@@ -121,7 +121,7 @@
     <string name="location_disable">Désactiver l\'emplacement</string>
     <string name="background_location_continue">Continuer</string>
     <string name="initializing_mdm">Initialisation de l\'application de gestion des appareils mobiles...</string>
-    <string name="dialog_server_error_title">The MDM server returned an invalid response. Please contact your administrator.</string>
+    <string name="dialog_server_error_title">Le serveur MDM %s a renvoyé une réponse non valide. Veuillez contacter votre administrateur.</string>
     <string name="mdm_choice_message">Cet appareil sera entièrement géré par votre organisation. Vos données ne seront pas privées et pourront être effacées ou révisées par votre administrateur informatique à tout moment.</string>
     <string name="work_profile_message">Cet appareil recevra un profil professionnel géré appartenant à votre organisation. Le profil professionnel est séparé de votre profil privé et vous pouvez basculer entre les profils à tout moment.</string>
     <string name="overlays_not_supported">Malheureusement, les superpositions ne sont pas prises en charge par votre appareil.</string>

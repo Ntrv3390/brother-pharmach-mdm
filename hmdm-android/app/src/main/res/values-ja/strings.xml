@@ -45,7 +45,7 @@
     <string name="main_activity_cancel">キャンセル</string>
     <string name="main_activity_details">詳細</string>
     <string name="select_system_launcher">%s をデフォルトのランチャーとして選択し、\'常に\' にチェックを入れます:</string>
-    <string name="dialog_network_error_title">Error connecting to the server. Please check the Internet connection and try again.</string>
+    <string name="dialog_network_error_title">%s への接続エラー。インターネット接続を確認して、再試行してください。</string>
     <string name="main_activity_update_config">サーバーから設定ファイルをリクエストしています</string>
     <string name="main_activity_applications_update">アプリケーションの更新</string>
     <string name="dialog_overlay_settings_title">アプリが他のウィンドウの上に描画できるようにしてください。\n\nこのオプションは、不要なアプリをより効果的にブロックし、キオスクモードの緊急ロック解除を可能にします。\n\n\"続行\" をタップして設定を開きますシート。 \"%s\" アイテムを見つけて許可を与え、\"戻る\" をタップしてください。</string>
@@ -121,7 +121,7 @@
     <string name="location_disable">位置情報を無効にする</string>
     <string name="background_location_continue">続ける</string>
     <string name="initializing_mdm">モバイルデバイス管理アプリケーションを初期化しています...</string>
-    <string name="dialog_server_error_title">The MDM server returned an invalid response. Please contact your administrator.</string>
+    <string name="dialog_server_error_title">MDMサーバー %s が無効な応答を返しました。管理者に連絡してください。</string>
     <string name="mdm_choice_message">このデバイスは組織によって完全に管理されます。データは秘匿されず、管理者がいつでも消去または確認することができます。</string>
     <string name="work_profile_message">このデバイスは、組織に属する管理対象の仕事用プロファイルを取得します。 仕事用プロファイルはプライベート プロファイルから分離されており、いつでもプロファイルを切り替えることができます。</string>
     <string name="overlays_not_supported">お使いのデバイスではオーバーレイがサポートされていません.</string>

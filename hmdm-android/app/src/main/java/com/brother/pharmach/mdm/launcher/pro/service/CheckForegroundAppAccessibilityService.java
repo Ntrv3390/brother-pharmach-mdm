@@ -40,15 +40,9 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
 
     private static final String TAG = "WorkTimeAccessibility";
 
-    // Live instance + last foreground package, so the mobile-data watchdog can force a user who
-    // is sitting still in a blocked app back to the launcher (no window-change event fires then).
-    private static volatile CheckForegroundAppAccessibilityService instance;
-    private static volatile String lastForegroundPkg;
-
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
-        instance = this;
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
         // TYPE_WINDOWS_CHANGED is intentionally excluded: it fires for every window in the
         // recents stack (thumbnails of all recent apps), which caused recents to auto-close
@@ -62,18 +56,6 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
     }
 
     @Override
-    public boolean onUnbind(Intent intent) {
-        instance = null;
-        return super.onUnbind(intent);
-    }
-
-    @Override
-    public void onDestroy() {
-        instance = null;
-        super.onDestroy();
-    }
-
-    @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             return;
@@ -83,27 +65,21 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
             return;
         }
         String pkg = packageName.toString();
-        if (pkg.isEmpty()) {
-            return;
-        }
-        lastForegroundPkg = pkg;
-        if (pkg.equals(getPackageName())) {
+        if (pkg.isEmpty() || pkg.equals(getPackageName())) {
             return;
         }
 
         // Mobile-data enforcement: while the policy requires data ON, a SIM is present and data is
-        // OFF, the only place the user may go is the launcher itself and the system Settings (to
-        // reach the mobile-network toggle) — plus the phone/emergency UIs, which must never be
-        // blocked. Any other app is bounced immediately back to the launcher with the persistent
-        // "turn on mobile data" prompt.
-        // Note: this event-driven bounce stays active even during the "open settings" grace window
-        // (the grace only silences the timer-driven bring-to-front). Settings itself is allowed, so
-        // it is never yanked; but if the user opens some OTHER app during the grace they are still
-        // bounced — no lockdown hole.
-        if (StatusControlService.isMobileDataViolationActive()
-                && !isAllowedDuringDataViolation(pkg)) {
+        // OFF, the only apps the user may use are the launcher itself, the system Settings (to reach
+        // the mobile-network toggle) and the phone/emergency UIs (never block calls). Any other app
+        // is bounced immediately: return home (the launcher is the kiosk home) and raise the
+        // persistent "turn on mobile data" prompt.
+        if (StatusControlService.isMobileDataViolationActive() && !isAllowedDuringDataViolation(pkg)) {
             Log.d(TAG, "Mobile data off — bouncing out of " + pkg);
-            bounceHome();
+            performGlobalAction(GLOBAL_ACTION_HOME);
+            Intent violation = new Intent(Const.ACTION_POLICY_VIOLATION);
+            violation.putExtra(Const.POLICY_VIOLATION_CAUSE, Const.MOBILE_DATA_ON_REQUIRED);
+            LocalBroadcastManager.getInstance(this).sendBroadcast(violation);
             return;
         }
 
@@ -119,48 +95,18 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
         }
     }
 
-    private void bounceHome() {
-        performGlobalAction(GLOBAL_ACTION_HOME);
-        Intent violation = new Intent(Const.ACTION_POLICY_VIOLATION);
-        violation.putExtra(Const.POLICY_VIOLATION_CAUSE, Const.MOBILE_DATA_ON_REQUIRED);
-        LocalBroadcastManager.getInstance(this).sendBroadcast(violation);
-    }
-
-    /**
-     * Called from the mobile-data watchdog every tick while data is off. If the user is currently
-     * parked in a blocked app (a case that fires no window-change event), force them back to the
-     * launcher. No-op if the foreground is already the launcher or an allowed screen (Settings /
-     * call), so it never fights the user while they are on the mobile-network settings page.
-     */
-    public static void reassertIfViolating() {
-        CheckForegroundAppAccessibilityService self = instance;
-        if (self == null) {
-            return;
-        }
-        if (!StatusControlService.isMobileDataViolationActive()
-                || StatusControlService.isEnforcementSuppressed()) {
-            return;
-        }
-        String pkg = lastForegroundPkg;
-        if (pkg == null || pkg.equals(self.getPackageName())) {
-            return;
-        }
-        if (self.isAllowedDuringDataViolation(pkg)) {
-            return;
-        }
-        Log.d(TAG, "Mobile data off — re-asserting launcher over parked app " + pkg);
-        self.bounceHome();
+    @Override
+    public void onInterrupt() {
+        // Required by AccessibilityService — no-op
     }
 
     private String settingsPkg;
 
     /**
-     * The things the user is allowed to reach while mobile data is off (besides the launcher):
-     *  - the system Settings, so they can turn data back on,
-     *  - the telephony/"Phone services" package `com.android.phone`, which hosts the mobile-network
-     *    and SIM settings screens on some OEMs (this is NOT the dialer UI, so the dialer stays
-     *    blocked as required).
-     * Everything else — including the phone dialer app — is bounced back to the launcher.
+     * Packages the user is allowed to reach while mobile data is off:
+     *  - the system Settings (to turn data back on),
+     *  - the telephony stack and dialer / in-call / emergency UIs — calls must NEVER be blocked.
+     * Everything else is bounced back to the launcher.
      */
     private boolean isAllowedDuringDataViolation(String pkg) {
         if (settingsPkg == null) {
@@ -176,13 +122,14 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
                 settingsPkg = "com.android.settings";
             }
         }
-        return pkg.equals(settingsPkg)
-                || pkg.contains("settings")
-                || pkg.equals("com.android.phone");
-    }
-
-    @Override
-    public void onInterrupt() {
-        // Required by AccessibilityService — no-op
+        if (pkg.equals(settingsPkg) || pkg.contains("settings")) {
+            return true;
+        }
+        // Never block calls / emergency / telephony UI.
+        return pkg.equals("com.android.phone")
+                || pkg.contains("dialer")
+                || pkg.contains("incall")
+                || pkg.contains("telecom")
+                || pkg.contains("emergency");
     }
 }

@@ -45,7 +45,7 @@
     <string name="main_activity_cancel">Ukončit</string>
     <string name="main_activity_details">Podrobnosti</string>
     <string name="select_system_launcher">Vyberte %s jako hlavní launcher a klepněte na \'Vždy\':</string>
-    <string name="dialog_network_error_title">Error connecting to the server. Please check the Internet connection and try again.</string>
+    <string name="dialog_network_error_title">Chyba připojení k %s. Zkontrolujte připojení k internetu a zkuste znovu.</string>
     <string name="main_activity_update_config">Získávám konfigurační soubor ze serveru</string>
     <string name="main_activity_applications_update">Aktualizace aplikací</string>
     <string name="dialog_overlay_settings_title">Prosím povolte aplikaci vykreslování přes ostatní okna.\n\nToto nastavení pomáhá lépe blokovat nežádoucí aplikace a umožní nouzové odemykání kiosku.\n\nVyberte \"Pokračovat\" pro otevření nastavení. Vyberte položku \"%s\" a povolte oprávnění, poté se vraťte.</string>
@@ -121,7 +121,7 @@
     <string name="location_disable">Zakázat polohu</string>
     <string name="background_location_continue">Pokračovat</string>
     <string name="initializing_mdm">Připravuji aplikaci pro správu zařízení...</string>
-    <string name="dialog_server_error_title">The MDM server returned an invalid response. Please contact your administrator.</string>
+    <string name="dialog_server_error_title">MDM server %s vrátil neplatnou odpověď. Prosím kontaktujte administrátora.</string>
     <string name="mdm_choice_message">Toto zažízení bude plně řízeno vaší organizací. Vaše data nejsou soukromá a mohou být kdykoliv smazána, nebo zobrazena vaším administrátotem.</string>
     <string name="work_profile_message">Na tomto zařízení se vytvoří pracovní profil, který patří vaší organizaci. Pracovní profil je oddělen od vašeho soukromého a lze mezi nimi kdykoliv přepínat.</string>
     <string name="overlays_not_supported">Překreslování obrazovku bohužel není podporováno na vašem zařízení.</string>
