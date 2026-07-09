@@ -653,9 +653,17 @@ public class MainActivity
 
         // Force the accessibility service to be enabled — it powers WorkTime blocking and the
         // mobile-data lockdown. Shows a mandatory (non-cancelable, no-skip) prompt until allowed.
-        enforceAccessibilityGate();
-
-        checkMobileDataViolation();
+        // While that gate is blocking, do NOT also show the mobile-data prompt — only one modal at
+        // a time, otherwise the two flicker and the user can't complete either.
+        boolean accessibilityGateBlocking = enforceAccessibilityGate();
+        if (accessibilityGateBlocking) {
+            if (mobileDataPromptShowing && systemSettingsDialog != null && systemSettingsDialog.isShowing()) {
+                dismissDialog(systemSettingsDialog);
+            }
+            mobileDataPromptShowing = false;
+        } else {
+            checkMobileDataViolation();
+        }
         enforceOverlayPermission();
 
         if (interruptResumeFlow) {

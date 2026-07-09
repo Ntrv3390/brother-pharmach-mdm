@@ -149,9 +149,12 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
     private String settingsPkg;
 
     /**
-     * The ONLY thing the user is allowed to reach while mobile data is off (besides the launcher):
-     * the system Settings, so they can turn data back on. Everything else — including the phone
-     * dialer — is bounced back to the launcher.
+     * The things the user is allowed to reach while mobile data is off (besides the launcher):
+     *  - the system Settings, so they can turn data back on,
+     *  - the telephony/"Phone services" package `com.android.phone`, which hosts the mobile-network
+     *    and SIM settings screens on some OEMs (this is NOT the dialer UI, so the dialer stays
+     *    blocked as required).
+     * Everything else — including the phone dialer app — is bounced back to the launcher.
      */
     private boolean isAllowedDuringDataViolation(String pkg) {
         if (settingsPkg == null) {
@@ -167,7 +170,9 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
                 settingsPkg = "com.android.settings";
             }
         }
-        return pkg.equals(settingsPkg) || pkg.contains("settings");
+        return pkg.equals(settingsPkg)
+                || pkg.contains("settings")
+                || pkg.equals("com.android.phone");
     }
 
     @Override

@@ -526,6 +526,18 @@ public class StatusControlService extends Service {
                 return;
             }
 
+            // Accessibility is a hard prerequisite for the lockdown. Until it is enabled, the UI
+            // shows its own mandatory "allow accessibility" gate and sends the user to the
+            // accessibility settings screen. If we enforced mobile data now (bring-to-front / the
+            // full-screen notification), we would repeatedly yank the user OUT of that settings
+            // screen — they could never finish enabling it, and the two prompts would flicker.
+            // So while accessibility is off, mobile-data enforcement stays completely dormant.
+            if (!com.brother.pharmach.mdm.launcher.pro.ProUtils.checkAccessibilityService(this)) {
+                sMobileDataViolationActive = false;
+                mobileDataViolationTicks = 0;
+                return;
+            }
+
             // Confirmed violation: data is OFF with a SIM present and policy requiring ON. Mark it
             // active so the accessibility service bounces the user out of other apps, and lift the
             // toggle lock so they can actually turn data on from the mobile-network settings screen.
@@ -541,7 +553,7 @@ public class StatusControlService extends Service {
                     .reassertIfViolating();
 
             // Also raise the blocking prompt / bring-to-front, throttled, as a backup to the
-            // accessibility bounce (covers devices where accessibility is unavailable).
+            // accessibility bounce.
             long now = System.currentTimeMillis();
             if (mobileDataViolationTicks >= MOBILE_DATA_ESCALATE_AFTER_TICKS
                     && now - lastMobileDataEscalationMs >= MOBILE_DATA_ESCALATE_INTERVAL_MS) {
