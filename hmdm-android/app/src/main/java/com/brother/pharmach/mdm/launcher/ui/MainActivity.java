@@ -183,6 +183,13 @@ public class MainActivity
     // True only while the currently-shown system-settings dialog is the mobile-data prompt, so we
     // can auto-dismiss it (and only it) the moment data is turned back on.
     private boolean mobileDataPromptShowing = false;
+    // Whether MainActivity is currently in the foreground — read by StatusControlService so it does
+    // not fire the "bring to front" escalation (which caused the popup to flash) while the popup is
+    // already on screen.
+    private static volatile boolean sForeground = false;
+    public static boolean isForeground() {
+        return sForeground;
+    }
     private DialogSystemSettingsBinding dialogSystemSettingsBinding;
 
     private Dialog permissionsDialog;
@@ -633,6 +640,7 @@ public class MainActivity
         checkBatteryOptimizationCompliance();
 
         isBackground = false;
+        sForeground = true;
 
         // Issue 5: refresh WorkTime policy on every resume so the Favorites page
         // never shows restricted apps after screen unlock or app switch
@@ -2867,6 +2875,7 @@ public class MainActivity
         super.onPause();
 
         isBackground = true;
+        sForeground = false;
 
         // Never leave the quick panel open across pause/screen-off; its open state
         // is intentionally not persisted so kiosk re-entry always starts closed
@@ -3741,16 +3750,16 @@ public class MainActivity
                 if (settingsIntent == null) {
                     return;
                 }
-                // Enable settings once again, because the dialog may be shown more than 3 minutes
-                // This is not necessary: the problem is resolved by clicking "Continue" in a popup window
-                /*LocalBroadcastManager.getInstance( MainActivity.this ).sendBroadcast( new Intent( Const.ACTION_ENABLE_SETTINGS ) );
-                // Open settings with a slight delay so Broadcast would certainly be handled
-                handler.postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        startActivity(settingsIntent);
-                    }
-                }, 300);*/
+                // For the mobile-data prompt: suppress enforcement briefly so opening the
+                // mobile-network settings isn't immediately undone by the bounce / bring-to-front,
+                // and launch it as a NEW_TASK so the screen reliably opens from the dialog context
+                // on OEM skins. (Not for the GPS path, which uses startActivityForResult and must
+                // not carry NEW_TASK, or the result would never be delivered.)
+                if (mobileDataPromptShowing) {
+                    mobileDataPromptShowing = false;
+                    StatusControlService.suppressEnforcement(60000);
+                    settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                }
                 try {
                     startActivityOptionalResult(settingsIntent, requestCode);
                 } catch (/*ActivityNotFound*/Exception e) {

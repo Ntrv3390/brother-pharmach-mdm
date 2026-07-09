@@ -96,7 +96,12 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
         // reach the mobile-network toggle) — plus the phone/emergency UIs, which must never be
         // blocked. Any other app is bounced immediately back to the launcher with the persistent
         // "turn on mobile data" prompt.
-        if (StatusControlService.isMobileDataViolationActive() && !isAllowedDuringDataViolation(pkg)) {
+        // Note: this event-driven bounce stays active even during the "open settings" grace window
+        // (the grace only silences the timer-driven bring-to-front). Settings itself is allowed, so
+        // it is never yanked; but if the user opens some OTHER app during the grace they are still
+        // bounced — no lockdown hole.
+        if (StatusControlService.isMobileDataViolationActive()
+                && !isAllowedDuringDataViolation(pkg)) {
             Log.d(TAG, "Mobile data off — bouncing out of " + pkg);
             bounceHome();
             return;
@@ -132,7 +137,8 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
         if (self == null) {
             return;
         }
-        if (!StatusControlService.isMobileDataViolationActive()) {
+        if (!StatusControlService.isMobileDataViolationActive()
+                || StatusControlService.isEnforcementSuppressed()) {
             return;
         }
         String pkg = lastForegroundPkg;

@@ -86,6 +86,17 @@ public class StatusControlService extends Service {
         return sMobileDataViolationActive;
     }
 
+    // When the user taps "open mobile-network settings" we suppress all mobile-data enforcement
+    // (no bounce, no bring-to-front) for a grace window, so the settings screen can open and stay
+    // long enough for them to flip the toggle instead of being yanked straight back.
+    private static volatile long sEnforcementSuppressedUntil = 0;
+    public static void suppressEnforcement(long ms) {
+        sEnforcementSuppressedUntil = System.currentTimeMillis() + ms;
+    }
+    public static boolean isEnforcementSuppressed() {
+        return System.currentTimeMillis() < sEnforcementSuppressedUntil;
+    }
+
     public static final int MOBILE_DATA_NOTIFICATION_ID = 2001;
     private static final String MOBILE_DATA_CHANNEL_ID = "mdm_mobile_data_channel";
 
@@ -546,19 +557,29 @@ public class StatusControlService extends Service {
             sMobileDataViolationActive = true;
             liftMobileDataLockForRemediation();
 
+            // Grace window right after the user tapped "open mobile-network settings": do nothing,
+            // so the settings screen opens and stays put instead of being yanked away.
+            if (isEnforcementSuppressed()) {
+                return;
+            }
+
             // If the user is parked in a blocked app (no window-change event fires in that case),
             // force them back to the launcher every tick. The accessibility service ignores this
             // while they are on the launcher / mobile-network settings, so it won't fight them.
             com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundAppAccessibilityService
                     .reassertIfViolating();
 
-            // Also raise the blocking prompt / bring-to-front, throttled, as a backup to the
-            // accessibility bounce.
-            long now = System.currentTimeMillis();
-            if (mobileDataViolationTicks >= MOBILE_DATA_ESCALATE_AFTER_TICKS
-                    && now - lastMobileDataEscalationMs >= MOBILE_DATA_ESCALATE_INTERVAL_MS) {
-                lastMobileDataEscalationMs = now;
-                enforceMobileDataAndBringToFront();
+            // Bring-to-front is ONLY needed when the launcher is in the background. When it is
+            // already foreground the popup is on screen (shown by onResume) — firing startActivity /
+            // the full-screen notification again just makes the popup flash. The accessibility
+            // bounce already handles returning the user when they switch to another app.
+            if (!com.brother.pharmach.mdm.launcher.ui.MainActivity.isForeground()) {
+                long now = System.currentTimeMillis();
+                if (mobileDataViolationTicks >= MOBILE_DATA_ESCALATE_AFTER_TICKS
+                        && now - lastMobileDataEscalationMs >= MOBILE_DATA_ESCALATE_INTERVAL_MS) {
+                    lastMobileDataEscalationMs = now;
+                    enforceMobileDataAndBringToFront();
+                }
             }
         } catch (Exception e) {
             // ignore
