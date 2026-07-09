@@ -86,6 +86,16 @@ public class StatusControlService extends Service {
         return sMobileDataViolationActive;
     }
 
+    // Set by MainActivity while its "turn on mobile data" dialog is actually on screen. Lets the
+    // watchdog's escalation below skip re-launching/re-notifying while the user is already looking
+    // at the prompt — repeating that every escalation tick was tearing the dialog down and
+    // rebuilding it, which is what made it flicker and swallowed taps on "Continue".
+    private static volatile boolean sMobileDataDialogVisible = false;
+
+    public static void setMobileDataDialogVisible(boolean visible) {
+        sMobileDataDialogVisible = visible;
+    }
+
     public static final int MOBILE_DATA_NOTIFICATION_ID = 2001;
     private static final String MOBILE_DATA_CHANNEL_ID = "mdm_mobile_data_channel";
 
@@ -761,6 +771,14 @@ public class StatusControlService extends Service {
         // Don't interrupt the user if they're already in a settings app where they can fix the issue.
         if (isUserInAllowedSettingsApp()) {
             Log.d(Const.LOG_TAG, "StatusControlService: user is in settings app, skipping bring-to-front");
+            return;
+        }
+
+        // The prompt is already on screen — re-launching/re-notifying here on every escalation tick
+        // tore the dialog down and rebuilt it every few seconds, which is what made it flicker and
+        // swallowed taps on "Continue".
+        if (sMobileDataDialogVisible) {
+            Log.d(Const.LOG_TAG, "StatusControlService: mobile data dialog already visible, skipping bring-to-front");
             return;
         }
 

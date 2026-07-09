@@ -126,10 +126,17 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
             return true;
         }
         // Never block calls / emergency / telephony UI.
-        return pkg.equals("com.android.phone")
+        if (pkg.equals("com.android.phone")
                 || pkg.contains("dialer")
                 || pkg.contains("incall")
                 || pkg.contains("telecom")
-                || pkg.contains("emergency");
+                || pkg.contains("emergency")) {
+            return true;
+        }
+        // System UI (status bar, quick settings, heads-up/full-screen notifications) must never be
+        // bounced: our own mobile-data enforcement notification is presented through it, and
+        // bouncing home in response to it re-triggers ACTION_POLICY_VIOLATION on every window-state
+        // change it causes — fighting the dialog we're trying to show and making it flicker.
+        return pkg.contains("systemui");
     }
 }

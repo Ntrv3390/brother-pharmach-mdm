@@ -678,15 +678,14 @@ public class MainActivity
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) nm.cancel(StatusControlService.MOBILE_DATA_NOTIFICATION_ID);
 
-            if (systemSettingsDialog == null || !systemSettingsDialog.isShowing()) {
-                boolean dataOn = Utils.isMobileDataEnabled(this);
-                String msg = getString(dataOn
-                        ? R.string.message_mobile_data_locked
-                        : R.string.message_turn_on_mobile_data);
-                // When data is off, the button opens the Settings page so the user can enable it;
-                // when it is only locked (already on), the dialog is purely informational.
-                Intent settingsIntent = dataOn ? null : mobileNetworkSettingsIntent();
-                createAndShowSystemSettingDialog(msg, settingsIntent, null, null);
+            if (Utils.isMobileDataEnabled(this)) {
+                // Already back on (auto-restored by policy or the user complied) — nothing to
+                // show the user, just clear any stale prompt that may still be up.
+                dismissDialog(systemSettingsDialog);
+                StatusControlService.setMobileDataDialogVisible(false);
+            } else if (systemSettingsDialog == null || !systemSettingsDialog.isShowing()) {
+                createAndShowSystemSettingDialog(getString(R.string.message_turn_on_mobile_data),
+                        mobileNetworkSettingsIntent(), null, null);
             }
         }
     }
@@ -2803,6 +2802,7 @@ public class MainActivity
         dismissDialog(deviceInfoDialog);
         dismissDialog(accessibilityServiceDialog);
         dismissDialog(systemSettingsDialog);
+        StatusControlService.setMobileDataDialogVisible(false);
         dismissDialog(permissionsDialog);
 
         try {
@@ -3581,10 +3581,16 @@ public class MainActivity
         final String message = getString(dataOnRequired
                 ? R.string.message_turn_on_mobile_data
                 : R.string.message_turn_off_mobile_data);
+        // When data must be turned ON, give the "Continue" button a real settings screen to open —
+        // there's nothing to gate on since the whole point of tapping it is to reach that screen.
+        // When data must be turned OFF there's no settings deep-link for that, so Continue just
+        // confirms compliance (requiredMobileDataState below).
+        final Intent settingsIntent = dataOnRequired ? mobileNetworkSettingsIntent() : null;
         handler.postDelayed(new Runnable() {
             @Override
             public void run() {
-                createAndShowSystemSettingDialog(message, null, null, dataOnRequired);
+                createAndShowSystemSettingDialog(message, settingsIntent, null,
+                        dataOnRequired ? null : false);
             }
         }, 5000);
     }
@@ -3622,6 +3628,7 @@ public class MainActivity
     // requiredMobileDataState: true = mobile data must be ON, false = must be OFF, null = no check
     private void createAndShowSystemSettingDialog(final String message, final Intent settingsIntent, final Integer requestCode, final Boolean requiredMobileDataState) {
         dismissDialog(systemSettingsDialog);
+        final boolean isMobileDataOnDialog = message.equals(getString(R.string.message_turn_on_mobile_data));
         systemSettingsDialog = new Dialog( this );
         dialogSystemSettingsBinding = DataBindingUtil.inflate(
                 LayoutInflater.from( this ),
@@ -3650,6 +3657,9 @@ public class MainActivity
                     }
                 }
                 dismissDialog(systemSettingsDialog);
+                if (isMobileDataOnDialog) {
+                    StatusControlService.setMobileDataDialogVisible(false);
+                }
                 if (settingsIntent == null) {
                     return;
                 }
@@ -3674,6 +3684,9 @@ public class MainActivity
 
         try {
             systemSettingsDialog.show();
+            if (isMobileDataOnDialog) {
+                StatusControlService.setMobileDataDialogVisible(true);
+            }
         } catch (Exception e) {
             // BadTokenException: activity closed before dialog is shown
             RemoteLogger.log(this, Const.LOG_WARN, "Failed to open a popup system dialog! " + e.getMessage());

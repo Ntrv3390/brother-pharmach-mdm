@@ -96,7 +96,6 @@
     <string name="message_turn_off_gps">The settings screen will open. Please TURN OFF GPS location on this screen and click Back.</string>
     <string name="message_turn_on_mobile_data">Mobile data is disabled! Tap the button below to open mobile network settings and turn on mobile data.</string>
     <string name="message_turn_off_mobile_data">Mobile data is enabled. Please open the status bar and TURN OFF mobile data.</string>
-    <string name="message_mobile_data_locked">Mobile data was turned off. It has been automatically re-enabled by your organisation\'s policy.</string>
     <string name="overlay_permission_required_message">This app requires permission to display over other apps.\n\nThis is needed to enforce device policies (such as mobile data) even when you are using another app.\n\nTap \"Grant Permission\" and enable it for %s.</string>
     <string name="overlay_permission_grant">Grant Permission</string>
     <string name="message_set_password">Your password quality is not good enough. The settings screen will open. Please change the password and click Back.</string>
