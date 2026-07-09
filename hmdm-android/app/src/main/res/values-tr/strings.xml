@@ -45,7 +45,7 @@
 	<string name="main_activity_cancel">İptal</string>
 	<string name="main_activity_details">Ayrıntılar</string>
 	<string name="select_system_launcher">Varsayılan başlatıcı olarak %s\'yi seçin ve \'Her Zaman\'ı işaretleyin:</string>
-	<string name="dialog_network_error_title">%s\'ye bağlanırken hata oluştu. Lütfen İnternet bağlantısını kontrol edin ve tekrar deneyin.</string>
+	<string name="dialog_network_error_title">Error connecting to the server. Please check the Internet connection and try again.</string>
 	<string name="main_activity_update_config">Sunucudan yapılandırma dosyası isteniyor</string>
 	<string name="main_activity_applications_update">Uygulamalar güncelleniyor</string>
 	<string name="dialog_overlay_settings_title">Lütfen uygulamanın diğer pencerelerin üzerine çizim yapmasına izin verin.\n\nBu seçenek istenmeyen uygulamaların engellenmesine yardımcı olur ve kiosk modunun acil olarak kilidini açmayı sağlar.\n\nAyarları açmak için \"Devam\" öğesine dokunun. \"%s\" öğesini bulun, izni verin ve ardından \"Geri\" öğesine dokunun.</string>
@@ -121,7 +121,7 @@
 	<string name="location_disable">Konumu devre dışı bırak</string>
 	<string name="background_location_continue">Devam</string>
 	<string name="initializing_mdm">Mobil cihaz yönetim uygulaması başlatılıyor...</string>
-	<string name="dialog_server_error_title">MDM sunucusu %s geçersiz bir yanıt döndürdü. Lütfen yöneticinizle iletişime geçin.</string>
+	<string name="dialog_server_error_title">The MDM server returned an invalid response. Please contact your administrator.</string>
 	<string name="mdm_choice_message">Bu cihaz kuruluşunuz tarafından tamamen yönetilecektir. Verileriniz özel olmayacak ve istediğiniz zaman BT yöneticiniz tarafından silinebilir veya incelenebilir.</string>
 	<string name="work_profile_message">Bu cihaz kuruluşunuza ait yönetilen bir çalışma profili alacaktır. Çalışma profili özel profilinizden ayrılmıştır ve istediğiniz zaman profiller arasında geçiş yapabilirsiniz.</string>
 	<string name="overlays_not_supported">Ne yazık ki cihazınız kaplamaları desteklemiyor.</string>

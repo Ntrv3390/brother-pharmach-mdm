@@ -285,12 +285,8 @@ public class BaseActivity extends AppCompatActivity {
         networkErrorDialog.requestWindowFeature( Window.FEATURE_NO_TITLE );
         networkErrorDetails = errorDetails;
 
-        String serverUrl = serverName;
-        if (serverPath != null && serverPath.length() > 0) {
-            serverUrl += "/";
-            serverUrl += serverPath;
-        }
-        dialogNetworkErrorBinding.title.setText(getString(R.string.dialog_network_error_title, serverUrl));
+        // Do not expose the server URL to the user — the message just refers to "the server".
+        dialogNetworkErrorBinding.title.setText(getString(R.string.dialog_network_error_title));
 
         dialogNetworkErrorBinding.resetButton.setVisibility(showResetButton ? View.VISIBLE : View.GONE);
         dialogNetworkErrorBinding.wifiButton.setVisibility(showWifiButton ? View.VISIBLE : View.GONE);

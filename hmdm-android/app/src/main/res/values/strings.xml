@@ -48,7 +48,7 @@
     <string name="main_activity_cancel">Cancel</string>
     <string name="main_activity_details">Details</string>
     <string name="select_system_launcher">Select %s as a default launcher and check \'Always\':</string>
-    <string name="dialog_network_error_title">Error connecting to %s. Please check the Internet connection and try again.</string>
+    <string name="dialog_network_error_title">Error connecting to the server. Please check the Internet connection and try again.</string>
     <string name="main_activity_update_config">Requesting configuration file from server</string>
     <string name="main_activity_applications_update">Updating applications</string>
     <string name="dialog_overlay_settings_title">Please allow the app to draw over other windows.\n\nThis option aids the blocking of unwanted apps, and enables emergency unlocking of the kiosk mode.\n\nTap \"Continue\" to open the settings. Find the \"%s\" item, grant the permission, then tap \"Back\".</string>
@@ -128,7 +128,7 @@
     <string name="location_disable">Disable location</string>
     <string name="background_location_continue">Continue</string>
     <string name="initializing_mdm">Initializing the mobile device management application...</string>
-    <string name="dialog_server_error_title">MDM server %s returned an invalid response. Please contact your administrator.</string>
+    <string name="dialog_server_error_title">The MDM server returned an invalid response. Please contact your administrator.</string>
     <string name="mdm_choice_message">This device will be fully managed by your organization. Your data won\'t be private and can be erased or reviewed by your IT admin at any time.</string>
     <string name="work_profile_message">This device will get a managed work profile belonging to your organization. The work profile is separated from your private profile and you may switch between profiles at any time.</string>
     <string name="overlays_not_supported">Unfortunately overlays are not supported by your device.</string>

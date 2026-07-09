@@ -45,7 +45,7 @@
     <string name="main_activity_cancel">Cancelar</string>
     <string name="main_activity_details">Detalhes</string>
     <string name="select_system_launcher">Selecione %s como o launcher padrão e marque a opção \'Sempre\':</string>
-    <string name="dialog_network_error_title">Erro ao conectar em %s. Por favor verifique a conexão com a internet e tente novamente.</string>
+    <string name="dialog_network_error_title">Error connecting to the server. Please check the Internet connection and try again.</string>
     <string name="main_activity_update_config">Requisitando arquivo de configuração do servidor</string>
     <string name="main_activity_applications_update">Atualizar aplicativos</string>
     <string name="dialog_overlay_settings_title">Permita que o aplicativo desenhe sobre outras janelas.\n\nEsta opção ajuda a bloquear melhor os aplicativos indesejados e ativa o desbloqueio de emergência do modo quiosque.\n\nToque em \"Continuar\" para abrir uma página de configurações. Encontre o item \"%s\", conceda a permissão e toque em \"Voltar\".</string>
@@ -121,7 +121,7 @@
     <string name="location_disable">Desativar localização</string>
     <string name="background_location_continue">Continuar</string>
     <string name="initializing_mdm">Inicializando o aplicativo de gerenciamento de dispositivo móvel ...</string>
-    <string name="dialog_server_error_title">O servidor MDM %s retornou uma resposta inválida. Entre em contato com o seu administrador.</string>
+    <string name="dialog_server_error_title">The MDM server returned an invalid response. Please contact your administrator.</string>
     <string name="mdm_choice_message">Este dispositivo será totalmente gerenciado por sua organização. Seus dados não serão privados e podem ser apagados ou revisados por seu administrador de TI a qualquer momento.</string>
     <string name="work_profile_message">Este dispositivo receberá um perfil de trabalho gerenciado pertencente à sua organização. O perfil de trabalho é separado do seu perfil privado e você pode alternar entre os perfis a qualquer momento.</string>
     <string name="overlays_not_supported">Infelizmente, as sobreposições não são suportadas pelo seu dispositivo.</string>

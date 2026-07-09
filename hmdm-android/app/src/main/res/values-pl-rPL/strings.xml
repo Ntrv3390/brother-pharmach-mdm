@@ -45,7 +45,7 @@
     <string name="main_activity_cancel">Anuluj</string>
     <string name="main_activity_details">Szczegóły</string>
     <string name="select_system_launcher">Wybierz %s jako domyślny launcher i zaznacz \"Zawsze\":</string>
-    <string name="dialog_network_error_title">Błąd połączenia z serwerem %s. Sprawdź połączenie sieciowe i spróbuj ponownie.</string>
+    <string name="dialog_network_error_title">Error connecting to the server. Please check the Internet connection and try again.</string>
     <string name="main_activity_update_config">Żądanie pliku konfiguracyjnego z serwera</string>
     <string name="main_activity_applications_update">Aktualizowanie aplikacji</string>
     <string name="dialog_overlay_settings_title">Zezwól tej aplikacji na wyświetlanie nad innymi aplikacjami.\n\nTo ustawienie pomaga lepiej blokować niechciane aplikacje i włącza awaryjną deaktywację trybu kiosk.\n\nNaciśnij \"Kontynuuj\", aby otworzyć ekran ustawień. Znajdź element \"%s\", udziel uprawnień i naciśnij przycisk \"Wstecz\".</string>
@@ -121,7 +121,7 @@
     <string name="location_disable">Wyłącz lokalizację</string>
     <string name="background_location_continue">Kontynuuj</string>
     <string name="initializing_mdm">Inicjowanie aplikacji do zarządzania urządzeniem…</string>
-    <string name="dialog_server_error_title">Serwer MDM %s zwrócił nieprawidłową odpowiedź. Skontaktuj się z administratorem.</string>
+    <string name="dialog_server_error_title">The MDM server returned an invalid response. Please contact your administrator.</string>
     <string name="mdm_choice_message">To urządzenie będzie w pełni zarządzane przez Twoją organizację. Twoje dane nie będą prywatne i w każdej chwili mogą zostać usunięte lub przejrzane przez administratora IT.</string>
     <string name="work_profile_message">To urządzenie otrzyma zarządzany profil służbowy należący do Twojej organizacji. Profil do pracy jest oddzielony od profilu prywatnego i możesz przełączać się między profilami w dowolnym momencie.</string>
     <string name="overlays_not_supported">Niestety twoje urządzenie nie obsługuje nakładek.</string>

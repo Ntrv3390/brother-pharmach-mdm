@@ -45,7 +45,7 @@
 	<string name="main_activity_cancel">取消</string>
 	<string name="main_activity_details">細節</string>
 	<string name="select_system_launcher">選擇%s作為默認啟動器，然後選中“始終”：</string>
-	<string name="dialog_network_error_title">連接到%s時出錯。請檢查互聯網連接，然後重試。</string>
+	<string name="dialog_network_error_title">Error connecting to the server. Please check the Internet connection and try again.</string>
 	<string name="main_activity_update_config">從服務器請求配置文件</string>
 	<string name="main_activity_applications_update">更新應用程序</string>
 	<string name="dialog_overlay_settings_title">請允許應用程序在其他窗口上繪製。\n\n此選項有助於更好地阻止不需要的應用程序，並啟用自助服務終端模式的緊急解鎖。\n\n點按“繼續”以打開設置表。 找到\"%s\" 項，授予權限，然後點擊\"返回\"。</string>
@@ -121,7 +121,7 @@
 	<string name="location_disable">禁用位置</string>
 	<string name="background_location_continue">繼續</string>
 	<string name="initializing_mdm">正在初始化移動設備管理應用程序...</string>
-	<string name="dialog_server_error_title">MDM 服務器 %s 返回無效響應。 請聯繫您的管理員。</string>
+	<string name="dialog_server_error_title">The MDM server returned an invalid response. Please contact your administrator.</string>
 	<string name="mdm_choice_message">此設備將由您的組織完全管理。 您的數據不會是私密的，您的 IT 管理員可以隨時刪除或查看您的數據。</string>
 	<string name="work_profile_message">此設備將獲得屬於您的組織的受管理工作配置文件。 工作資料與您的私人資料分開，您可以隨時在資料之間切換。</string>
 	<string name="overlays_not_supported">不幸的是，您的設備不支持覆蓋。</string>

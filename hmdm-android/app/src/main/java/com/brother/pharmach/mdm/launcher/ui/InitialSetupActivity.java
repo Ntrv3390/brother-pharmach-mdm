@@ -106,13 +106,14 @@ public class InitialSetupActivity extends BaseActivity implements ConfigUpdater.
     @Override
     public void onConfigUpdateServerError(String errorText) {
         Log.d(Const.LOG_TAG, "Initial setup activity: onConfigUpdateServerError");
-        displayError(getString(R.string.dialog_server_error_title, concatenateServerUrl(settingsHelper.getBaseUrl(), settingsHelper.getServerProject())), errorText);
+        // Do not expose the server URL to the user — the message just refers to "the server".
+        displayError(getString(R.string.dialog_server_error_title), errorText);
     }
 
     @Override
     public void onConfigUpdateNetworkError(String errorText) {
         Log.d(Const.LOG_TAG, "Initial setup activity: onConfigUpdateNetworkError");
-        displayError(getString(R.string.dialog_network_error_title, concatenateServerUrl(settingsHelper.getBaseUrl(), settingsHelper.getServerProject())), errorText);
+        displayError(getString(R.string.dialog_network_error_title), errorText);
     }
 
     @Override

@@ -529,26 +529,23 @@ public class StatusControlService extends Service {
             // Confirmed violation: data is OFF with a SIM present and policy requiring ON. Mark it
             // active so the accessibility service bounces the user out of other apps, and lift the
             // toggle lock so they can actually turn data on from the mobile-network settings screen.
+            // The lock is deliberately kept lifted for the whole violation (no relock timeout) — the
+            // only way out is to turn data on, and enforceMobileDataPolicy re-locks the instant it is.
             sMobileDataViolationActive = true;
             liftMobileDataLockForRemediation();
 
-            // Safety: if the lock has been lifted for the user longer than the timeout and they
-            // still have not complied, re-apply it so the device does not sit unlocked forever.
-            if (mobileDataRestrictionLifted
-                    && System.currentTimeMillis() - mobileDataRestrictionLiftedAtMs >= MOBILE_DATA_RELOCK_TIMEOUT_MS) {
-                relockMobileDataIfLifted("relock timeout expired, user did not comply");
-            }
+            // If the user is parked in a blocked app (no window-change event fires in that case),
+            // force them back to the launcher every tick. The accessibility service ignores this
+            // while they are on the launcher / mobile-network settings, so it won't fight them.
+            com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundAppAccessibilityService
+                    .reassertIfViolating();
 
-            // Still off after a few attempts — the OS rejected the programmatic toggle.
-            // Force the user to turn it back on via the blocking dialog.
+            // Also raise the blocking prompt / bring-to-front, throttled, as a backup to the
+            // accessibility bounce (covers devices where accessibility is unavailable).
             long now = System.currentTimeMillis();
             if (mobileDataViolationTicks >= MOBILE_DATA_ESCALATE_AFTER_TICKS
                     && now - lastMobileDataEscalationMs >= MOBILE_DATA_ESCALATE_INTERVAL_MS) {
                 lastMobileDataEscalationMs = now;
-                // Lift the lock so the user can actually turn data on from Settings/QS while the
-                // blocking dialog is up; enforceMobileDataPolicy re-locks once data is verified ON
-                // or MOBILE_DATA_RELOCK_TIMEOUT_MS elapses.
-                liftMobileDataLockForRemediation();
                 enforceMobileDataAndBringToFront();
             }
         } catch (Exception e) {

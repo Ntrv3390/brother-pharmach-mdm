@@ -180,6 +180,9 @@ public class MainActivity
     private DialogAccessibilityServiceBinding dialogAccessibilityServiceBinding;
 
     private Dialog systemSettingsDialog;
+    // True only while the currently-shown system-settings dialog is the mobile-data prompt, so we
+    // can auto-dismiss it (and only it) the moment data is turned back on.
+    private boolean mobileDataPromptShowing = false;
     private DialogSystemSettingsBinding dialogSystemSettingsBinding;
 
     private Dialog permissionsDialog;
@@ -648,6 +651,10 @@ public class MainActivity
 
         startServicesWithRetry();
 
+        // Force the accessibility service to be enabled — it powers WorkTime blocking and the
+        // mobile-data lockdown. Shows a mandatory (non-cancelable, no-skip) prompt until allowed.
+        enforceAccessibilityGate();
+
         checkMobileDataViolation();
         enforceOverlayPermission();
 
@@ -687,6 +694,7 @@ public class MainActivity
                 // when it is only locked (already on), the dialog is purely informational.
                 Intent settingsIntent = dataOn ? null : mobileNetworkSettingsIntent();
                 createAndShowSystemSettingDialog(msg, settingsIntent, null, null);
+                mobileDataPromptShowing = !dataOn;
             }
         }
     }
@@ -1265,11 +1273,75 @@ public class MainActivity
                 false );
         dialogAccessibilityServiceBinding.hint.setText(
                 getString(R.string.dialog_accessibility_service_message, getString(R.string.white_app_name)));
+        // No opt-out: hide the "skip" button so the only way forward is to enable the service.
+        if (dialogAccessibilityServiceBinding.skipButton != null) {
+            dialogAccessibilityServiceBinding.skipButton.setVisibility(View.GONE);
+        }
         accessibilityServiceDialog.setCancelable( false );
         accessibilityServiceDialog.requestWindowFeature( Window.FEATURE_NO_TITLE );
 
         accessibilityServiceDialog.setContentView( dialogAccessibilityServiceBinding.getRoot() );
         accessibilityServiceDialog.show();
+    }
+
+    /**
+     * Extracted device-owner silent enable of the accessibility service (works when the app is a
+     * priv-app / holds WRITE_SECURE_SETTINGS; a no-op that throws-and-is-ignored on a plain DO).
+     */
+    private void tryAutoEnableAccessibility() {
+        if (!Utils.isDeviceOwner(this)) {
+            return;
+        }
+        try {
+            String componentName = getPackageName()
+                    + "/com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundAppAccessibilityService";
+            String enabledServices = Settings.Secure.getString(
+                    getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            if (enabledServices == null || enabledServices.isEmpty()) {
+                Settings.Secure.putString(getContentResolver(),
+                        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, componentName);
+            } else if (!enabledServices.contains(componentName)) {
+                Settings.Secure.putString(getContentResolver(),
+                        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, enabledServices + ":" + componentName);
+            }
+            Settings.Secure.putInt(getContentResolver(), Settings.Secure.ACCESSIBILITY_ENABLED, 1);
+            startService(new Intent(this, CheckForegroundAppAccessibilityService.class));
+        } catch (Exception e) {
+            Log.w(Const.LOG_TAG, "auto-enable accessibility failed", e);
+        }
+    }
+
+    /**
+     * Hard gate: the WorkTime / mobile-data enforcement relies on the accessibility service, so we
+     * force it on. If it is off we first try to enable it silently; failing that we show a
+     * non-cancelable, no-skip dialog that deep-links to Accessibility settings (the standard
+     * ACTION_ACCESSIBILITY_SETTINGS action, available on every OEM). The dialog is re-shown on
+     * every resume until the service is enabled, so the user is effectively stuck until they allow
+     * it. Returns true while the gate is still blocking.
+     */
+    private boolean enforceAccessibilityGate() {
+        if (!ProUtils.isPro() || !BuildConfig.USE_ACCESSIBILITY) {
+            return false;
+        }
+        // Don't block the enrollment flow itself — only enforce once the device is configured.
+        if (settingsHelper == null || settingsHelper.getConfig() == null) {
+            return false;
+        }
+        if (ProUtils.checkAccessibilityService(this)) {
+            dismissDialog(accessibilityServiceDialog);
+            accessibilityServiceDialog = null;
+            return false;
+        }
+        tryAutoEnableAccessibility();
+        if (ProUtils.checkAccessibilityService(this)) {
+            dismissDialog(accessibilityServiceDialog);
+            accessibilityServiceDialog = null;
+            return false;
+        }
+        if (accessibilityServiceDialog == null || !accessibilityServiceDialog.isShowing()) {
+            createAndShowAccessibilityServiceDialog();
+        }
+        return true;
     }
 
     public void skipAccessibilityService( View view ) {
@@ -2564,17 +2636,21 @@ public class MainActivity
 
     private void checkMobileDataViolation() {
         ServerConfig config = settingsHelper != null ? settingsHelper.getConfig() : null;
-        if (config == null || !Boolean.TRUE.equals(config.getMobileData())) {
-            return;
-        }
-        if (!Utils.hasValidSim(this)) {
-            return;
-        }
+        boolean enforce = config != null && Boolean.TRUE.equals(config.getMobileData()) && Utils.hasValidSim(this);
         try {
-            if (!Utils.isMobileDataEnabled(this)) {
+            if (enforce && !Utils.isMobileDataEnabled(this)) {
+                // Data is off — keep the blocking prompt up (constant until data is turned on).
                 if (systemSettingsDialog == null || !systemSettingsDialog.isShowing()) {
                     createAndShowSystemSettingDialog(getString(R.string.message_turn_on_mobile_data),
                             mobileNetworkSettingsIntent(), null, null);
+                }
+                mobileDataPromptShowing = true;
+            } else if (mobileDataPromptShowing) {
+                // Data is back on (or no longer enforced) — dismiss the mobile-data prompt, and only
+                // that one.
+                mobileDataPromptShowing = false;
+                if (systemSettingsDialog != null && systemSettingsDialog.isShowing()) {
+                    dismissDialog(systemSettingsDialog);
                 }
             }
         } catch (Exception e) {
@@ -2595,6 +2671,7 @@ public class MainActivity
             case Const.MOBILE_DATA_ON_REQUIRED:
                 createAndShowSystemSettingDialog(getString(R.string.message_turn_on_mobile_data),
                         mobileNetworkSettingsIntent(), null, null);
+                mobileDataPromptShowing = true;
                 break;
             case Const.MOBILE_DATA_OFF_REQUIRED:
                 createAndShowSystemSettingDialog(getString(R.string.message_turn_off_mobile_data), null, 0, false);
@@ -3621,6 +3698,9 @@ public class MainActivity
 
     // requiredMobileDataState: true = mobile data must be ON, false = must be OFF, null = no check
     private void createAndShowSystemSettingDialog(final String message, final Intent settingsIntent, final Integer requestCode, final Boolean requiredMobileDataState) {
+        // Any freshly-shown dialog defaults to "not the mobile-data prompt"; the mobile-data call
+        // sites set the flag true right after showing.
+        mobileDataPromptShowing = false;
         dismissDialog(systemSettingsDialog);
         systemSettingsDialog = new Dialog( this );
         dialogSystemSettingsBinding = DataBindingUtil.inflate(

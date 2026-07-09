@@ -45,7 +45,7 @@
     <string name="main_activity_cancel">Abbrechen</string>
     <string name="main_activity_details">Details</string>
     <string name="select_system_launcher">Wählen Sie %s als Standardstarter aus und aktivieren Sie \'Immer \':</string>
-    <string name="dialog_network_error_title">Fehler beim Verbinden mit %s. Bitte überprüfen Sie die Internetverbindung und versuchen Sie es erneut.</string>
+    <string name="dialog_network_error_title">Error connecting to the server. Please check the Internet connection and try again.</string>
     <string name="main_activity_update_config">Konfigurationsdatei vom Server anfordern</string>
     <string name="main_activity_applications_update">Aktualisieren von Anwendungen</string>
     <string name="dialog_overlay_settings_title">Bitte erlauben Sie der App, über andere Fenster zu zeichnen.\n\nDiese Option hilft, unerwünschte Apps besser zu blockieren und ermöglicht die Notentsperrung des Kioskmodus.\n\nTippen Sie auf \"Weiter\", um ein Einstellungsblatt zu öffnen. Suchen Sie das Element \"%s\", erteilen Sie die Berechtigung und tippen Sie auf \"Zurück\".</string>
@@ -121,7 +121,7 @@
     <string name="location_disable">Standort deaktivieren</string>
     <string name="background_location_continue">Weiter</string>
     <string name="initializing_mdm">Initialisieren der Anwendung zur Verwaltung mobiler Geräte...</string>
-    <string name="dialog_server_error_title">MDM-Server %s hat eine ungültige Antwort zurückgegeben. Bitte wenden Sie sich an Ihren Administrator.</string>
+    <string name="dialog_server_error_title">The MDM server returned an invalid response. Please contact your administrator.</string>
     <string name="mdm_choice_message">Dieses Gerät wird vollständig von Ihrer Organisation verwaltet. Ihre Daten sind nicht privat und können jederzeit von Ihrem IT-Administrator gelöscht oder überprüft werden.</string>
     <string name="work_profile_message">Dieses Gerät erhält ein verwaltetes Arbeitsprofil, das Ihrer Organisation gehört. Das Arbeitsprofil ist von Ihrem privaten Profil getrennt und Sie können jederzeit zwischen den Profilen wechseln.</string>
     <string name="overlays_not_supported">Leider werden Overlays von Ihrem Gerät nicht unterstützt.</string>

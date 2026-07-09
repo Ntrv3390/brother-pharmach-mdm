@@ -502,38 +502,31 @@ angular.module('headwind-kiosk')
             return device.info;
         };
 
-        var isEffectivelyOnline = function (device) {
+        // A device counts as recently in touch with the server if EITHER its config was
+        // synced within the last 10 minutes, OR it uploaded logs / a location ping within
+        // the last 20 minutes (lastContact is stamped by any of sync, log, or location).
+        var CONFIG_FRESH_MS = 10 * 60 * 1000;
+        var CONTACT_FRESH_MS = 20 * 60 * 1000;
+
+        var hasRecentContact = function (device) {
             if (!device) {
                 return false;
             }
-
-            // Keep Internet status aligned with device freshness to avoid showing stale network types.
-            if (device.statusCode) {
-                return device.statusCode !== 'red';
-            }
-
-            if (!device.lastUpdate) {
-                return false;
-            }
-
-            return (Date.now() - device.lastUpdate) < (2 * 60 * 60 * 1000);
-        };
-
-        var RECENT_CONTACT_WINDOW_MS = 20 * 60 * 1000;
-
-        // True if the device has made ANY contact with the server (full sync, location
-        // ping, or log upload) within the last 10 minutes, even if its last full sync
-        // reported no internet - a more recent contact proves it was online since then.
-        var hasRecentContact = function (device) {
-            return !!(device && device.lastContact) && (Date.now() - device.lastContact) < RECENT_CONTACT_WINDOW_MS;
+            var configFresh = !!device.lastUpdate && (Date.now() - device.lastUpdate) < CONFIG_FRESH_MS;
+            var contactFresh = !!device.lastContact && (Date.now() - device.lastContact) < CONTACT_FRESH_MS;
+            return configFresh || contactFresh;
         };
 
         var hasEffectiveInternetConnection = function (device) {
-            var info = $scope.getDeviceInfo(device);
-            if (isEffectivelyOnline(device) && info && info.internetConnected === true) {
-                return true;
+            if (!hasRecentContact(device)) {
+                return false;
             }
-            return hasRecentContact(device);
+            // A device that reported no working connection (OFFLINE) is never shown as online.
+            var info = $scope.getDeviceInfo(device);
+            if (info && (info.internetConnected === false || info.internetType === 'OFFLINE')) {
+                return false;
+            }
+            return true;
         };
 
         $scope.getInternetIndicatorImage = function (device) {
@@ -546,18 +539,19 @@ angular.module('headwind-kiosk')
         $scope.getInternetType = function (device) {
             var info = $scope.getDeviceInfo(device);
             if (hasEffectiveInternetConnection(device)) {
-                if (info && info.internetType && info.internetType.length > 0) {
+                if (info && info.internetType && info.internetType.length > 0 && info.internetType !== 'OFFLINE') {
                     return info.internetType;
                 }
                 return 'ONLINE';
             }
+            // We never surface the raw "OFFLINE" status - a device out of touch is "NO INTERNET".
             return 'NO INTERNET';
         };
 
         $scope.getInternetStatusTitle = function (device) {
             var info = $scope.getDeviceInfo(device);
             if (hasEffectiveInternetConnection(device)) {
-                var type = info && info.internetType && info.internetType.length > 0 ? info.internetType : 'ONLINE';
+                var type = info && info.internetType && info.internetType.length > 0 && info.internetType !== 'OFFLINE' ? info.internetType : 'ONLINE';
                 return 'Internet connected (' + type + ')';
             }
             return 'No Internet connection';
