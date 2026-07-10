@@ -29,6 +29,7 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.service.StatusControlService;
+import com.brother.pharmach.mdm.launcher.util.Utils;
 import com.brother.pharmach.mdm.launcher.util.WorkTimeManager;
 
 /**
@@ -74,7 +75,8 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
         // the mobile-network toggle) and the phone/emergency UIs (never block calls). Any other app
         // is bounced immediately: return home (the launcher is the kiosk home) and raise the
         // persistent "turn on mobile data" prompt.
-        if (StatusControlService.isMobileDataViolationActive() && !isAllowedDuringDataViolation(pkg)) {
+        if (StatusControlService.isMobileDataViolationActive()
+                && !Utils.isAllowedDuringMobileDataViolation(this, pkg)) {
             Log.d(TAG, "Mobile data off — bouncing out of " + pkg);
             performGlobalAction(GLOBAL_ACTION_HOME);
             Intent violation = new Intent(Const.ACTION_POLICY_VIOLATION);
@@ -100,43 +102,4 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
         // Required by AccessibilityService — no-op
     }
 
-    private String settingsPkg;
-
-    /**
-     * Packages the user is allowed to reach while mobile data is off:
-     *  - the system Settings (to turn data back on),
-     *  - the telephony stack and dialer / in-call / emergency UIs — calls must NEVER be blocked.
-     * Everything else is bounced back to the launcher.
-     */
-    private boolean isAllowedDuringDataViolation(String pkg) {
-        if (settingsPkg == null) {
-            try {
-                android.content.pm.ResolveInfo ri = getPackageManager().resolveActivity(
-                        new Intent(android.provider.Settings.ACTION_SETTINGS), 0);
-                if (ri != null && ri.activityInfo != null) {
-                    settingsPkg = ri.activityInfo.packageName;
-                }
-            } catch (Exception ignored) {
-            }
-            if (settingsPkg == null) {
-                settingsPkg = "com.android.settings";
-            }
-        }
-        if (pkg.equals(settingsPkg) || pkg.contains("settings")) {
-            return true;
-        }
-        // Never block calls / emergency / telephony UI.
-        if (pkg.equals("com.android.phone")
-                || pkg.contains("dialer")
-                || pkg.contains("incall")
-                || pkg.contains("telecom")
-                || pkg.contains("emergency")) {
-            return true;
-        }
-        // System UI (status bar, quick settings, heads-up/full-screen notifications) must never be
-        // bounced: our own mobile-data enforcement notification is presented through it, and
-        // bouncing home in response to it re-triggers ACTION_POLICY_VIOLATION on every window-state
-        // change it causes — fighting the dialog we're trying to show and making it flicker.
-        return pkg.contains("systemui");
-    }
 }

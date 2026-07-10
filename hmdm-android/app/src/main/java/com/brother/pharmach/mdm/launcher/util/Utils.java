@@ -771,6 +771,49 @@ public class Utils {
         }
     }
 
+    // Cached lazily: resolveActivity() is a PackageManager IPC call, and this helper runs once
+    // per installed app during a mobile-data-violation app-block pass — it must not re-resolve
+    // on every call.
+    private static volatile String sSettingsPkgForMobileDataViolation;
+
+    /**
+     * Packages the user may still reach while a confirmed mobile-data policy violation is
+     * active: system Settings (to fix it), phone/dialer/incall/telecom/emergency UI (calls must
+     * never be blocked), System UI (status bar / quick settings / our own enforcement
+     * notification render through it) and the permission-grant UI. Shared by
+     * CheckForegroundAppAccessibilityService, StatusControlService.isUserInAllowedSettingsApp()
+     * and MobileDataAppBlocker so the three enforcement paths can never disagree about what's
+     * allowed.
+     */
+    public static boolean isAllowedDuringMobileDataViolation(Context context, String pkg) {
+        if (pkg == null || pkg.isEmpty()) {
+            return false;
+        }
+        if (sSettingsPkgForMobileDataViolation == null) {
+            String resolved = null;
+            try {
+                ResolveInfo ri = context.getPackageManager().resolveActivity(
+                        new Intent(Settings.ACTION_SETTINGS), 0);
+                if (ri != null && ri.activityInfo != null) {
+                    resolved = ri.activityInfo.packageName;
+                }
+            } catch (Exception ignored) {
+            }
+            sSettingsPkgForMobileDataViolation = resolved != null ? resolved : Const.SETTINGS_PACKAGE_NAME;
+        }
+        if (pkg.equals(sSettingsPkgForMobileDataViolation) || pkg.contains("settings")) {
+            return true;
+        }
+        if (pkg.equals("com.android.phone")
+                || pkg.contains("dialer")
+                || pkg.contains("incall")
+                || pkg.contains("telecom")
+                || pkg.contains("emergency")) {
+            return true;
+        }
+        return pkg.contains("systemui") || pkg.contains("permissioncontroller");
+    }
+
     /**
      * Locks or unlocks the mobile data toggle for the user.
      * When locked=true:

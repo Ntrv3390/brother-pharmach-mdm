@@ -47,6 +47,7 @@ import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.ui.MainActivity;
 import com.brother.pharmach.mdm.launcher.json.ServerConfig;
 import com.brother.pharmach.mdm.launcher.util.LegacyUtils;
+import com.brother.pharmach.mdm.launcher.util.MobileDataAppBlocker;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 import com.brother.pharmach.mdm.launcher.util.Utils;
 import com.brother.pharmach.mdm.launcher.worker.SmsLogUploadWorker;
@@ -109,6 +110,14 @@ public class StatusControlService extends Service {
     private long lastMobileDataEscalationMs = 0;
     private long lastMobileDataDiagMs = 0;
     private final long MOBILE_DATA_DIAG_INTERVAL_MS = 60000;
+
+    // App-lockdown while a mobile-data violation is confirmed active: suspends every app except
+    // Settings/telephony/systemui via MobileDataAppBlocker, closing the gap where an app already
+    // open (or one whose internal navigation never triggers a new foreground window) keeps
+    // running past the reactive accessibility-service bounce.
+    private boolean mobileDataAppsBlocked = false;
+    private long lastMobileDataAppsReassertMs = 0;
+    private final long MOBILE_DATA_APPS_REASSERT_INTERVAL_MS = 10000;
 
     // Escalation lift-and-relock: DISALLOW_CONFIG_MOBILE_NETWORKS blocks the user from turning
     // data back ON via the Settings app just as it blocks turning it OFF. When we escalate to the
@@ -486,6 +495,7 @@ public class StatusControlService extends Service {
             ServerConfig config = settingsHelper.getConfig();
             if (config == null || controlDisabled || !Boolean.TRUE.equals(config.getMobileData())) {
                 sMobileDataViolationActive = false;
+                unblockMobileDataAppsIfBlocked();
                 relockMobileDataIfLifted("policy no longer requires mobile data ON");
                 mobileDataViolationTicks = 0;
                 // Diagnostic (throttled): the force-ON prompt only runs when the server policy
@@ -502,6 +512,7 @@ public class StatusControlService extends Service {
             }
             if (!Utils.hasValidSim(this)) {
                 sMobileDataViolationActive = false;
+                unblockMobileDataAppsIfBlocked();
                 relockMobileDataIfLifted("no valid SIM present");
                 mobileDataViolationTicks = 0;
                 long now = System.currentTimeMillis();
@@ -514,6 +525,7 @@ public class StatusControlService extends Service {
             }
             if (Utils.isMobileDataEnabled(this)) {
                 sMobileDataViolationActive = false;
+                unblockMobileDataAppsIfBlocked();
                 if (mobileDataViolationTicks > 0) {
                     RemoteLogger.log(this, Const.LOG_INFO,
                             "StatusControlService: mobile data is back ON (policy enforced)");
@@ -529,6 +541,7 @@ public class StatusControlService extends Service {
             Utils.setMobileDataEnabled(this, true);
             if (Utils.isMobileDataEnabled(this)) {
                 sMobileDataViolationActive = false;
+                unblockMobileDataAppsIfBlocked();
                 RemoteLogger.log(this, Const.LOG_INFO,
                         "StatusControlService: mobile data was disabled by user, re-enabled automatically");
                 relockMobileDataIfLifted("mobile data re-enabled automatically");
@@ -540,6 +553,10 @@ public class StatusControlService extends Service {
             // active so the accessibility service bounces the user out of other apps, and lift the
             // toggle lock so they can actually turn data on from the mobile-network settings screen.
             sMobileDataViolationActive = true;
+            if (!mobileDataAppsBlocked) {
+                mobileDataAppsBlocked = true;
+                MobileDataAppBlocker.enforceAsync(this, true);
+            }
             liftMobileDataLockForRemediation();
 
             // Safety: if the lock has been lifted for the user longer than the timeout and they
@@ -555,6 +572,15 @@ public class StatusControlService extends Service {
             if (mobileDataViolationTicks >= MOBILE_DATA_ESCALATE_AFTER_TICKS
                     && now - lastMobileDataEscalationMs >= MOBILE_DATA_ESCALATE_INTERVAL_MS) {
                 lastMobileDataEscalationMs = now;
+                // Defensive re-assertion, throttled separately from the escalation interval: a
+                // full installed-apps scan is heavier than the dialog/notification escalation, and
+                // this also self-heals against a service restart or WorkTimeManager's own
+                // independent periodic pass re-allowing a package during an active violation.
+                if (mobileDataAppsBlocked
+                        && now - lastMobileDataAppsReassertMs >= MOBILE_DATA_APPS_REASSERT_INTERVAL_MS) {
+                    lastMobileDataAppsReassertMs = now;
+                    MobileDataAppBlocker.enforceAsync(this, true);
+                }
                 // Lift the lock so the user can actually turn data on from Settings/QS while the
                 // blocking dialog is up; enforceMobileDataPolicy re-locks once data is verified ON
                 // or MOBILE_DATA_RELOCK_TIMEOUT_MS elapses.
@@ -563,6 +589,15 @@ public class StatusControlService extends Service {
             }
         } catch (Exception e) {
             // ignore
+        }
+    }
+
+    // Reverses MobileDataAppBlocker's lockdown once the violation clears. No-op if nothing is
+    // currently blocked, so the frequent early-return branches above stay cheap.
+    private void unblockMobileDataAppsIfBlocked() {
+        if (mobileDataAppsBlocked) {
+            mobileDataAppsBlocked = false;
+            MobileDataAppBlocker.enforceAsync(this, false);
         }
     }
 
@@ -811,18 +846,9 @@ public class StatusControlService extends Service {
             ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
             if (am == null) return false;
             List<ActivityManager.RunningTaskInfo> tasks = am.getRunningTasks(1);
-            if (tasks == null || tasks.isEmpty()) return false;
+            if (tasks == null || tasks.isEmpty() || tasks.get(0).topActivity == null) return false;
             String foregroundPkg = tasks.get(0).topActivity.getPackageName();
-            if (foregroundPkg == null) return false;
-            // Allow Settings apps (any package containing "settings")
-            if (foregroundPkg.contains("settings")) return true;
-            // Allow telephony / dialer / emergency UIs (calls must never be blocked)
-            if (foregroundPkg.equals("com.android.phone")
-                    || foregroundPkg.contains("dialer")
-                    || foregroundPkg.contains("incall")
-                    || foregroundPkg.contains("telecom")
-                    || foregroundPkg.contains("emergency")) return true;
-            return false;
+            return Utils.isAllowedDuringMobileDataViolation(this, foregroundPkg);
         } catch (Exception e) {
             return false;
         }
