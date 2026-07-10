@@ -180,6 +180,14 @@ public class MainActivity
     private DialogAccessibilityServiceBinding dialogAccessibilityServiceBinding;
 
     private Dialog systemSettingsDialog;
+    // Whether systemSettingsDialog is currently showing the "turn on mobile data" prompt. Unlike
+    // the GPS/password/turn-off-mobile-data variants (which genuinely should be torn down when the
+    // activity pauses, e.g. because the user navigated to Settings), this one must survive a
+    // transient pause — the mobile-data violation state doesn't resolve just because the activity
+    // was briefly paused (e.g. by the accessibility service's own home-bounce reacting to the
+    // app-lockdown sweep), so dismissing-and-rebuilding it on every such pause is exactly what
+    // made it flicker.
+    private boolean systemSettingsDialogIsMobileDataOn = false;
     private DialogSystemSettingsBinding dialogSystemSettingsBinding;
 
     private Dialog permissionsDialog;
@@ -682,6 +690,7 @@ public class MainActivity
                 // Already back on (auto-restored by policy or the user complied) — nothing to
                 // show the user, just clear any stale prompt that may still be up.
                 dismissDialog(systemSettingsDialog);
+                systemSettingsDialogIsMobileDataOn = false;
                 StatusControlService.setMobileDataDialogVisible(false);
             } else if (systemSettingsDialog == null || !systemSettingsDialog.isShowing()) {
                 createAndShowSystemSettingDialog(getString(R.string.message_turn_on_mobile_data),
@@ -2801,8 +2810,15 @@ public class MainActivity
         dismissDialog(administratorModeDialog);
         dismissDialog(deviceInfoDialog);
         dismissDialog(accessibilityServiceDialog);
-        dismissDialog(systemSettingsDialog);
-        StatusControlService.setMobileDataDialogVisible(false);
+        // Don't tear down the "turn on mobile data" prompt here: the violation it's reporting
+        // doesn't resolve just because the activity was transiently paused (e.g. by the
+        // accessibility service's own home-bounce reacting to the mobile-data app-lockdown sweep
+        // suspending/closing several apps at once) — dismissing and letting onResume recreate it
+        // on every such pause is exactly what made it flicker open/closed repeatedly.
+        if (!systemSettingsDialogIsMobileDataOn) {
+            dismissDialog(systemSettingsDialog);
+            StatusControlService.setMobileDataDialogVisible(false);
+        }
         dismissDialog(permissionsDialog);
 
         try {
@@ -3629,6 +3645,7 @@ public class MainActivity
     private void createAndShowSystemSettingDialog(final String message, final Intent settingsIntent, final Integer requestCode, final Boolean requiredMobileDataState) {
         dismissDialog(systemSettingsDialog);
         final boolean isMobileDataOnDialog = message.equals(getString(R.string.message_turn_on_mobile_data));
+        systemSettingsDialogIsMobileDataOn = isMobileDataOnDialog;
         systemSettingsDialog = new Dialog( this );
         dialogSystemSettingsBinding = DataBindingUtil.inflate(
                 LayoutInflater.from( this ),
@@ -3658,6 +3675,7 @@ public class MainActivity
                 }
                 dismissDialog(systemSettingsDialog);
                 if (isMobileDataOnDialog) {
+                    systemSettingsDialogIsMobileDataOn = false;
                     StatusControlService.setMobileDataDialogVisible(false);
                 }
                 if (settingsIntent == null) {

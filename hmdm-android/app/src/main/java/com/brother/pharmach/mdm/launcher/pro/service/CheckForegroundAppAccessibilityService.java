@@ -41,6 +41,15 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
 
     private static final String TAG = "WorkTimeAccessibility";
 
+    // Debounces the mobile-data bounce below: MobileDataAppBlocker's lockdown sweep can suspend,
+    // force-stop and close the recents task of several apps in one pass, and each of those
+    // teardowns can itself raise a window-state-changed event — without this, a single lockdown
+    // pass could fire performGlobalAction(HOME) + the ACTION_POLICY_VIOLATION broadcast a dozen
+    // times within a few hundred ms, which was enough to transiently pause/resume MainActivity
+    // repeatedly and make its "turn on mobile data" dialog flicker open/closed.
+    private static final long MOBILE_DATA_BOUNCE_DEBOUNCE_MS = 500;
+    private long lastMobileDataBounceMs = 0;
+
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
@@ -77,11 +86,15 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
         // persistent "turn on mobile data" prompt.
         if (StatusControlService.isMobileDataViolationActive()
                 && !Utils.isAllowedDuringMobileDataViolation(this, pkg)) {
-            Log.d(TAG, "Mobile data off — bouncing out of " + pkg);
-            performGlobalAction(GLOBAL_ACTION_HOME);
-            Intent violation = new Intent(Const.ACTION_POLICY_VIOLATION);
-            violation.putExtra(Const.POLICY_VIOLATION_CAUSE, Const.MOBILE_DATA_ON_REQUIRED);
-            LocalBroadcastManager.getInstance(this).sendBroadcast(violation);
+            long now = System.currentTimeMillis();
+            if (now - lastMobileDataBounceMs >= MOBILE_DATA_BOUNCE_DEBOUNCE_MS) {
+                lastMobileDataBounceMs = now;
+                Log.d(TAG, "Mobile data off — bouncing out of " + pkg);
+                performGlobalAction(GLOBAL_ACTION_HOME);
+                Intent violation = new Intent(Const.ACTION_POLICY_VIOLATION);
+                violation.putExtra(Const.POLICY_VIOLATION_CAUSE, Const.MOBILE_DATA_ON_REQUIRED);
+                LocalBroadcastManager.getInstance(this).sendBroadcast(violation);
+            }
             return;
         }
 
