@@ -1,7 +1,6 @@
 package com.brother.pharmach.mdm.launcher.service;
 
 import android.Manifest;
-import android.app.ActivityManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -44,6 +43,7 @@ import com.brother.pharmach.mdm.launcher.BuildConfig;
 import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.R;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
+import com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundAppAccessibilityService;
 import com.brother.pharmach.mdm.launcher.ui.MainActivity;
 import com.brother.pharmach.mdm.launcher.json.ServerConfig;
 import com.brother.pharmach.mdm.launcher.util.LegacyUtils;
@@ -843,11 +843,13 @@ public class StatusControlService extends Service {
     // resolve the mobile data violation without being interrupted.
     private boolean isUserInAllowedSettingsApp() {
         try {
-            ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
-            if (am == null) return false;
-            List<ActivityManager.RunningTaskInfo> tasks = am.getRunningTasks(1);
-            if (tasks == null || tasks.isEmpty() || tasks.get(0).topActivity == null) return false;
-            String foregroundPkg = tasks.get(0).topActivity.getPackageName();
+            // ActivityManager.getRunningTasks() only returns the calling app's own tasks for a
+            // non-privileged caller since Lollipop, so it can never actually see that the user is
+            // in Settings — it always reported our own package, which made this check permanently
+            // false and dragged the user back out of Settings every escalation tick. The
+            // accessibility service sees the real foreground package on every window change.
+            String foregroundPkg = CheckForegroundAppAccessibilityService.getLastForegroundPackage();
+            if (foregroundPkg == null) return false;
             return Utils.isAllowedDuringMobileDataViolation(this, foregroundPkg);
         } catch (Exception e) {
             return false;

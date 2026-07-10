@@ -50,6 +50,19 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
     private static final long MOBILE_DATA_BOUNCE_DEBOUNCE_MS = 500;
     private long lastMobileDataBounceMs = 0;
 
+    // The real current foreground package, updated on every window-state-changed event this
+    // service sees. ActivityManager.getRunningTasks()/getRunningTasks(1) has been restricted since
+    // Lollipop to return only the calling app's own tasks for non-privileged callers, so it cannot
+    // be used to ask "what app is the user in right now" — this accessibility event stream is the
+    // only reliable source of that for a non-system app. Read by
+    // StatusControlService.isUserInAllowedSettingsApp() to avoid dragging the user out of Settings
+    // while they're actively trying to turn mobile data back on there.
+    private static volatile String sLastForegroundPackage;
+
+    public static String getLastForegroundPackage() {
+        return sLastForegroundPackage;
+    }
+
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
@@ -75,7 +88,11 @@ public class CheckForegroundAppAccessibilityService extends AccessibilityService
             return;
         }
         String pkg = packageName.toString();
-        if (pkg.isEmpty() || pkg.equals(getPackageName())) {
+        if (pkg.isEmpty()) {
+            return;
+        }
+        sLastForegroundPackage = pkg;
+        if (pkg.equals(getPackageName())) {
             return;
         }
 
