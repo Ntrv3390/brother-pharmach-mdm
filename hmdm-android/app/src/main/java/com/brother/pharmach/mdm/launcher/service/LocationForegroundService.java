@@ -573,6 +573,39 @@ public class LocationForegroundService extends Service {
         });
     }
 
+    // Retry Wi-Fi enable at most once per this interval — the user (or a policy) may keep
+    // turning it off; don't fight them every 30 seconds.
+    private static final long WIFI_ENABLE_RETRY_MS = 10 * 60_000L;
+    private volatile long lastWifiEnableAttemptMs;
+
+    /**
+     * Indoor fallback: GNSS cannot work inside buildings, but the fused/network provider can
+     * locate off Wi-Fi scans at ~20-50m — IF Wi-Fi is on (it need not be connected). Field
+     * devices often have Wi-Fi switched off, leaving only 0.5-2km cell fixes indoors. As
+     * Device Owner this app may still call setWifiEnabled(true) (DO/PO apps are exempt from
+     * the API 29 lockout), so when fixes go stale we re-enable Wi-Fi, throttled.
+     */
+    private void ensureWifiAvailableForIndoorFix() {
+        long now = System.currentTimeMillis();
+        if (now - lastWifiEnableAttemptMs < WIFI_ENABLE_RETRY_MS) return;
+        try {
+            android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager)
+                    getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wm == null || wm.isWifiEnabled()) return;
+            if (!Utils.isDeviceOwner(this)) return;
+            lastWifiEnableAttemptMs = now;
+            @SuppressWarnings("deprecation")
+            boolean ok = wm.setWifiEnabled(true);
+            RemoteLogger.log(this, ok ? Const.LOG_INFO : Const.LOG_WARN,
+                    "LocationForegroundService: Wi-Fi was off with stale location — "
+                    + (ok ? "re-enabled for indoor Wi-Fi positioning"
+                          : "setWifiEnabled(true) refused by OS"));
+        } catch (Exception e) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationForegroundService: Wi-Fi enable for indoor fix failed: " + e.getMessage());
+        }
+    }
+
     /**
      * Accuracy-aware replacement rule for the in-memory fix. A coarse network callback must not
      * overwrite a fresh, more accurate GPS fix — cell-tower fixes in dense urban areas are off
@@ -635,6 +668,10 @@ public class LocationForegroundService extends Service {
                 // No-op when not dozing; throttled internally, so safe every 30s.
                 com.brother.pharmach.mdm.launcher.util.DozeExitHelper.escapeDozeIfNeeded(
                         getApplicationContext(), "heartbeat:staleFix");
+                // Indoors GNSS is physically unavailable — Wi-Fi scanning is what gives the
+                // fused/network provider its 20-50m indoor fixes. If Wi-Fi was switched off,
+                // re-enable it (Device Owner is exempt from the API 29 setWifiEnabled lockout).
+                ensureWifiAvailableForIndoorFix();
             }
             if (location == null || inMemoryAgeMs > HEARTBEAT_CACHE_RECHECK_AGE_MS) {
                 // In-memory fix missing or aging — re-check every cache: LocationManager
