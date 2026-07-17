@@ -15,6 +15,7 @@ import com.brother.pharmach.mdm.launcher.util.DozeExitHelper;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 import com.brother.pharmach.mdm.launcher.util.Utils;
 
+import java.util.Calendar;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -41,6 +42,13 @@ public class PeriodicGpsWakeReceiver extends BroadcastReceiver {
 
     // Screen-on + GPS upload cadence. 2.5 minutes.
     private static final long INTERVAL_MS = TimeUnit.SECONDS.toMillis(150);
+
+    // Active window (device local time) for the autonomous screen-wake tracker. Outside this
+    // window it does nothing — but manual "Get Latest GPS", live tracking, and the app's normal
+    // interval uploads are separate paths and keep working 24h. Minutes-of-day, inclusive of the
+    // end boundary: active 08:00 → 21:00; inactive 21:01 → 07:59.
+    private static final int ACTIVE_START_MIN = 8 * 60;    // 08:00
+    private static final int ACTIVE_END_MIN = 21 * 60;     // 21:00
     // How long to keep the screen on after waking, so the GPS cold-start capture (≤20s) plus
     // upload finishes before we turn it back off. GNSS needs the screen on the whole time on
     // ColorOS, so this must comfortably exceed the capture window.
@@ -59,8 +67,18 @@ public class PeriodicGpsWakeReceiver extends BroadcastReceiver {
 
         if (!ACTION.equals(action)) return;
 
-        // Reschedule first so the chain survives even if the work below throws.
+        // Reschedule first so the chain survives even if the work below throws. schedule() picks
+        // the next fire time based on the active window: +2.5min while active, or a single jump to
+        // the next 08:00 while inactive (so there are no wasteful 2.5-min wakeups overnight).
         schedule(context);
+
+        // Outside 08:00–21:00 the autonomous wake tracker stays idle. (Manual Get Latest GPS,
+        // live tracking, and the regular interval uploads are unaffected — different code paths.)
+        if (!isWithinActiveHours()) {
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "PeriodicGpsWake: outside active hours (08:00–21:00) — skipping periodic wake");
+            return;
+        }
 
         // Only turn the screen back off afterwards if WE are the ones turning it on — i.e. it was
         // off and the device is on battery. If the screen was already on (user is using it) or the
@@ -116,7 +134,11 @@ public class PeriodicGpsWakeReceiver extends BroadcastReceiver {
         return false;
     }
 
-    /** Arms the next 2.5-minute alarm. Idempotent — UPDATE_CURRENT deduplicates. */
+    /**
+     * Arms the next wake alarm. While inside the active window the next fire is +2.5min; while
+     * outside it, the next fire is scheduled directly for the next 08:00 so the alarm doesn't
+     * wake the CPU every 2.5 minutes all night just to skip. Idempotent — UPDATE_CURRENT dedups.
+     */
     public static void schedule(Context context) {
         AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (am == null) return;
@@ -126,9 +148,11 @@ public class PeriodicGpsWakeReceiver extends BroadcastReceiver {
         int flags = PendingIntent.FLAG_UPDATE_CURRENT
                 | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
                         ? PendingIntent.FLAG_IMMUTABLE : 0);
-        PendingIntent pi = PendingIntent.getBroadcast(context, 0, i, flags);
+        PendingIntent pi = PendingIntent.getBroadcast(context, REQ_WAKE, i, flags);
 
-        long triggerAt = System.currentTimeMillis() + INTERVAL_MS;
+        long triggerAt = isWithinActiveHours()
+                ? System.currentTimeMillis() + INTERVAL_MS
+                : nextActiveStartMillis();
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 if (am.canScheduleExactAlarms()) {
@@ -145,6 +169,26 @@ public class PeriodicGpsWakeReceiver extends BroadcastReceiver {
             RemoteLogger.log(context, Const.LOG_WARN,
                     "PeriodicGpsWake: failed to schedule alarm: " + e.getMessage());
         }
+    }
+
+    /** True when the device's local time is within the active window [08:00, 21:00]. */
+    private static boolean isWithinActiveHours() {
+        Calendar c = Calendar.getInstance();
+        int minuteOfDay = c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE);
+        return minuteOfDay >= ACTIVE_START_MIN && minuteOfDay <= ACTIVE_END_MIN;
+    }
+
+    /** Wall-clock millis of the next 08:00 (today if still upcoming, else tomorrow). */
+    private static long nextActiveStartMillis() {
+        Calendar target = Calendar.getInstance();
+        target.set(Calendar.HOUR_OF_DAY, ACTIVE_START_MIN / 60);
+        target.set(Calendar.MINUTE, ACTIVE_START_MIN % 60);
+        target.set(Calendar.SECOND, 0);
+        target.set(Calendar.MILLISECOND, 0);
+        if (!target.after(Calendar.getInstance())) {
+            target.add(Calendar.DAY_OF_MONTH, 1);
+        }
+        return target.getTimeInMillis();
     }
 
     /** Arms a one-shot alarm to turn the screen back off once the capture window has elapsed. */
