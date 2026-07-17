@@ -888,6 +888,19 @@ public class LocationForegroundService extends Service {
                         "LocationForegroundService: no recent fix (age="
                         + (fixAge == Long.MAX_VALUE ? "none" : fixAge + "ms")
                         + ") — falling back to cold-start capture");
+
+                // Catch-all wake for every urgent origin (push, Initializer, DetailedInfoWorker):
+                // if the screen is off, ColorOS/MIUI suppresses the GPS chip for a background app
+                // even outside Doze, so the capture below would get zero GnssStatus callbacks.
+                // Waking the screen now gives GNSS the ~20s capture window to actually acquire.
+                com.brother.pharmach.mdm.launcher.util.DozeExitHelper.prepareForForegroundCapture(
+                        appContext, "urgentColdStart:" + reqId);
+
+                // Snapshot the in-memory fix so we can tell if the parallel continuous listener
+                // delivers a NEWER one while the cold-start capture runs (see re-check below).
+                Location beforeCapture = latestContinuousFix;
+                long beforeCaptureTime = beforeCapture != null ? beforeCapture.getTime() : 0L;
+
                 LocationDiag.timeline(appContext, reqId, "handleUrgentRequest:coldStartBegin");
                 try {
                     LocationWorker.captureAndUpload(appContext, true, () -> false, reqId);
@@ -896,6 +909,25 @@ public class LocationForegroundService extends Service {
                             "LocationForegroundService: urgent cold-start failed: " + e.getMessage());
                 } finally {
                     LocationDiag.timeline(appContext, reqId, "handleUrgentRequest:coldStartEnd");
+                }
+
+                // Fix 2: the continuous listener runs in parallel with the cold-start capture and
+                // often lands a fix (e.g. a 40m network fix on ColorOS) moments after the capture's
+                // own providers time out. Without this, that fix would wait up to 30s for the next
+                // heartbeat. If a new fix arrived during the window, upload it immediately — its
+                // real timestamp is preserved by uploadFix, so a stale-timestamped one stays marked
+                // stale on the server.
+                Location afterCapture = latestContinuousFix;
+                if (afterCapture != null
+                        && afterCapture != beforeCapture
+                        && afterCapture.getTime() != beforeCaptureTime) {
+                    RemoteLogger.log(appContext, Const.LOG_INFO,
+                            "LocationForegroundService: continuous listener delivered a fix during"
+                            + " cold-start (provider=" + afterCapture.getProvider()
+                            + ", accuracy=" + (afterCapture.hasAccuracy()
+                                    ? afterCapture.getAccuracy() + "m" : "unknown")
+                            + ") — uploading it instead of waiting for the heartbeat reqId=" + reqId);
+                    uploadFix(new Location(afterCapture), true, "fgsMemoryCacheAfterColdStart");
                 }
             } finally {
                 // This is the terminal consumer for both the memory-cache and cold-start branches.

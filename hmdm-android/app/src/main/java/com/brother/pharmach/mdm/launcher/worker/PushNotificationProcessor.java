@@ -113,9 +113,11 @@ public class PushNotificationProcessor {
             final Context appContext = context.getApplicationContext();
             long pushReceivedMs = System.currentTimeMillis();
             LocationDiag.logProcessAndPowerState(appContext, "pushReceived:fetchGpsUrgent");
-            // If the device is dozing, GNSS/timers are suspended and the capture below would
-            // serve a stale cache at best — wake the device alarm-clock-style first.
-            com.brother.pharmach.mdm.launcher.util.DozeExitHelper.escapeDozeIfNeeded(
+            // Wake the device before capturing: in Doze, GNSS/timers are suspended; and on
+            // ColorOS/MIUI the GPS chip is suppressed for background apps whenever the screen is
+            // off even outside Doze. prepareForForegroundCapture handles both cases (no-op when
+            // the screen is already on).
+            com.brother.pharmach.mdm.launcher.util.DozeExitHelper.prepareForForegroundCapture(
                     appContext, "pushMessage:fetchGpsUrgent");
             // Reverted from the LocationService experiment back to LocationForegroundService —
             // see LocationService.java for why the simplified version was rolled back.

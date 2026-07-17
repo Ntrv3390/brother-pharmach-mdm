@@ -35,12 +35,14 @@ import com.brother.pharmach.mdm.launcher.receiver.DozeExitReceiver;
 public final class DozeExitHelper {
 
     private static final long MIN_ESCAPE_INTERVAL_MS = 2 * 60_000L;
+    private static final long SCREEN_WAKE_RETRY_MS = 30_000L;
     private static final long CPU_WAKELOCK_TIMEOUT_MS = 90_000L;
     private static final long SCREEN_WAKELOCK_TIMEOUT_MS = 10_000L;
     private static final int ALARM_REQUEST_CODE = 2002;
     private static final int KEYCODE_WAKEUP = 224;
 
     private static volatile long lastEscapeAttemptMs;
+    private static volatile long lastScreenWakeMs;
 
     private DozeExitHelper() {}
 
@@ -49,6 +51,41 @@ public final class DozeExitHelper {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false;
         PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
         return pm != null && pm.isDeviceIdleMode();
+    }
+
+    /** True when the screen is off (non-interactive). */
+    public static boolean isScreenOff(Context context) {
+        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        if (pm == null) return false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
+            return !pm.isInteractive();
+        }
+        return !pm.isScreenOn();
+    }
+
+    /**
+     * Call right before an urgent, foreground-initiated GPS capture. On ColorOS/MIUI the GPS
+     * chip is suspended for background apps whenever the SCREEN IS OFF — even when the device is
+     * NOT in Doze (confirmed in field logs: deviceIdle=false, screenInteractive=false, zero
+     * GnssStatus callbacks). A screen wake is what lets GNSS actually run for the capture.
+     *
+     *  - In Doze: the full alarm-clock escape (wake + setAlarmClock kick).
+     *  - Screen off but not Doze: a direct screen wake (throttled to {@link #SCREEN_WAKE_RETRY_MS}).
+     *  - Screen already on: no-op.
+     */
+    public static void prepareForForegroundCapture(Context context, String reason) {
+        if (isDozing(context)) {
+            escapeDozeIfNeeded(context, reason);
+            return;
+        }
+        if (!isScreenOff(context)) return;
+        long now = System.currentTimeMillis();
+        if (now - lastScreenWakeMs < SCREEN_WAKE_RETRY_MS) return;
+        lastScreenWakeMs = now;
+        RemoteLogger.log(context, Const.LOG_INFO,
+                "DozeExitHelper: screen off (not Doze) before capture — waking screen so the GPS"
+                        + " chip is not suppressed (reason=" + reason + ")");
+        wakeDeviceNow(context, "screenOff:" + reason);
     }
 
     /**
