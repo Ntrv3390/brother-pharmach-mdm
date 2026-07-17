@@ -1020,6 +1020,25 @@ public class LocationForegroundService extends Service {
         // (BootReceiver → FGS → here). DozeExitHelper remains the runtime escape hatch for
         // devices where this shell command is unsupported.
         runDpmShell(dpm, admin, "cmd deviceidle disable");
+
+        // PUBLIC Device Owner API — works on stock builds where the hidden shell channel above
+        // throws NoSuchMethodException. Keeps the screen on whenever the device is charging
+        // (AC/USB/wireless = 7); a lit screen makes Doze impossible, so vehicle-mounted devices
+        // on a charger never lose GNSS.
+        try {
+            dpm.setGlobalSetting(admin,
+                    android.provider.Settings.Global.STAY_ON_WHILE_PLUGGED_IN,
+                    String.valueOf(android.os.BatteryManager.BATTERY_PLUGGED_AC
+                            | android.os.BatteryManager.BATTERY_PLUGGED_USB
+                            | android.os.BatteryManager.BATTERY_PLUGGED_WIRELESS));
+            RemoteLogger.log(this, Const.LOG_INFO,
+                    "LocationForegroundService: STAY_ON_WHILE_PLUGGED_IN set — screen stays on"
+                    + " while charging, preventing Doze on vehicle-mounted devices");
+        } catch (Exception e) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationForegroundService: setGlobalSetting(STAY_ON_WHILE_PLUGGED_IN)"
+                    + " failed: " + e.getMessage());
+        }
     }
 
     /** Executes a shell command via the hidden DPM channel. Returns true if it ran. */

@@ -148,6 +148,17 @@
         android:hardwareAccelerated="true"
         tools:ignore="GoogleAppIndexingWarning">
 
+        <!-- Invisible screen-wake activity — turnScreenOn/showWhenLocked ends Doze so urgent
+             GPS capture can engage GNSS. Launched by DozeExitHelper; self-finishes in ~3s. -->
+        <activity
+            android:name=".ui.WakeUpActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:exported="false" />
+
         <activity
             android:name=".ui.MainActivity"
             android:launchMode="singleInstance"

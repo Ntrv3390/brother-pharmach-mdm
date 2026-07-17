@@ -96,6 +96,23 @@ public final class DozeExitHelper {
                     "DozeExitHelper: wake lock acquisition failed: " + e.getMessage());
         }
 
+        // The reliable, public-API screen wake: an invisible activity with setTurnScreenOn().
+        // ColorOS/MIUI ignore the deprecated wake lock above, and the DPM shell channel below
+        // does not exist on stock builds — this is the path that must work on those devices.
+        // Background-activity-launch restrictions don't block us: this app is the default HOME
+        // launcher, a Device Owner, and holds SYSTEM_ALERT_WINDOW — any one of which exempts it.
+        try {
+            Intent wakeIntent = new Intent(context,
+                    com.brother.pharmach.mdm.launcher.ui.WakeUpActivity.class);
+            wakeIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                    | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+                    | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+            context.startActivity(wakeIntent);
+        } catch (Exception e) {
+            RemoteLogger.log(context, Const.LOG_WARN,
+                    "DozeExitHelper: WakeUpActivity launch failed: " + e.getMessage());
+        }
+
         if (Utils.isDeviceOwner(context)) {
             runDpmShell(context, "input keyevent " + KEYCODE_WAKEUP);
         }
