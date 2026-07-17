@@ -45,6 +45,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 2. Rather than the pasted code's always-registered LocationListener, this service takes one
  *    fresh fix at a time (on-demand or once a minute) via requestSingleUpdate() and stops
  *    listening immediately after — see the class-level note in captureAndUploadOnce() about why.
+ *    Within each capture, GPS is preferred: a network fix that answers first is only held as a
+ *    fallback for the timeout, never uploaded while the GPS request is still pending.
  *
  * Behavior:
  *  - "Get Latest GPS" (PushNotificationProcessor / DetailedInfoWorker / Initializer, all
@@ -76,6 +78,10 @@ public class LocationService extends Service {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final AtomicBoolean requestInFlight = new AtomicBoolean(false);
     private volatile LocationListener activeListener;
+    // Network fix held while we keep waiting for GPS within the capture window. Cell-tower
+    // network fixes in dense urban areas are off by 0.5–2 km, so the network fast-responder
+    // must not win the race outright — it's only the fallback if GPS never answers.
+    private volatile Location pendingNetworkFix;
 
     private final Runnable periodicTick = new Runnable() {
         @Override
@@ -195,13 +201,33 @@ public class LocationService extends Service {
 
         RemoteLogger.log(this, Const.LOG_INFO, "LocationService: capture started, origin=" + origin);
 
+        pendingNetworkFix = null;
+        boolean gpsRequestable = false;
+        try {
+            gpsRequestable = fineGranted && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+        } catch (Exception ignored) {
+        }
+        final boolean waitForGps = gpsRequestable;
+
         LocationListener listener = new LocationListener() {
             @Override
             public void onLocationChanged(@NonNull Location location) {
-                RemoteLogger.log(LocationService.this, Const.LOG_INFO,
-                        "LocationService: fix received provider=" + location.getProvider()
-                                + " origin=" + origin);
-                finish(location);
+                boolean isGps = LocationManager.GPS_PROVIDER.equals(location.getProvider());
+                if (isGps || !waitForGps) {
+                    RemoteLogger.log(LocationService.this, Const.LOG_INFO,
+                            "LocationService: fix received provider=" + location.getProvider()
+                                    + " accuracy=" + (location.hasAccuracy() ? location.getAccuracy() + "m" : "unknown")
+                                    + " origin=" + origin);
+                    finish(location, true);
+                } else {
+                    // Network answers in 1–3s, GPS needs 10–60s. Hold the coarse fix and keep
+                    // the GPS request alive until the timeout — GPS wins if it arrives at all.
+                    pendingNetworkFix = location;
+                    RemoteLogger.log(LocationService.this, Const.LOG_INFO,
+                            "LocationService: holding network fix (accuracy="
+                                    + (location.hasAccuracy() ? location.getAccuracy() + "m" : "unknown")
+                                    + "), still waiting for GPS, origin=" + origin);
+                }
             }
 
             @Override
@@ -219,7 +245,7 @@ public class LocationService extends Service {
         activeListener = listener;
 
         try {
-            if (fineGranted && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            if (waitForGps) {
                 locationManager.requestSingleUpdate(LocationManager.GPS_PROVIDER, listener, Looper.getMainLooper());
             }
             if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
@@ -232,10 +258,12 @@ public class LocationService extends Service {
 
         mainHandler.postDelayed(() -> {
             if (activeListener != listener) return; // already finished via a fix
+            Location heldNetworkFix = pendingNetworkFix;
             RemoteLogger.log(this, Const.LOG_WARN,
-                    "LocationService: capture timed out after " + SINGLE_UPDATE_TIMEOUT_MS
-                            + "ms, origin=" + origin);
-            finish(bestLastKnown());
+                    "LocationService: no GPS fix within " + SINGLE_UPDATE_TIMEOUT_MS
+                            + "ms, origin=" + origin + " — falling back to "
+                            + (heldNetworkFix != null ? "held network fix" : "last known location"));
+            finish(heldNetworkFix != null ? heldNetworkFix : bestLastKnown(), heldNetworkFix != null);
         }, SINGLE_UPDATE_TIMEOUT_MS);
     }
 
@@ -255,11 +283,20 @@ public class LocationService extends Service {
         return best;
     }
 
-    /** Called exactly once per capture, either from a fresh fix or the timeout fallback. */
-    private synchronized void finish(@Nullable Location location) {
+    /**
+     * Called exactly once per capture, either from a fresh fix or the timeout fallback.
+     *
+     * @param freshFix true when {@code location} came from a live provider callback in this
+     *                 capture window; false for the last-known-location fallback. Only fresh
+     *                 fixes get stamped with "now" — a cached fix keeps its real time so the
+     *                 server can tell a live position from a stale one (same semantics as
+     *                 LocationWorker.performUpload's stale-fallback path).
+     */
+    private synchronized void finish(@Nullable Location location, boolean freshFix) {
         LocationListener listener = activeListener;
         if (listener == null) return; // already finished by the other path
         activeListener = null;
+        pendingNetworkFix = null;
 
         try {
             locationManager.removeUpdates(listener);
@@ -275,7 +312,11 @@ public class LocationService extends Service {
                 RemoteLogger.log(this, Const.LOG_WARN, "LocationService: capture found no location to upload");
             } else {
                 LocationTable.Location tableLocation = new LocationTable.Location(location);
-                tableLocation.setTs(System.currentTimeMillis());
+                if (freshFix) {
+                    tableLocation.setTs(System.currentTimeMillis());
+                }
+                // else: keep the fix's own time (set by the constructor) — a stale last-known
+                // fallback must be visibly stale on the server, not masquerade as live.
 
                 boolean sent = LocationUploader.sendUrgentLocation(getApplicationContext(), tableLocation, true);
                 if (!sent) {

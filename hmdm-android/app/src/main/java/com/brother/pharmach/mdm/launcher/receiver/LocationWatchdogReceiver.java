@@ -38,6 +38,12 @@ public class LocationWatchdogReceiver extends BroadcastReceiver {
         // Always reschedule next alarm first so the chain survives even if FGS start fails.
         schedule(context);
 
+        // This alarm fires even in deep Doze — use the window to fully wake the device
+        // (alarm-clock style) if it dozed off, so location capture resumes with live GNSS
+        // instead of serving stale caches until someone unlocks the screen.
+        com.brother.pharmach.mdm.launcher.util.DozeExitHelper.escapeDozeIfNeeded(
+                context.getApplicationContext(), "watchdog15min");
+
         // Reverted from the LocationService experiment back to LocationForegroundService —
         // see LocationService.java for why the simplified version was rolled back.
         // LocationService.start(context.getApplicationContext());

@@ -281,6 +281,15 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name="com.brother.pharmach.mdm.launcher.receiver.DozeExitReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.brother.pharmach.mdm.launcher.ACTION_DOZE_EXIT_GPS" />
+            </intent-filter>
+        </receiver>
+
 
         <provider
             android:name="androidx.core.content.FileProvider"

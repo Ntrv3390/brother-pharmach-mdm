@@ -107,6 +107,16 @@ public class LocationForegroundService extends Service {
     // Urgent: use the streaming in-memory fix if it's < 20s old (GPS is warm, instant response).
     private static final long URGENT_FIX_MAX_AGE_MS = 20_000L;
 
+    // A held in-memory fix older than this is superseded by ANY incoming fix regardless of
+    // provider/accuracy — under Doze or GNSS blackout the coarse network stream must still take
+    // over so tracking never goes silent.
+    private static final long FIX_SUPERSEDE_AGE_MS = 60_000L;
+
+    // Uploads stamp "now" only when the fix is at most this old. Older (cached/heartbeat
+    // fallback) fixes keep their real time so the server can tell a live position from a stale
+    // one — mirrors LocationWorker.performUpload's stale-fallback semantics.
+    private static final long FRESH_FIX_STAMP_MAX_AGE_MS = 30_000L;
+
     // A duplicate urgent request within this window joins the in-flight capture instead of
     // cancelling it. Sized to the urgent cold-start capture (20s provider wait + 2s outer
     // margin + upload) plus headroom; anything still running past this is stuck and replaced.
@@ -171,6 +181,9 @@ public class LocationForegroundService extends Service {
         @Override
         public void onLocationChanged(@NonNull Location location) {
             if (location.getLatitude() == 0.0 && location.getLongitude() == 0.0) {
+                return;
+            }
+            if (!shouldReplaceFix(location, latestContinuousFix)) {
                 return;
             }
             latestContinuousFix = location;
@@ -560,6 +573,27 @@ public class LocationForegroundService extends Service {
         });
     }
 
+    /**
+     * Accuracy-aware replacement rule for the in-memory fix. A coarse network callback must not
+     * overwrite a fresh, more accurate GPS fix — cell-tower fixes in dense urban areas are off
+     * by 0.5–2 km and previously won purely by being a few seconds newer, which is what put the
+     * server pin at the locality centroid instead of the vehicle's position. Once the held fix
+     * ages past {@link #FIX_SUPERSEDE_AGE_MS}, anything newer wins, preserving the
+     * Doze/GNSS-blackout behavior where the network stream takes over rather than tracking
+     * going silent.
+     */
+    private static boolean shouldReplaceFix(@NonNull Location incoming, @Nullable Location current) {
+        if (current == null) return true;
+        if (System.currentTimeMillis() - current.getTime() > FIX_SUPERSEDE_AGE_MS) return true;
+        if (LocationManager.GPS_PROVIDER.equals(incoming.getProvider())) return true;
+        if (!LocationManager.GPS_PROVIDER.equals(current.getProvider())) return true;
+        // Incoming is a network fix, current is a fresh GPS fix — replace only if the network
+        // fix is genuinely more accurate (rare, but possible right after a GNSS cold start).
+        float incomingAcc = incoming.hasAccuracy() ? incoming.getAccuracy() : Float.MAX_VALUE;
+        float currentAcc = current.hasAccuracy() ? current.getAccuracy() : Float.MAX_VALUE;
+        return incomingAcc < currentAcc;
+    }
+
     /** Best available getLastKnownLocation() across GPS/Network/Passive, or null if none. */
     @Nullable
     private Location getBestLastKnownLocation() {
@@ -595,6 +629,13 @@ public class LocationForegroundService extends Service {
             boolean usedLastKnownFallback = false;
             long inMemoryAgeMs = location != null
                     ? System.currentTimeMillis() - location.getTime() : Long.MAX_VALUE;
+            if (inMemoryAgeMs > HEARTBEAT_CACHE_RECHECK_AGE_MS) {
+                // Fix has gone stale — if that's because the device dozed off, wake it
+                // alarm-clock-style so the next cycles upload a genuinely fresh position.
+                // No-op when not dozing; throttled internally, so safe every 30s.
+                com.brother.pharmach.mdm.launcher.util.DozeExitHelper.escapeDozeIfNeeded(
+                        getApplicationContext(), "heartbeat:staleFix");
+            }
             if (location == null || inMemoryAgeMs > HEARTBEAT_CACHE_RECHECK_AGE_MS) {
                 // In-memory fix missing or aging — re-check every cache: LocationManager
                 // last-known, GMS Fused cache, FGS prefs cache, offline SQLite queue. The GMS
@@ -723,7 +764,12 @@ public class LocationForegroundService extends Service {
         uploadExecutor.execute(() -> {
             try {
                 LocationTable.Location tableLocation = new LocationTable.Location(location);
-                tableLocation.setTs(System.currentTimeMillis());
+                long fixAgeMs = System.currentTimeMillis() - location.getTime();
+                if (fixAgeMs >= 0 && fixAgeMs <= FRESH_FIX_STAMP_MAX_AGE_MS) {
+                    tableLocation.setTs(System.currentTimeMillis());
+                }
+                // else: cached/heartbeat-fallback fix — keep its real time (constructor default)
+                // so the server sees it as stale instead of a live position.
 
                 boolean sent = LocationUploader.sendUrgentLocation(appContext, tableLocation, isUrgent);
                 if (!sent) {
@@ -968,6 +1014,12 @@ public class LocationForegroundService extends Service {
 
         runDpmShell(dpm, admin, "settings put global low_power 0");
         runDpmShell(dpm, admin, "settings put global low_power_trigger_level 0");
+
+        // Kiosk fleet: disable Doze (deep idle) entirely so GNSS, timers and network are never
+        // suspended between trips. Resets on reboot, but this runs on every FGS process start
+        // (BootReceiver → FGS → here). DozeExitHelper remains the runtime escape hatch for
+        // devices where this shell command is unsupported.
+        runDpmShell(dpm, admin, "cmd deviceidle disable");
     }
 
     /** Executes a shell command via the hidden DPM channel. Returns true if it ran. */
@@ -1329,6 +1381,7 @@ public class LocationForegroundService extends Service {
 
             if (location == null) return;
             if (location.getLatitude() == 0.0 && location.getLongitude() == 0.0) return;
+            if (!shouldReplaceFix(location, latestContinuousFix)) return;
 
             latestContinuousFix = location;
             writeFixToSharedPrefs(location);

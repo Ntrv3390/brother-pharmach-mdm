@@ -235,11 +235,13 @@ public class DeviceInfoProvider {
                 } else if (lastLocationNetwork == null || (lastLocationNetwork.getLatitude() == 0 && lastLocationNetwork.getLongitude() == 0)) {
                     lastLocation = lastLocationGps;
                 } else {
-                    // Get the latest location as the best one
-                    if (lastLocationGps.getTime() >= lastLocationNetwork.getTime()) {
-                        lastLocation = lastLocationGps;
-                    } else {
+                    // Prefer GPS: a cell-tower network fix can be 0.5–2 km off, and picking
+                    // purely by newest timestamp let it beat a GPS fix taken seconds earlier.
+                    // Only fall back to network once GPS has been silent for a few minutes.
+                    if (lastLocationNetwork.getTime() - lastLocationGps.getTime() > 3 * 60 * 1000L) {
                         lastLocation = lastLocationNetwork;
+                    } else {
+                        lastLocation = lastLocationGps;
                     }
                 }
 
