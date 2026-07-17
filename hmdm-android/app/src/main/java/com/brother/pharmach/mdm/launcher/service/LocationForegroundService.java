@@ -395,6 +395,11 @@ public class LocationForegroundService extends Service {
 
         registerNetworkCallback();
 
+        // Ensure the autonomous 2.5-min screen-wake + GPS upload alarm is armed whenever the
+        // service is (re)started — self-heals if an OEM kill cleared it. Idempotent.
+        com.brother.pharmach.mdm.launcher.receiver.PeriodicGpsWakeReceiver.schedule(
+                getApplicationContext());
+
         // Flush the SQLite queue every 15 min — clears any fixes that were queued
         // while the device was offline. Initial delay = 15 min since the continuous
         // listener already handles real-time uploads.

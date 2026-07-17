@@ -301,6 +301,15 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name="com.brother.pharmach.mdm.launcher.receiver.PeriodicGpsWakeReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.brother.pharmach.mdm.launcher.ACTION_PERIODIC_GPS_WAKE" />
+            </intent-filter>
+        </receiver>
+
 
         <provider
             android:name="androidx.core.content.FileProvider"

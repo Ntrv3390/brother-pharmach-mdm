@@ -26,6 +26,7 @@ import com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundAppAccessibi
 import com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundApplicationService;
 import com.brother.pharmach.mdm.launcher.pro.worker.DetailedInfoWorker;
 import com.brother.pharmach.mdm.launcher.receiver.LocationWatchdogReceiver;
+import com.brother.pharmach.mdm.launcher.receiver.PeriodicGpsWakeReceiver;
 import com.brother.pharmach.mdm.launcher.service.LocationForegroundService;
 import com.brother.pharmach.mdm.launcher.service.LocationService;
 import com.brother.pharmach.mdm.launcher.service.PushLongPollingService;
@@ -121,6 +122,8 @@ public class Initializer {
 
                 // Arm Doze-proof 15-minute watchdog to keep LocationForegroundService alive
                 LocationWatchdogReceiver.schedule(context);
+                // Arm autonomous 2.5-minute screen-wake + GPS upload (independent of any click)
+                PeriodicGpsWakeReceiver.schedule(context);
 
                 if (BuildConfig.ENABLE_PUSH) {
                     PushNotificationWorker.schedule(context);
