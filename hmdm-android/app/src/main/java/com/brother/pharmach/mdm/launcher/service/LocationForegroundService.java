@@ -45,6 +45,7 @@ import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.IntentFilter;
 
+import com.brother.pharmach.mdm.launcher.util.DozeExitHelper;
 import com.brother.pharmach.mdm.launcher.util.LegacyUtils;
 import com.brother.pharmach.mdm.launcher.util.LocationDiag;
 import com.brother.pharmach.mdm.launcher.util.OemCompat;
@@ -172,6 +173,38 @@ public class LocationForegroundService extends Service {
     // PendingIntent-based location path — active in parallel with HandlerThread on restricted OEMs.
     private PendingIntent locationPendingIntent;
     private BroadcastReceiver pendingIntentReceiver;
+
+    // ---------------------------------------------------------------------------
+    // Live mode — sustained high-frequency streaming for the server's "Live Tracking".
+    //
+    // Triggered automatically by a sustained burst of urgent requests (the web page fires a
+    // refresh every ~15s while live tracking is on), so NO new server signal is needed. While
+    // active it keeps the device awake ONCE for the whole session instead of losing the
+    // per-request wake-throttle race (DozeExitHelper caps wakes at 30s/2min), and uploads a
+    // current-stamped fix every LIVE_CAPTURE_INTERVAL_MS so the map advances smoothly.
+    //
+    // Auto-expires LIVE_MODE_TTL_MS after the last urgent request — when the admin clicks "Stop
+    // Live Tracking" the page stops refreshing, the TTL lapses, and the device drops back to
+    // normal battery behavior on its own.
+    // ---------------------------------------------------------------------------
+    private static final long LIVE_CAPTURE_INTERVAL_MS = 8_000L;
+    private static final long LIVE_MODE_TTL_MS = 120_000L;
+    // Enter live mode only after this many urgent requests within the window — enough to tell a
+    // sustained live-tracking session from a single "Get Latest GPS" click (one click = ~2
+    // triggers: the urgent push + its config-update side-effect).
+    private static final int LIVE_TRIGGER_MIN_REQUESTS = 4;
+    private static final long LIVE_TRIGGER_WINDOW_MS = 45_000L;
+    // While the screen is forced off (user pressed power), re-assert a screen wake no more often
+    // than this — best-effort GPS-quality sample without fighting the user on every tick.
+    private static final long LIVE_SCREEN_REASSERT_MS = 30_000L;
+
+    private volatile boolean liveModeActive;
+    private volatile long liveModeExpiryMs;
+    private volatile long lastLiveScreenReassertMs;
+    private ScheduledExecutorService liveScheduler;
+    private PowerManager.WakeLock liveWakeLock;
+    private BroadcastReceiver liveScreenReceiver;
+    private final java.util.ArrayDeque<Long> recentUrgentRequestTimes = new java.util.ArrayDeque<>();
 
     // ---------------------------------------------------------------------------
     // Continuous LocationListener — callbacks delivered on listenerThread.
@@ -413,6 +446,7 @@ public class LocationForegroundService extends Service {
                 .putBoolean(KEY_FGS_ALIVE, false)
                 .apply();
         LocationDiag.DozeTracker.unregister(this);
+        exitLiveMode("serviceDestroyed");
         stopPendingIntentTracking();
         stopContinuousTracking();
         unregisterNetworkCallback();
@@ -834,6 +868,10 @@ public class LocationForegroundService extends Service {
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService: urgent GPS triggered — MAX_PRIORITY reqId=" + reqId);
 
+        // Count this request (even if it coalesces below) — a sustained burst means the admin is
+        // live-tracking, so switch into sustained live mode instead of per-request waking.
+        noteUrgentRequestAndMaybeGoLive();
+
         // Coalesce instead of cancel: one "Get Latest GPS" click makes the server send BOTH a
         // fetchGpsUrgent push and a configUpdated push, and the configUpdated side-effect used to
         // cancel(true) the real capture mid-flight (field logs: InterruptedException 5s in, then a
@@ -934,6 +972,177 @@ public class LocationForegroundService extends Service {
                 LocationDiag.endRequest(appContext, reqId);
             }
         });
+    }
+
+    // ---------------------------------------------------------------------------
+    // Live mode — sustained streaming while the server page is live-tracking
+    // ---------------------------------------------------------------------------
+
+    /** Records an urgent request and enters/extends live mode if they are arriving in a burst. */
+    private synchronized void noteUrgentRequestAndMaybeGoLive() {
+        long now = System.currentTimeMillis();
+        recentUrgentRequestTimes.addLast(now);
+        while (!recentUrgentRequestTimes.isEmpty()
+                && now - recentUrgentRequestTimes.peekFirst() > LIVE_TRIGGER_WINDOW_MS) {
+            recentUrgentRequestTimes.pollFirst();
+        }
+        if (liveModeActive) {
+            // Already live — just push the auto-expiry further out.
+            liveModeExpiryMs = now + LIVE_MODE_TTL_MS;
+            return;
+        }
+        if (recentUrgentRequestTimes.size() >= LIVE_TRIGGER_MIN_REQUESTS) {
+            enterLiveMode();
+            liveModeExpiryMs = now + LIVE_MODE_TTL_MS;
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private synchronized void enterLiveMode() {
+        if (liveModeActive) return;
+        liveModeActive = true;
+        RemoteLogger.log(this, Const.LOG_INFO,
+                "LocationForegroundService: LIVE MODE on — sustained streaming every "
+                        + LIVE_CAPTURE_INTERVAL_MS + "ms");
+
+        // Wake once and stay awake for the session (vs losing the per-request throttle race).
+        DozeExitHelper.wakeDeviceNow(getApplicationContext(), "liveModeEnter");
+        try {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                liveWakeLock = pm.newWakeLock(
+                        PowerManager.PARTIAL_WAKE_LOCK, "hmdm:liveModeCpu");
+                liveWakeLock.setReferenceCounted(false);
+                liveWakeLock.acquire(LIVE_MODE_TTL_MS + 30_000L);
+            }
+        } catch (Exception e) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationForegroundService: live wakelock failed: " + e.getMessage());
+        }
+
+        // Disable Doze for the session (Device Owner) so timers/GNSS/network aren't suspended.
+        runLiveDpmShellAsync("cmd deviceidle disable");
+
+        registerLiveScreenReceiver();
+
+        liveScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "location-live-fg");
+            t.setDaemon(true);
+            return t;
+        });
+        liveScheduler.scheduleAtFixedRate(this::runLiveTick,
+                0, LIVE_CAPTURE_INTERVAL_MS, TimeUnit.MILLISECONDS);
+    }
+
+    private void runLiveTick() {
+        try {
+            if (System.currentTimeMillis() > liveModeExpiryMs) {
+                exitLiveMode("ttlExpired");
+                return;
+            }
+
+            // If the screen is off (user pressed power, or it timed out), re-assert a wake at a
+            // gentle cadence so a GPS-quality sample is still taken periodically. We do NOT fight
+            // the user on every tick — network/Wi-Fi fused positioning below keeps the feed alive
+            // even while the screen stays off, since it does not need the GPS chip.
+            if (DozeExitHelper.isScreenOff(getApplicationContext())) {
+                long now = System.currentTimeMillis();
+                if (now - lastLiveScreenReassertMs >= LIVE_SCREEN_REASSERT_MS) {
+                    lastLiveScreenReassertMs = now;
+                    DozeExitHelper.wakeDeviceNow(getApplicationContext(), "liveReassertScreenOff");
+                }
+            }
+
+            // Stream the best current fix. uploadFix(isUrgent=true) stamps it "now" when it is
+            // within the represents-current window, so the server map advances every tick even
+            // when the device is stationary (same coordinates, fresh timestamp).
+            Location fix = latestContinuousFix;
+            if (fix == null) {
+                fix = getBestLastKnownLocation();
+            }
+            if (fix != null) {
+                uploadFix(new Location(fix), true, "liveMode");
+            } else {
+                RemoteLogger.log(getApplicationContext(), Const.LOG_INFO,
+                        "LocationForegroundService: live tick — no fix available yet");
+            }
+        } catch (Exception e) {
+            RemoteLogger.log(getApplicationContext(), Const.LOG_WARN,
+                    "LocationForegroundService: live tick failed: " + e.getMessage());
+        }
+    }
+
+    private synchronized void exitLiveMode(String reason) {
+        if (!liveModeActive) return;
+        liveModeActive = false;
+        RemoteLogger.log(this, Const.LOG_INFO,
+                "LocationForegroundService: LIVE MODE off (" + reason + ")");
+        if (liveScheduler != null) {
+            liveScheduler.shutdownNow();
+            liveScheduler = null;
+        }
+        unregisterLiveScreenReceiver();
+        if (liveWakeLock != null) {
+            try {
+                if (liveWakeLock.isHeld()) liveWakeLock.release();
+            } catch (Exception ignored) {
+            }
+            liveWakeLock = null;
+        }
+        // Re-enable Doze so the device returns to normal battery behavior between live sessions.
+        runLiveDpmShellAsync("cmd deviceidle enable");
+    }
+
+    /** Runs a Device Owner shell command off-thread (best-effort) for live-mode power control. */
+    private void runLiveDpmShellAsync(String cmd) {
+        if (!Utils.isDeviceOwner(this)) return;
+        final Context appContext = getApplicationContext();
+        new Thread(() -> {
+            try {
+                DevicePolicyManager dpm =
+                        (DevicePolicyManager) appContext.getSystemService(Context.DEVICE_POLICY_SERVICE);
+                if (dpm == null) return;
+                ComponentName admin = LegacyUtils.getAdminComponentName(appContext);
+                runDpmShell(dpm, admin, cmd);
+            } catch (Exception e) {
+                RemoteLogger.log(appContext, Const.LOG_WARN,
+                        "LocationForegroundService: live DPM shell failed (" + cmd + "): " + e.getMessage());
+            }
+        }, "live-dpm-shell").start();
+    }
+
+    /** While live, a manual power-off (SCREEN_OFF) triggers a throttled re-assert of the screen. */
+    private void registerLiveScreenReceiver() {
+        if (liveScreenReceiver != null) return;
+        liveScreenReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (!liveModeActive) return;
+                long now = System.currentTimeMillis();
+                if (now - lastLiveScreenReassertMs < LIVE_SCREEN_REASSERT_MS) return;
+                lastLiveScreenReassertMs = now;
+                RemoteLogger.log(context, Const.LOG_INFO,
+                        "LocationForegroundService: screen turned off during live mode —"
+                        + " re-asserting (best-effort; network positioning continues regardless)");
+                DozeExitHelper.wakeDeviceNow(context, "liveScreenOffBroadcast");
+            }
+        };
+        try {
+            registerReceiver(liveScreenReceiver, new IntentFilter(Intent.ACTION_SCREEN_OFF));
+        } catch (Exception e) {
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "LocationForegroundService: failed to register live screen receiver: " + e.getMessage());
+            liveScreenReceiver = null;
+        }
+    }
+
+    private void unregisterLiveScreenReceiver() {
+        if (liveScreenReceiver == null) return;
+        try {
+            unregisterReceiver(liveScreenReceiver);
+        } catch (Exception ignored) {
+        }
+        liveScreenReceiver = null;
     }
 
     // ---------------------------------------------------------------------------
