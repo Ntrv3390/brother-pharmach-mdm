@@ -550,6 +550,77 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                 });
         };
 
+        // ── Live Tracking ─────────────────────────────────────────────
+        // Emulates a telematics live feed on top of the existing on-demand GPS pipeline:
+        //  - POLL: read the latest uploaded fixes from the server every LIVE_POLL_MS and redraw
+        //    the map silently (cheap DB read, no push). This alone already follows a moving
+        //    device, because the on-device continuous tracker streams a fix on every ~100m of
+        //    movement and at least every 30s.
+        //  - PROMPT: send an urgent GPS refresh every LIVE_PUSH_MS so a *stationary* device (or
+        //    one between its own heartbeats) is actively told to capture, keeping the feed fresh.
+        // Prompts are "silent" — they do NOT raise the full-screen "Fetching..." overlay or the
+        // pending/completed bookkeeping that the manual "Get Latest Location" button uses, so the
+        // map just refreshes smoothly. Existing manual refresh is untouched.
+        var LIVE_POLL_MS = 4000;
+        var LIVE_PUSH_MS = 15000;
+        var livePollPromise = null;
+        var livePushPromise = null;
+        var liveLastRenderedTs = 0;
+
+        $scope.liveTracking = {
+            active: false,
+            lastUpdateAt: null
+        };
+
+        var sendSilentRefresh = function () {
+            $http.post('rest/plugins/deviceinfo/deviceinfo/private/refresh/' + $stateParams.deviceNumber)
+                .then(function () {}, function () {
+                    // A single failed prompt is non-fatal — the next poll/prompt retries. Keep
+                    // the feed running rather than tearing it down on a transient network blip.
+                });
+        };
+
+        var startLiveTracking = function () {
+            if ($scope.liveTracking.active) {
+                return;
+            }
+            $scope.liveTracking.active = true;
+            liveLastRenderedTs = getLatestGpsRecordTs($scope.data);
+
+            // Kick off immediately: one prompt + one fetch so the feed starts without waiting a
+            // full interval.
+            sendSilentRefresh();
+            loadData(true);
+
+            livePollPromise = $interval(function () {
+                loadData(true);
+            }, LIVE_POLL_MS);
+
+            livePushPromise = $interval(function () {
+                sendSilentRefresh();
+            }, LIVE_PUSH_MS);
+        };
+
+        var stopLiveTracking = function () {
+            if (livePollPromise) {
+                $interval.cancel(livePollPromise);
+                livePollPromise = null;
+            }
+            if (livePushPromise) {
+                $interval.cancel(livePushPromise);
+                livePushPromise = null;
+            }
+            $scope.liveTracking.active = false;
+        };
+
+        $scope.toggleLiveTracking = function () {
+            if ($scope.liveTracking.active) {
+                stopLiveTracking();
+            } else {
+                startLiveTracking();
+            }
+        };
+
         // Build the server request applying all 8 date/time filter cases.
         // fromTime / toTime are Date objects (from input[type=time]) or null/undefined.
         // When only a date is given with no time:
@@ -740,20 +811,26 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
             return 'https://www.google.com/maps?q=' + $scope.mapLat + ',' + $scope.mapLon;
         };
 
-        var loadData = function () {
+        var loadData = function (silent) {
             if (loading) {
                 return;
             }
 
-            clearMessages();
+            // Live tracking polls loadData(true) frequently — in that mode we suppress the
+            // spinner and message-clearing so the UI doesn't flicker while the map updates.
+            if (!silent) {
+                clearMessages();
+                spinnerService.show('spinner2');
+            }
             loading = true;
-            spinnerService.show('spinner2');
 
             var request = prepareRequestToServer();
 
             pluginDeviceInfoService.searchDynamicData(request, function (response) {
                 loading = false;
-                spinnerService.close('spinner2');
+                if (!silent) {
+                    spinnerService.close('spinner2');
+                }
                 if (response.status === 'OK') {
                     $scope.data = response.data.items;
                     $scope.formData.totalItems = response.data.totalItemsCount;
@@ -792,6 +869,15 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
                             }
                         }
                         updateMap($scope.data);
+
+                        // While live tracking, surface when the feed last advanced to a newer fix.
+                        if ($scope.liveTracking && $scope.liveTracking.active) {
+                            var newestTs = getLatestGpsRecordTs($scope.data);
+                            if (newestTs && newestTs > liveLastRenderedTs) {
+                                liveLastRenderedTs = newestTs;
+                                $scope.liveTracking.lastUpdateAt = new Date(newestTs);
+                            }
+                        }
                     } else {
                         $scope.mapLat = null;
                         $scope.mapLon = null;
@@ -1057,11 +1143,13 @@ angular.module('plugin-deviceinfo', ['ngResource', 'ui.bootstrap', 'ui.router', 
         loadData();
 
         var updateInterval = $interval(function () {
-            loadData();
+            // Suppress the spinner during live tracking (its own fast poll is already refreshing).
+            loadData($scope.liveTracking && $scope.liveTracking.active);
         }, 60 * 1000);
         $scope.$on('$destroy', function () {
             $interval.cancel(updateInterval);
             stopPostRefreshPolling();
+            stopLiveTracking();
         });
 
     })

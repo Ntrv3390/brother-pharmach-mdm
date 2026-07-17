@@ -21,7 +21,20 @@
 
 <div class="content-wrapper width-1000">
 
-    <div ng-if="refreshState.waitingForNewData"
+    <style>
+        .live-pulse-dot {
+            display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+            background: #22c55e; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+            animation: hmdm-live-pulse 1.4s infinite;
+        }
+        @keyframes hmdm-live-pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
+            70%  { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+    </style>
+
+    <div ng-if="refreshState.waitingForNewData && !liveTracking.active"
          style="position: fixed; top: 0; left: 0; width: 100%; height: 100%;
                 background: rgba(0, 0, 0, 0.45); z-index: 2000;
                 display: flex; align-items: center; justify-content: center;">
@@ -273,9 +286,23 @@
 
     <div class="row margin-top-20">
         <div class="col-sm-12 text-right">
-             <button class="btn btn-info" ng-click="refreshLocation()">
+             <button class="btn btn-info" ng-click="refreshLocation()" ng-disabled="liveTracking.active">
                 <span class="glyphicon glyphicon-refresh"></span> Location
             </button>
+            <button class="btn"
+                    ng-class="liveTracking.active ? 'btn-danger' : 'btn-success'"
+                    ng-click="toggleLiveTracking()"
+                    style="margin-left: 10px;">
+                <span class="glyphicon" ng-class="liveTracking.active ? 'glyphicon-stop' : 'glyphicon-play'"></span>
+                <span ng-if="!liveTracking.active">Live Tracking</span>
+                <span ng-if="liveTracking.active">Stop Live Tracking</span>
+            </button>
+            <span ng-if="liveTracking.active" style="margin-left: 10px; color: #16a34a; font-weight: bold;">
+                <span class="live-pulse-dot"></span> LIVE
+                <small class="text-muted" ng-if="liveTracking.lastUpdateAt" style="font-weight: normal;">
+                    (last update {{liveTracking.lastUpdateAt | date:'HH:mm:ss'}})
+                </small>
+            </span>
             <a class="btn btn-default"
                ng-if="hasMapCoordinates()"
                ng-href="{{getGoogleMapsUrl()}}"
