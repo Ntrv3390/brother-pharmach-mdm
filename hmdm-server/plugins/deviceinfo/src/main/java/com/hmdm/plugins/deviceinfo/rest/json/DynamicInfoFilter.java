@@ -38,6 +38,22 @@ import java.util.Date;
 public class DynamicInfoFilter implements Serializable {
 
     private static final long serialVersionUID = 1321492463446573290L;
+
+    /**
+     * <p>A hardcoded toggle for thinning out the records displayed in the dynamic info table. When set to
+     * <code>true</code>, the table shows only one record per {@link #THIN_TABLE_INTERVAL_MILLIS} time bucket
+     * (the newest one in each bucket) while all records remain stored in the database. When set to
+     * <code>false</code>, the original behavior is restored and all records are displayed. Data saving,
+     * "Get Latest GPS", live tracking and export are not affected by this toggle in either case.</p>
+     */
+    public static final boolean THIN_TABLE_RECORDS_ENABLED = true;
+
+    /**
+     * <p>A size of the time bucket (in milliseconds) used for thinning out the displayed records when
+     * {@link #THIN_TABLE_RECORDS_ENABLED} is <code>true</code>.</p>
+     */
+    public static final long THIN_TABLE_INTERVAL_MILLIS = 2 * 60 * 1000L;
+
     @ApiModelProperty(hidden = true)
     private int deviceId;
 
@@ -157,6 +173,16 @@ public class DynamicInfoFilter implements Serializable {
 
     public boolean isUseFixedInterval() {
         return useFixedInterval;
+    }
+
+    @ApiModelProperty(hidden = true)
+    public boolean isThinDisplayedRecords() {
+        return THIN_TABLE_RECORDS_ENABLED;
+    }
+
+    @ApiModelProperty(hidden = true)
+    public long getThinIntervalMillis() {
+        return THIN_TABLE_INTERVAL_MILLIS;
     }
 
     public void setUseFixedInterval(boolean useFixedInterval) {

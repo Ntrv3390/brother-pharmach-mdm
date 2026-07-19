@@ -105,13 +105,31 @@
 
         <include refid="dynamicDataConditions"/>
 
+        <if test="thinDisplayedRecords">
+            AND p.id IN (
+                SELECT t.id FROM (
+                    SELECT p.id AS id,
+                           ROW_NUMBER() OVER (PARTITION BY p.ts / #{thinIntervalMillis} ORDER BY p.ts DESC) AS rn
+                    FROM plugin_deviceinfo_deviceParams p
+                    <include refid="dynamicDataConditions"/>
+                ) t WHERE t.rn = 1
+            )
+        </if>
+
         ORDER BY p.ts DESC
         OFFSET (#{pageNum} - 1) * #{pageSize}
         LIMIT #{pageSize}
     </select>
 
     <select id="countAllDynamicData" parameterType="com.hmdm.plugins.deviceinfo.rest.json.DynamicInfoFilter" resultType="long">
-        SELECT COUNT(*)
+        <choose>
+            <when test="thinDisplayedRecords">
+                SELECT COUNT(DISTINCT p.ts / #{thinIntervalMillis})
+            </when>
+            <otherwise>
+                SELECT COUNT(*)
+            </otherwise>
+        </choose>
         FROM plugin_deviceinfo_deviceParams p
 
         <include refid="dynamicDataConditions"/>
