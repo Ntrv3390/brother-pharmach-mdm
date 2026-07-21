@@ -3,6 +3,11 @@ package com.brother.pharmach.mdm.launcher.util;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.net.Uri;
+import android.os.Build;
+import android.telecom.TelecomManager;
 import android.util.Log;
 
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
@@ -17,7 +22,9 @@ import com.brother.pharmach.mdm.launcher.server.ServerService;
 import com.brother.pharmach.mdm.launcher.server.ServerServiceKeeper;
 
 import java.util.Calendar;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -303,13 +310,8 @@ public class WorkTimeManager {
         // Never block the phone/dialer/incall UI. Otherwise, when the screen is already on and a
         // call arrives, the incoming-call window fires a window-state change, gets flagged as a
         // disallowed app, and the launcher is re-asserted to the foreground before the user can
-        // accept/decline (the ringtone keeps playing on a separate audio path). Same allowlist as
-        // Utils.isAllowedDuringMobileDataViolation so the enforcement paths never disagree.
-        if ("com.android.phone".equals(packageName)
-                || packageName.contains("dialer")
-                || packageName.contains("incall")
-                || packageName.contains("telecom")
-                || packageName.contains("emergency")) {
+        // accept/decline (the ringtone keeps playing on a separate audio path).
+        if (isPhoneOrCallPackage(packageName)) {
             return true;
         }
 
@@ -323,6 +325,95 @@ public class WorkTimeManager {
                 || "com.transsion.itel.launcher".equals(packageName)
                 || "com.transsion.infinix.xlauncher".equals(packageName)
                 || "com.transsion.tecno.launcher".equals(packageName);
+    }
+
+    // Packages resolved at runtime as the device's actual phone/dialer apps (default dialer,
+    // system dialer, ACTION_DIAL handler). Resolved once and cached; the set never changes at
+    // runtime and this is queried on the hot accessibility path (every window change).
+    private volatile Set<String> cachedCallPackages;
+
+    /**
+     * True if {@code packageName} is a phone/dialer/incoming-call UI. Combines three layers so a
+     * call is never mistaken for a blockable app on any OEM:
+     *   1. Substring heuristics covering AOSP + most OEM call UIs (dialer/incall/telecom/
+     *      telephony/emergency).
+     *   2. A hardcoded list of known OEM call packages whose names match none of the substrings.
+     *   3. The dialer packages actually resolved from the system at runtime (cached).
+     */
+    private boolean isPhoneOrCallPackage(String packageName) {
+        if (packageName == null || packageName.isEmpty()) {
+            return false;
+        }
+        if (packageName.contains("dialer")
+                || packageName.contains("incall")
+                || packageName.contains("telecom")
+                || packageName.contains("telephony")
+                || packageName.contains("emergency")) {
+            return true;
+        }
+        switch (packageName) {
+            case "com.android.phone":                    // AOSP telephony / InCall service
+            case "com.android.server.telecom":           // AOSP Telecom (also caught by 'telecom')
+            case "com.samsung.android.app.telephonyui":  // Samsung One UI incoming-call UI
+            case "com.samsung.android.incallui":         // Samsung InCall
+            case "com.coloros.phone":                    // ColorOS (Oppo/Realme)
+            case "com.oplus.phone":                      // ColorOS/OxygenOS (com.oplus namespace)
+            case "com.oppo.phone":
+            case "com.realme.phone":
+            case "com.vivo.phone":                       // Funtouch/OriginOS
+            case "com.hihonor.phone":                    // Honor / MagicOS
+            case "com.huawei.phone":                     // EMUI/HarmonyOS
+            case "com.miui.phone":                       // MIUI
+                return true;
+            default:
+                break;
+        }
+        return getCallPackages().contains(packageName);
+    }
+
+    /** Resolves and caches the device's real dialer packages from the system. */
+    private Set<String> getCallPackages() {
+        Set<String> cached = cachedCallPackages;
+        if (cached != null) {
+            return cached;
+        }
+        Set<String> set = new HashSet<>();
+        Context ctx = appContext;
+        if (ctx == null) {
+            // No context yet — return an empty set WITHOUT caching, so we resolve properly later.
+            return set;
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                TelecomManager tm = (TelecomManager) ctx.getSystemService(Context.TELECOM_SERVICE);
+                if (tm != null) {
+                    String defaultDialer = tm.getDefaultDialerPackage();
+                    if (defaultDialer != null && !defaultDialer.trim().isEmpty()) {
+                        set.add(defaultDialer);
+                    }
+                    try {
+                        // getSystemDialerPackage() is hidden but returns the pre-installed dialer
+                        // that shows the incoming-call UI; harmless if unavailable.
+                        Object sys = TelecomManager.class
+                                .getMethod("getSystemDialerPackage").invoke(tm);
+                        if (sys instanceof String && !((String) sys).trim().isEmpty()) {
+                            set.add((String) sys);
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+            PackageManager pm = ctx.getPackageManager();
+            ResolveInfo dial = pm.resolveActivity(
+                    new Intent(Intent.ACTION_DIAL, Uri.parse("tel:")), 0);
+            if (dial != null && dial.activityInfo != null && dial.activityInfo.packageName != null) {
+                set.add(dial.activityInfo.packageName);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to resolve device call packages", e);
+        }
+        cachedCallPackages = set;
+        return set;
     }
 
     private boolean isCurrentTimeWorkTime() {

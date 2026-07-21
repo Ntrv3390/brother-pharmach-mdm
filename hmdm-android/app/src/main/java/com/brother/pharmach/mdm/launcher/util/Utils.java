@@ -808,6 +808,7 @@ public class Utils {
                 || pkg.contains("dialer")
                 || pkg.contains("incall")
                 || pkg.contains("telecom")
+                || pkg.contains("telephony")
                 || pkg.contains("emergency")) {
             return true;
         }
