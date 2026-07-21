@@ -145,39 +145,28 @@ public final class DevicePolicyBootstrapper {
                                               ComponentName adminComponent) {
         // API-DIFF: Android 9.0 (API 28)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            // Disable status bar expansion by omitting LOCK_TASK_FEATURE_NOTIFICATIONS.
             // Enable SYSTEM_INFO to show time, battery and network icons.
             // Enable OVERVIEW to keep the Recents button functional.
-            // Enable NOTIFICATIONS so heads-up notifications (the peek banner) are allowed in
-            // lock-task mode. This is REQUIRED for incoming calls: when the screen is already ON
-            // and the device is in use, Android does NOT launch the dialer's full-screen call
-            // activity — it demotes the full-screen intent to a heads-up notification. Without
-            // this flag that banner is suppressed, so the call rings but the user sees no way to
-            // accept/decline. (When the screen is OFF, the full-screen activity still launches
-            // directly, which is why the bug only shows up with the screen on.)
-            int flags = DevicePolicyManager.LOCK_TASK_FEATURE_HOME
+            int flags = DevicePolicyManager.LOCK_TASK_FEATURE_HOME 
                     | DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD
                     | DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
-                    | DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS
                     | DevicePolicyManager.LOCK_TASK_FEATURE_OVERVIEW;
             dpm.setLockTaskFeatures(adminComponent, flags);
-            Log.i(TAG, "LockTask features applied (HOME | KEYGUARD | SYSTEM_INFO | NOTIFICATIONS | OVERVIEW)");
+            Log.i(TAG, "LockTask features applied (HOME | KEYGUARD | SYSTEM_INFO | OVERVIEW)");
         }
     }
 
     /**
-     * Keeps the system status bar / notification shade fully ENABLED.
-     *
-     * The status-bar lockdown was intentionally removed: with it enabled, Android suppresses the
-     * heads-up call banner when the screen is already on, so incoming calls could not be answered.
-     * We explicitly set setStatusBarDisabled(false) (rather than just omitting the call) because
-     * the flag is persistent device-owner state — devices provisioned by earlier builds still have
-     * it disabled, and only an explicit false clears it.
+     * Disables the notification shade/status bar expansion for kiosk-style operation.
+     * This is a best-effort device-owner mitigation; Android still reserves some system
+     * notifications and privacy indicators for the framework itself.
      */
     private static void applyStatusBarPolicy(DevicePolicyManager dpm,
                                              ComponentName adminComponent) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            dpm.setStatusBarDisabled(adminComponent, false);
-            Log.i(TAG, "Status bar ENABLED (kiosk status-bar lockdown removed)");
+            dpm.setStatusBarDisabled(adminComponent, true);
+            Log.i(TAG, "Status bar disabled for kiosk operation");
         }
     }
 }

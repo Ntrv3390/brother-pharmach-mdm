@@ -650,11 +650,9 @@ public class MainActivity
         // Here we initialize all required fields to avoid crash at startup
         reinitApp();
 
-        // Hide custom status bar header so native system status bar and dropdown work normally
-        if (binding.statusHeader != null) {
-            binding.statusHeader.setVisibility(View.GONE);
-        }
-        // statusBarUpdater.startUpdating(this, binding.clock, binding.batteryState);
+        initQuickPanel();
+
+        statusBarUpdater.startUpdating(this, binding.clock, binding.batteryState);
 
         startServicesWithRetry();
 
