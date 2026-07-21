@@ -1530,9 +1530,25 @@ public class Utils {
         }
         PackageManager pm = context.getPackageManager();
 
-        // If it has a launch intent, it's launchable
-        if (pm.getLaunchIntentForPackage(packageName) != null) {
-            return true;
+        // If it has a launch intent, it's launchable — but getLaunchIntentForPackage() falls back
+        // to a CATEGORY_INFO activity when there's no real CATEGORY_LAUNCHER one, and some system
+        // packages (e.g. Samsung's com.samsung.android.incallui) expose that fallback activity
+        // without exporting it. startActivity() on those throws a SecurityException at tap time,
+        // so only trust the intent when its target activity is actually exported.
+        Intent launchIntent = pm.getLaunchIntentForPackage(packageName);
+        if (launchIntent != null) {
+            ComponentName component = launchIntent.getComponent();
+            if (component == null) {
+                return true;
+            }
+            try {
+                ActivityInfo activityInfo = pm.getActivityInfo(component, 0);
+                if (activityInfo.exported) {
+                    return true;
+                }
+            } catch (PackageManager.NameNotFoundException e) {
+                // Fall through to the suspended/hidden checks below
+            }
         }
 
         // If it is suspended, it was suspended by the MDM and is launchable
