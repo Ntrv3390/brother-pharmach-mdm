@@ -650,7 +650,12 @@ public class MainActivity
         // Here we initialize all required fields to avoid crash at startup
         reinitApp();
 
-        initQuickPanel();
+        // DISABLED: custom quick-panel / notification drawer is turned off so the SYSTEM
+        // notification bar and shade work normally (needed for incoming-call heads-up banners).
+        // Left commented (not deleted) so it can be re-enabled easily. With the controller never
+        // created, the swipe-interception in dispatchTouchEvent() is a no-op (it is null-guarded),
+        // so top-edge swipes fall through to the system shade.
+        // initQuickPanel();
 
         statusBarUpdater.startUpdating(this, binding.clock, binding.batteryState);
 
