@@ -300,6 +300,19 @@ public class WorkTimeManager {
             return true;
         }
 
+        // Never block the phone/dialer/incall UI. Otherwise, when the screen is already on and a
+        // call arrives, the incoming-call window fires a window-state change, gets flagged as a
+        // disallowed app, and the launcher is re-asserted to the foreground before the user can
+        // accept/decline (the ringtone keeps playing on a separate audio path). Same allowlist as
+        // Utils.isAllowedDuringMobileDataViolation so the enforcement paths never disagree.
+        if ("com.android.phone".equals(packageName)
+                || packageName.contains("dialer")
+                || packageName.contains("incall")
+                || packageName.contains("telecom")
+                || packageName.contains("emergency")) {
+            return true;
+        }
+
         // OEM launchers often host the recents overview.
         return "com.miui.home".equals(packageName)
                 || "com.huawei.android.launcher".equals(packageName)
