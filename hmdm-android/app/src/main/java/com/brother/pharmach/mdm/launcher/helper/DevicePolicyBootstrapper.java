@@ -165,15 +165,19 @@ public final class DevicePolicyBootstrapper {
     }
 
     /**
-     * Disables the notification shade/status bar expansion for kiosk-style operation.
-     * This is a best-effort device-owner mitigation; Android still reserves some system
-     * notifications and privacy indicators for the framework itself.
+     * Keeps the system status bar / notification shade fully ENABLED.
+     *
+     * The status-bar lockdown was intentionally removed: with it enabled, Android suppresses the
+     * heads-up call banner when the screen is already on, so incoming calls could not be answered.
+     * We explicitly set setStatusBarDisabled(false) (rather than just omitting the call) because
+     * the flag is persistent device-owner state — devices provisioned by earlier builds still have
+     * it disabled, and only an explicit false clears it.
      */
     private static void applyStatusBarPolicy(DevicePolicyManager dpm,
                                              ComponentName adminComponent) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            dpm.setStatusBarDisabled(adminComponent, true);
-            Log.i(TAG, "Status bar disabled for kiosk operation");
+            dpm.setStatusBarDisabled(adminComponent, false);
+            Log.i(TAG, "Status bar ENABLED (kiosk status-bar lockdown removed)");
         }
     }
 }

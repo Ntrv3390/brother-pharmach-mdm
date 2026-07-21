@@ -28,7 +28,6 @@ import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.location.Location;
 import android.os.Build;
-import android.os.UserManager;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
@@ -103,7 +102,11 @@ public class ProUtils {
         return WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE;
     }
 
-    private static void applyDevicePolicyStatusBarLock(Activity activity) {
+    // Ensures the system status bar / notification shade stays fully ENABLED via device policy.
+    // Runs at every launch (through preventStatusBarExpansion) so devices provisioned by earlier
+    // builds — which persisted setStatusBarDisabled(true) — get the lockdown cleared. The status
+    // bar must stay open so incoming-call heads-up banners appear when the screen is already on.
+    private static void releaseDevicePolicyStatusBarLock(Activity activity) {
         if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
             return;
         }
@@ -116,13 +119,10 @@ public class ProUtils {
         try {
             ComponentName adminComponent = new ComponentName(activity, AdminReceiver.class);
             if (dpm.isDeviceOwnerApp(activity.getPackageName())) {
-                dpm.setStatusBarDisabled(adminComponent, true);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_ADJUST_VOLUME);
-                }
+                dpm.setStatusBarDisabled(adminComponent, false);
             }
         } catch (Exception e) {
-            Log.w("ProUtils", "Unable to disable status bar via device policy", e);
+            Log.w("ProUtils", "Unable to re-enable status bar via device policy", e);
         }
     }
 
@@ -165,67 +165,22 @@ public class ProUtils {
         return blockingView;
     }
 
-    // Add a transparent view on top of the status bar which prevents user interaction with the status bar
+    // Status-bar lockdown intentionally REMOVED.
+    //
+    // Previously this disabled the status bar via device policy, laid a transparent overlay over
+    // the status-bar strip to eat pull-down swipes, and hid the system bars in immersive mode.
+    // That combination suppressed the incoming-call heads-up banner when the screen was already
+    // on, leaving users unable to answer/decline. The status bar and notification shade are now
+    // fully allowed; we only clear any status-bar-disabled flag persisted by earlier builds.
+    //
+    // The method and its callers are kept so no call sites break; it no longer blocks anything.
     public static View preventStatusBarExpansion(Activity activity) {
         if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
             return null;
         }
 
-        applyDevicePolicyStatusBarLock(activity);
-
-        if (kioskModeRequired(activity)) {
-            return null;
-        }
-
-        View overlayView = addBlockingOverlay(activity);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Android 12+ (API 31+): keep the bars hidden and re-hide them if the framework
-            // tries to reveal them after the overlay intercepts the swipe.
-            Window window = activity.getWindow();
-            View decorView = window.getDecorView();
-
-            window.setDecorFitsSystemWindows(false);
-            window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                    WindowManager.LayoutParams.FLAG_FULLSCREEN);
-
-            WindowInsetsController controller = window.getInsetsController();
-            if (controller != null) {
-                controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
-                controller.setSystemBarsBehavior(getSystemBarsBehavior(Build.VERSION.SDK_INT));
-            }
-
-            decorView.setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                            | View.SYSTEM_UI_FLAG_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
-
-            decorView.setOnSystemUiVisibilityChangeListener(new View.OnSystemUiVisibilityChangeListener() {
-                @Override
-                public void onSystemUiVisibilityChange(int visibility) {
-                    if ((visibility & View.SYSTEM_UI_FLAG_FULLSCREEN) == 0) {
-                        WindowInsetsController ctrl = window.getInsetsController();
-                        if (ctrl != null) {
-                            ctrl.hide(WindowInsets.Type.statusBars()
-                                    | WindowInsets.Type.navigationBars());
-                        }
-                    }
-                }
-            });
-
-            decorView.setOnApplyWindowInsetsListener((view, insets) -> {
-                WindowInsetsController ctrl = window.getInsetsController();
-                if (ctrl != null) {
-                    ctrl.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
-                }
-                return insets;
-            });
-        }
-
-        return overlayView;
+        releaseDevicePolicyStatusBarLock(activity);
+        return null;
     }
 
     // Add a transparent view on top of a swipeable area at the right (opens app list on Samsung tablets)
