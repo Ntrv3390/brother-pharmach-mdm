@@ -318,12 +318,19 @@ public class ProUtils {
             ComponentName adminComponent = new ComponentName(activity, AdminReceiver.class);
             if (dpm != null && dpm.isDeviceOwnerApp(activity.getPackageName())) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    // Disable status bar expansion by omitting LOCK_TASK_FEATURE_NOTIFICATIONS
                     // Enable SYSTEM_INFO to show time, battery and network icons.
                     // Enable OVERVIEW to keep the Recents button functional.
-                    int flags = DevicePolicyManager.LOCK_TASK_FEATURE_HOME 
+                    // Enable NOTIFICATIONS so heads-up notifications (the peek banner) are allowed
+                    // in lock-task mode. REQUIRED for incoming calls: when the screen is already ON
+                    // and the device is in use, Android demotes the dialer's full-screen intent to
+                    // a heads-up notification instead of launching the call activity. Without this
+                    // flag that banner is suppressed, so the call rings but the user cannot
+                    // accept/decline. (Screen OFF still launches the full activity directly.)
+                    // Kept in lockstep with DevicePolicyBootstrapper.applyLockTaskFeatures().
+                    int flags = DevicePolicyManager.LOCK_TASK_FEATURE_HOME
                             | DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD
                             | DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
+                            | DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS
                             | DevicePolicyManager.LOCK_TASK_FEATURE_OVERVIEW;
                     dpm.setLockTaskFeatures(adminComponent, flags);
                     Log.i("ProUtils", "Kiosk lock task features updated: " + flags);
