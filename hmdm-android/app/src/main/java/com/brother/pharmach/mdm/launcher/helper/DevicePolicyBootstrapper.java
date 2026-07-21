@@ -48,6 +48,24 @@ public final class DevicePolicyBootstrapper {
         applyKeyguardPolicy(dpm, adminComponent);
         applyLockTaskFeatures(dpm, adminComponent);
         applyStatusBarPolicy(dpm, adminComponent);
+        applyDefaultDialerPolicy(context);
+    }
+
+    /**
+     * Custom call receiver: make the app the default dialer so incoming cellular calls are routed
+     * to our {@code CustomInCallService} and our full-screen UI. Runs LAST so that the call
+     * permissions it grants (including POST_NOTIFICATIONS, needed for the full-screen-intent
+     * notification) win over the kiosk-default deny applied in {@link #applyNotificationPolicy}.
+     *
+     * POLICY-NOTE: self-guards on device owner + API 23; idempotent (skips if already the dialer).
+     */
+    private static void applyDefaultDialerPolicy(Context context) {
+        try {
+            boolean ok = DefaultDialerHelper.ensureDefaultDialer(context);
+            Log.i(TAG, "Default dialer policy applied, isDefaultDialer=" + ok);
+        } catch (Exception e) {
+            Log.w(TAG, "applyDefaultDialerPolicy failed: " + e.getMessage());
+        }
     }
 
     /**

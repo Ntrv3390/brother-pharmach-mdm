@@ -33,4 +33,13 @@
         <item name="colorAccent">@color/wizardAccent</item>
     </style>
 
+    <!-- Fullscreen, no-action-bar theme for the incoming/in-call screen. Uses a plain framework
+         parent (not AppCompat) so IncomingCallActivity can extend android.app.Activity and render
+         reliably over the keyguard on API 23-36. -->
+    <style name="IncomingCallTheme" parent="@android:style/Theme.NoTitleBar.Fullscreen">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+    </style>
+
 </resources>

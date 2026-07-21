@@ -659,6 +659,14 @@ public class MainActivity
         checkMobileDataViolation();
         enforceOverlayPermission();
 
+        // Custom call receiver: auto-grant + set default dialer silently when Device Owner, else
+        // prompt the user (once per stage). Internal prefs prevent re-nagging on every resume.
+        try {
+            com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper.ensureCallSetup(this);
+        } catch (Exception e) {
+            Log.w(Const.LOG_TAG, "ensureCallSetup failed: " + e.getMessage());
+        }
+
         if (interruptResumeFlow) {
             interruptResumeFlow = false;
             return;

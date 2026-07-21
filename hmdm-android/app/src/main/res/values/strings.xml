@@ -153,4 +153,18 @@
     <string name="qp_action_unsupported">Not supported on this Android version</string>
     <string name="qp_action_failed">Action failed, please try again</string>
     <string name="qp_managed_by_admin">This setting is managed by your administrator</string>
+
+    <!-- Custom call receiver (default-dialer incoming/in-call UI) -->
+    <string name="incoming_call_channel_name">Incoming calls</string>
+    <string name="incoming_call_channel_desc">Full-screen alerts for incoming phone calls</string>
+    <string name="incoming_call_title">Incoming call</string>
+    <string name="ongoing_call_title">Ongoing call</string>
+    <string name="calling">Calling…</string>
+    <string name="call_ended">Call ended</string>
+    <string name="unknown_caller">Unknown</string>
+    <string name="answer">Answer</string>
+    <string name="decline">Decline</string>
+    <string name="hang_up">Hang up</string>
+    <string name="mute">Mute</string>
+    <string name="speaker">Speaker</string>
 </resources>

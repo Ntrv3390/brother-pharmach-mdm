@@ -71,6 +71,14 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Custom call receiver (default dialer). CALL_PHONE / ANSWER_PHONE_CALLS let us control the
+         cellular call; FOREGROUND_SERVICE_PHONE_CALL is required (API 34+) for the InCallService
+         foreground; DISABLE_KEYGUARD backs the FLAG_DISMISS_KEYGUARD path on API 23-26. -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -409,6 +417,62 @@
             android:showOnLockScreen="true"
             android:turnScreenOn="true"
             android:screenOrientation="portrait"
+            android:exported="false"/>
+
+        <!-- ==================== Custom call receiver (default dialer) ==================== -->
+
+        <!-- System-managed InCallService. Bound by Telecom only when we hold the dialer role, at
+             which point every cellular call is delivered here so we can show our own UI.
+             foregroundServiceType="phoneCall" is enforced from API 34 (tools:targetApi silences
+             lint on lower minSdk). -->
+        <service
+            android:name=".service.CustomInCallService"
+            android:permission="android.permission.BIND_INCALL_SERVICE"
+            android:foregroundServiceType="phoneCall"
+            android:exported="true"
+            tools:targetApi="34">
+            <meta-data
+                android:name="android.telecom.IN_CALL_SERVICE_UI"
+                android:value="true"/>
+            <intent-filter>
+                <action android:name="android.telecom.InCallService"/>
+            </intent-filter>
+        </service>
+
+        <!-- Full-screen incoming / in-call UI. showWhenLocked/turnScreenOn honored on API 27+;
+             API 23-26 uses window flags set in code (IncomingCallActivity.onCreate). -->
+        <activity
+            android:name=".ui.IncomingCallActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:showOnLockScreen="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:taskAffinity=""
+            android:theme="@style/IncomingCallTheme"/>
+
+        <!-- DIAL handler so the app is offered/settable as the default phone app
+             (ACTION_CHANGE_DEFAULT_DIALER / ROLE_DIALER accept only DIAL-capable apps). -->
+        <activity
+            android:name=".ui.DialerActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="tel"/>
+            </intent-filter>
+        </activity>
+
+        <!-- Answer / decline / hang-up actions from the incoming-call notification. -->
+        <receiver
+            android:name=".receiver.CallActionReceiver"
             android:exported="false"/>
 
     </application>

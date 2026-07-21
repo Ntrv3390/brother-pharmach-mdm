@@ -48,6 +48,14 @@ public class BootReceiver extends BroadcastReceiver {
         Initializer.init(context, () -> {
             Initializer.startServicesAndLoadConfig(context);
 
+            // Custom call receiver: the dialer role persists across reboots, but re-assert it and
+            // re-grant the call permissions defensively in case an OEM cleared them on update/boot.
+            try {
+                com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper.ensureDefaultDialer(context);
+            } catch (Exception e) {
+                Log.w(Const.LOG_TAG, "BootReceiver: default dialer re-verify failed: " + e.getMessage());
+            }
+
             // Start the battery optimization compliance monitor.
             // API-DIFF: Android 8.0 (API 26) — background service start restriction
             // requires ContextCompat.startForegroundService() (called inside startMonitor()).
