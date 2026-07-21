@@ -77,13 +77,43 @@ public final class DevicePolicyBootstrapper {
      */
     private static void applyLockTaskPolicy(Context context, DevicePolicyManager dpm,
                                             ComponentName adminComponent) {
+        // The whitelist must include the phone/dialer packages. Otherwise, in strict lock-task
+        // (COSU) mode the framework silently refuses the incoming-call activity, so an arriving
+        // call rings but the accept/decline screen never appears.
+        LinkedHashSet<String> desired = new LinkedHashSet<>();
+        desired.add(context.getPackageName());   // launcher must always remain launchable
+        desired.addAll(getPhonePackages(context));
+
         String[] currentPackages = dpm.getLockTaskPackages(adminComponent);
-        if (!Arrays.asList(currentPackages).contains(context.getPackageName())) {
-            dpm.setLockTaskPackages(adminComponent, new String[]{context.getPackageName()});
-            Log.i(TAG, "LockTask policy applied");
+        if (currentPackages == null || !Arrays.asList(currentPackages).containsAll(desired)) {
+            dpm.setLockTaskPackages(adminComponent, desired.toArray(new String[0]));
+            Log.i(TAG, "LockTask policy applied (" + desired.size() + " packages)");
         } else {
             Log.i(TAG, "LockTask policy already set — skipping");
         }
+    }
+
+    /**
+     * Resolves the phone/dialer packages that must stay launchable so incoming calls work in
+     * lock-task mode: the current default dialer plus the AOSP telephony package.
+     */
+    private static LinkedHashSet<String> getPhonePackages(Context context) {
+        LinkedHashSet<String> pkgs = new LinkedHashSet<>();
+        pkgs.add("com.android.phone");   // AOSP telephony/InCall service
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                TelecomManager tm = (TelecomManager) context.getSystemService(Context.TELECOM_SERVICE);
+                if (tm != null) {
+                    String dialer = tm.getDefaultDialerPackage();
+                    if (dialer != null && !dialer.trim().isEmpty()) {
+                        pkgs.add(dialer);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Could not resolve default dialer package", e);
+        }
+        return pkgs;
     }
 
     /**
