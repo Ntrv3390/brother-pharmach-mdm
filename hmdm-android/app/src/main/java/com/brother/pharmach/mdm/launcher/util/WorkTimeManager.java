@@ -383,6 +383,14 @@ public class WorkTimeManager {
             // No context yet — return an empty set WITHOUT caching, so we resolve properly later.
             return set;
         }
+        // Share the authoritative resolver used by the lock-task whitelist so the foreground
+        // watchers (accessibility / UsageStats) and the kiosk whitelist can never disagree about
+        // which package is the incoming-call UI on this OEM.
+        try {
+            set.addAll(Utils.getPhoneCallPackages(ctx));
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to merge shared phone-call packages", e);
+        }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 TelecomManager tm = (TelecomManager) ctx.getSystemService(Context.TELECOM_SERVICE);

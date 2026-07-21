@@ -5,7 +5,6 @@ import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.os.Build;
-import android.telecom.TelecomManager;
 import android.util.Log;
 
 import com.brother.pharmach.mdm.launcher.AdminReceiver;
@@ -98,22 +97,11 @@ public final class DevicePolicyBootstrapper {
      * lock-task mode: the current default dialer plus the AOSP telephony package.
      */
     private static LinkedHashSet<String> getPhonePackages(Context context) {
-        LinkedHashSet<String> pkgs = new LinkedHashSet<>();
-        pkgs.add("com.android.phone");   // AOSP telephony/InCall service
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                TelecomManager tm = (TelecomManager) context.getSystemService(Context.TELECOM_SERVICE);
-                if (tm != null) {
-                    String dialer = tm.getDefaultDialerPackage();
-                    if (dialer != null && !dialer.trim().isEmpty()) {
-                        pkgs.add(dialer);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "Could not resolve default dialer package", e);
-        }
-        return pkgs;
+        // Delegate to the single authoritative resolver so the provisioning-time whitelist stays
+        // in lockstep with the runtime kiosk whitelist (ProUtils) — both must always permit the
+        // incoming-call UI so calls are never blocked in lock-task mode.
+        return new LinkedHashSet<>(
+                com.brother.pharmach.mdm.launcher.util.Utils.getPhoneCallPackages(context));
     }
 
     /**

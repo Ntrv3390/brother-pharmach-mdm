@@ -42,9 +42,11 @@ import android.graphics.Color;
 import android.media.AudioManager;
 import android.net.ConnectivityManager;
 import android.net.ProxyInfo;
+import android.net.Uri;
 import android.os.Build;
 import android.os.UserManager;
 import android.provider.Settings;
+import android.telecom.TelecomManager;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
@@ -69,6 +71,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -813,6 +816,117 @@ public class Utils {
             return true;
         }
         return pkg.contains("systemui") || pkg.contains("permissioncontroller");
+    }
+
+    // Concrete phone/dialer/incoming-call-UI package names, resolved once from the system and
+    // cached. Unlike the substring predicates above, this returns real package names suitable for
+    // the lock-task (kiosk) whitelist — which requires exact names, not heuristics.
+    private static volatile Set<String> sPhoneCallPackages;
+
+    /**
+     * Returns the set of packages that render the phone / dialer / incoming-call UI on this device.
+     *
+     * WHY THIS EXISTS: in strict lock-task (COSU/kiosk) mode the framework SILENTLY refuses to
+     * start any activity whose package is not in the lock-task whitelist. When a call arrives while
+     * the screen is already on, the incoming-call activity is such an activity — if its package is
+     * missing from the whitelist, the call rings but the accept/decline screen never appears
+     * (screen-off works because that path comes up over the keyguard, not as a lock-task activity).
+     * These packages must therefore always be whitelisted, regardless of WorkTime — a call must
+     * never be blocked by a work-hours policy.
+     *
+     * Resolution combines every reliable source so no OEM is missed:
+     *   1. AOSP telephony + telecom system packages.
+     *   2. The default dialer and (best-effort) the system dialer that shows the incoming-call UI.
+     *   3. Every package hosting an android.telecom.InCallService — the authoritative, OEM-agnostic
+     *      owner of the incoming-call screen.
+     *   4. The ACTION_DIAL / ACTION_CALL handlers.
+     *   5. A hardcoded list of known OEM call packages (harmless if not installed).
+     */
+    public static Set<String> getPhoneCallPackages(Context context) {
+        Set<String> cached = sPhoneCallPackages;
+        if (cached != null) {
+            return cached;
+        }
+        LinkedHashSet<String> set = new LinkedHashSet<>();
+        // 1. AOSP telephony / telecom system packages.
+        set.add("com.android.phone");
+        set.add("com.android.server.telecom");
+        if (context == null) {
+            // Return without caching so we resolve fully once a context is available.
+            return set;
+        }
+        PackageManager pm = context.getPackageManager();
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                TelecomManager tm = (TelecomManager) context.getSystemService(Context.TELECOM_SERVICE);
+                if (tm != null) {
+                    // 2. Default dialer.
+                    try {
+                        String def = tm.getDefaultDialerPackage();
+                        if (def != null && !def.trim().isEmpty()) {
+                            set.add(def);
+                        }
+                    } catch (Exception ignored) {
+                    }
+                    // 2. System dialer (the pre-installed app that shows the incoming-call UI).
+                    // getSystemDialerPackage() is a non-SDK method; harmless if unavailable.
+                    try {
+                        Object sys = TelecomManager.class.getMethod("getSystemDialerPackage").invoke(tm);
+                        if (sys instanceof String && !((String) sys).trim().isEmpty()) {
+                            set.add((String) sys);
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(Const.LOG_TAG, "getPhoneCallPackages: TelecomManager resolution failed", e);
+        }
+        // 3. Every InCallService host — the authoritative owner of the incoming-call screen.
+        try {
+            List<ResolveInfo> inCallServices = pm.queryIntentServices(
+                    new Intent("android.telecom.InCallService"), 0);
+            if (inCallServices != null) {
+                for (ResolveInfo ri : inCallServices) {
+                    if (ri != null && ri.serviceInfo != null && ri.serviceInfo.packageName != null) {
+                        set.add(ri.serviceInfo.packageName);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(Const.LOG_TAG, "getPhoneCallPackages: InCallService query failed", e);
+        }
+        // 4. ACTION_DIAL / ACTION_CALL handlers.
+        try {
+            ResolveInfo dial = pm.resolveActivity(new Intent(Intent.ACTION_DIAL, Uri.parse("tel:")), 0);
+            if (dial != null && dial.activityInfo != null && dial.activityInfo.packageName != null) {
+                set.add(dial.activityInfo.packageName);
+            }
+        } catch (Exception ignored) {
+        }
+        try {
+            ResolveInfo call = pm.resolveActivity(new Intent(Intent.ACTION_CALL, Uri.parse("tel:")), 0);
+            if (call != null && call.activityInfo != null && call.activityInfo.packageName != null) {
+                set.add(call.activityInfo.packageName);
+            }
+        } catch (Exception ignored) {
+        }
+        // 5. Known OEM call/incall packages (ignored by the framework if not installed).
+        set.add("com.samsung.android.app.telephonyui");   // Samsung One UI incoming-call UI
+        set.add("com.samsung.android.incallui");           // Samsung InCall
+        set.add("com.coloros.phone");                      // ColorOS (Oppo/Realme)
+        set.add("com.oplus.phone");
+        set.add("com.oppo.phone");
+        set.add("com.realme.phone");
+        set.add("com.vivo.phone");                         // Funtouch/OriginOS
+        set.add("com.android.incallui");
+        set.add("com.hihonor.phone");                      // Honor / MagicOS
+        set.add("com.huawei.phone");                       // EMUI/HarmonyOS
+        set.add("com.miui.phone");                         // MIUI
+        set.add("com.transsion.incallui");                 // Transsion (Itel/Infinix/Tecno)
+        set.add("com.transsion.phonemaster");
+        sPhoneCallPackages = set;
+        return set;
     }
 
     /**

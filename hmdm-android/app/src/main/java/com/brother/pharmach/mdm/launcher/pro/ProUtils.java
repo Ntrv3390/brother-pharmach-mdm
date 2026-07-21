@@ -284,7 +284,14 @@ public class ProUtils {
             DevicePolicyManager dpm = (DevicePolicyManager) activity.getSystemService(Context.DEVICE_POLICY_SERVICE);
             ComponentName adminComponent = new ComponentName(activity, AdminReceiver.class);
             if (dpm != null && dpm.isDeviceOwnerApp(activity.getPackageName())) {
-                String[] packages = new String[]{activity.getPackageName(), kioskApp};
+                // Include the phone/dialer/incoming-call packages from the start so a call that
+                // arrives before the first launcher render (which rebuilds the whitelist) can still
+                // bring up the accept/decline screen in lock-task mode.
+                java.util.LinkedHashSet<String> pkgSet = new java.util.LinkedHashSet<>();
+                pkgSet.add(activity.getPackageName());
+                pkgSet.add(kioskApp);
+                pkgSet.addAll(com.brother.pharmach.mdm.launcher.util.Utils.getPhoneCallPackages(activity));
+                String[] packages = pkgSet.toArray(new String[0]);
                 dpm.setLockTaskPackages(adminComponent, packages);
                 updateKioskOptions(activity);
                 activity.startLockTask();
@@ -378,6 +385,13 @@ public class ProUtils {
             }
             java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
             set.add(activity.getPackageName());   // launcher must always remain launchable
+            // Phone/dialer/incoming-call UI must ALWAYS stay whitelisted, independent of WorkTime.
+            // This rebuild runs on every render and otherwise reflects only the worktime-filtered
+            // launcher apps; without this the incoming-call activity's package drops out of the
+            // lock-task whitelist during work hours and the framework silently refuses it when a
+            // call arrives with the screen already on (the ringtone plays but no accept/decline
+            // screen appears). A call must never be blocked by a work-hours policy.
+            set.addAll(com.brother.pharmach.mdm.launcher.util.Utils.getPhoneCallPackages(activity));
             if (allowedPackages != null) {
                 for (String p : allowedPackages) {
                     if (p != null && !p.trim().isEmpty()) {
