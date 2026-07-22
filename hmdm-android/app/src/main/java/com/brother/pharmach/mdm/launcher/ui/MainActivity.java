@@ -659,12 +659,16 @@ public class MainActivity
         checkMobileDataViolation();
         enforceOverlayPermission();
 
-        // Custom call receiver: auto-grant + set default dialer silently when Device Owner, else
-        // prompt the user (once per stage). Internal prefs prevent re-nagging on every resume.
+        // Custom call receiver: set default dialer silently when Device Owner; otherwise hard-gate
+        // the user with the blocking gatekeeper until the app is the default phone app. Only after
+        // the device is provisioned, so we never block the initial enrollment flow.
         try {
-            com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper.ensureCallSetup(this);
+            if (settingsHelper != null && settingsHelper.isBaseUrlSet()) {
+                com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper.ensureCallSetup(this);
+                com.brother.pharmach.mdm.launcher.ui.DefaultDialerGatekeeperActivity.enforce(this);
+            }
         } catch (Exception e) {
-            Log.w(Const.LOG_TAG, "ensureCallSetup failed: " + e.getMessage());
+            Log.w(Const.LOG_TAG, "ensureCallSetup/enforce failed: " + e.getMessage());
         }
 
         if (interruptResumeFlow) {

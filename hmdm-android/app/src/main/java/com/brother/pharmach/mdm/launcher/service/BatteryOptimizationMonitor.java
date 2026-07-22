@@ -19,6 +19,7 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.Constants;
+import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.ui.ComplianceGatekeeperActivity;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
@@ -42,6 +43,7 @@ public class BatteryOptimizationMonitor extends Service {
             @Override
             public void run() {
                 checkCompliance();
+                enforceDefaultDialer();
                 mHandler.postDelayed(this, Constants.BATTERY_POLL_INTERVAL_MS);
             }
         };
@@ -122,6 +124,25 @@ public class BatteryOptimizationMonitor extends Service {
                         .sendBroadcast(new Intent(Constants.ACTION_COMPLIANCE_RESTORED));
             }
             mWasCompliant = true;
+        }
+    }
+
+    /**
+     * Background arm of the default-dialer hard gate: if the app is provisioned and not yet the
+     * default phone app, bring the blocking gatekeeper to the front — this is what catches the case
+     * where the user managed to switch to another app instead of setting the default. Self-guards
+     * on telephony/role availability and on the request grace window (so it never yanks away the
+     * system role picker the user is actively using).
+     */
+    private void enforceDefaultDialer() {
+        try {
+            SettingsHelper settingsHelper = SettingsHelper.getInstance(getApplicationContext());
+            if (settingsHelper == null || !settingsHelper.isBaseUrlSet()) {
+                return; // not provisioned yet — do not block the enrollment flow
+            }
+            com.brother.pharmach.mdm.launcher.ui.DefaultDialerGatekeeperActivity.enforce(this);
+        } catch (Exception e) {
+            Log.w(TAG, "enforceDefaultDialer failed: " + e.getMessage());
         }
     }
 

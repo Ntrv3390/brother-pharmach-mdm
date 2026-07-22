@@ -158,6 +158,21 @@ public final class CallManager {
         }
     }
 
+    /**
+     * Force a state re-broadcast to attached surfaces. Used by the service when it promotes a
+     * remaining call (e.g. a call-waiting leg) into the primary slot so the UI repaints without
+     * waiting for the next framework state change.
+     */
+    public void notifyStateChanged() {
+        int state = getState();
+        for (Listener l : listeners) {
+            try {
+                l.onCallStateChanged(state);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
     public void unregister(Listener l) {
         listeners.remove(l);
     }

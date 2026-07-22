@@ -93,10 +93,29 @@ public class CustomInCallService extends InCallService {
     @Override
     public void onCallRemoved(Call call) {
         super.onCallRemoved(call);
-        Log.i(TAG, "onCallRemoved");
-        CallManager.getInstance().clearCall(call);
-        stopCallForeground();
-        releaseWakeLock();
+        CallManager cm = CallManager.getInstance();
+
+        java.util.List<Call> remaining = null;
+        try {
+            remaining = getCalls();
+        } catch (Exception ignored) {
+        }
+
+        if (remaining == null || remaining.isEmpty()) {
+            // Last call gone — tear everything down and dismiss the UI.
+            Log.i(TAG, "onCallRemoved: no calls remain");
+            cm.clearCall(call);
+            stopCallForeground();
+            releaseWakeLock();
+        } else {
+            // Call waiting / conference leg ended: promote the next call so the foreground service
+            // and UI keep tracking a live call instead of being torn down prematurely.
+            Call next = remaining.get(0);
+            Log.i(TAG, "onCallRemoved: promoting remaining call " + CallManager.stateName(stateOf(next)));
+            cm.setActiveCall(next);
+            startCallForeground(next, stateOf(next) == Call.STATE_RINGING);
+            cm.notifyStateChanged();
+        }
     }
 
     @Override

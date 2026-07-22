@@ -475,6 +475,17 @@
             android:name=".receiver.CallActionReceiver"
             android:exported="false"/>
 
+        <!-- Blocking enforcement screen: shown until the app is the default phone app.
+             Back disabled; Home re-launches; singleTask so re-entry reuses the instance. -->
+        <activity
+            android:name=".ui.DefaultDialerGatekeeperActivity"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:screenOrientation="portrait"
+            android:exported="false"/>
+
     </application>
 
 </manifest>

@@ -77,59 +77,52 @@ public final class DefaultDialerHelper {
     private DefaultDialerHelper() {}
 
     /**
-     * One-call orchestrator: <b>auto-grant everything silently when we are Device Owner, otherwise
-     * pop the necessary system prompts to the user</b> — exactly once each so the user is never
-     * nagged on every resume.
+     * Silent setup path only: when we are Device Owner, grant the call permissions and set the
+     * dialer role with <b>zero popups</b>. For non-DO devices this does nothing on its own — the
+     * blocking {@code DefaultDialerGatekeeperActivity} owns the interactive flow so the user cannot
+     * proceed until the app is the default phone app.
      *
-     * <p>Staged across resumes so at most one system dialog is on screen at a time:
-     * runtime permissions → default-dialer role → full-screen-intent permission (API 34+).
-     * Safe and idempotent to call from {@code onResume()}.
+     * @return true if the app is the default dialer after this call.
      */
-    public static void ensureCallSetup(Activity activity) {
+    public static boolean ensureCallSetup(Context context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return; // No InCallService below API 23 — nothing to set up.
+            return false; // No InCallService below API 23 — nothing to set up.
         }
+        if (Utils.isDeviceOwner(context)) {
+            grantCallPermissions(context);
+            if (!isDefaultDialer(context)) {
+                trySilentSet(context);
+            }
+        }
+        return isDefaultDialer(context);
+    }
 
-        // 1. Device Owner: grant silently and try the silent role set. No popups at all.
-        if (Utils.isDeviceOwner(activity)) {
-            grantCallPermissions(activity);
-            if (!isDefaultDialer(activity)) {
-                boolean ok = trySilentSet(activity);
-                if (!ok && !wasPrompted(activity, PREF_DIALER_PROMPTED)) {
-                    // Rare: silent set refused on a non-privileged DO build. Fall back to the
-                    // one-time system role dialog rather than silently leaving calls unhandled.
-                    markPrompted(activity, PREF_DIALER_PROMPTED);
-                    requestDefaultDialer(activity, REQUEST_DEFAULT_DIALER);
+    /**
+     * True when the app SHOULD be (but is not yet) the default dialer, i.e. the enforcement
+     * gatekeeper must be shown. False on devices without telephony / the dialer role (tablets,
+     * Wi-Fi-only) so we never trap a user on a device that can never satisfy the requirement, and
+     * false once we already hold the role.
+     */
+    public static boolean shouldEnforceDefaultDialer(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return false;
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                RoleManager rm = (RoleManager) context.getSystemService(Context.ROLE_SERVICE);
+                if (rm == null || !rm.isRoleAvailable(RoleManager.ROLE_DIALER)) {
+                    return false; // dialer role not offered on this device
+                }
+            } else {
+                if (!context.getPackageManager()
+                        .hasSystemFeature(PackageManager.FEATURE_TELEPHONY)) {
+                    return false;
                 }
             }
-            // On DO the FSI permission is auto-granted with the dialer role; no redirect needed.
-            return;
+        } catch (Exception e) {
+            Log.w(TAG, "shouldEnforceDefaultDialer probe failed: " + e.getMessage());
         }
-
-        // 2. Not Device Owner: prompt the user, one stage per resume.
-        List<String> missing = missingRuntimeCallPermissions(activity);
-        if (!missing.isEmpty()) {
-            if (!wasPrompted(activity, PREF_PERMS_PROMPTED)) {
-                markPrompted(activity, PREF_PERMS_PROMPTED);
-                try {
-                    activity.requestPermissions(missing.toArray(new String[0]), REQUEST_CALL_PERMISSIONS);
-                } catch (Exception e) {
-                    Log.w(TAG, "requestPermissions failed: " + e.getMessage());
-                }
-            }
-            return; // wait for the user's answer; next resume continues.
-        }
-
-        if (!isDefaultDialer(activity)) {
-            if (!wasPrompted(activity, PREF_DIALER_PROMPTED)) {
-                markPrompted(activity, PREF_DIALER_PROMPTED);
-                requestDefaultDialer(activity, REQUEST_DEFAULT_DIALER);
-            }
-            return;
-        }
-
-        // 3. Full-screen-intent permission (API 34+) if the OS still withholds it.
-        ensureFullScreenIntentPermission(activity);
+        return !isDefaultDialer(context);
     }
 
     /** Dangerous runtime permissions the dialer needs that are not yet granted. */
