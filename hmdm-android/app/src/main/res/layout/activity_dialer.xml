@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Brother Pharmamach MDM: default-dialer home — Keypad + Recents tabs (Contacts intentionally
+  ~ omitted). Light, Samsung-style layout. Dependency-free so it renders under AppTheme on 23-36.
+  -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    android:orientation="vertical">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- ==================== RECENTS ==================== -->
+        <LinearLayout
+            android:id="@+id/recents_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="24dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="8dp"
+                android:text="@string/phone_app_name"
+                android:textColor="#111111"
+                android:textSize="26sp"
+                android:textStyle="bold" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recents_list"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:clipToPadding="false"
+                android:paddingBottom="12dp"
+                android:scrollbars="vertical" />
+
+            <TextView
+                android:id="@+id/recents_empty"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="@string/recents_empty"
+                android:textColor="#9AA5AD"
+                android:textSize="16sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- ==================== KEYPAD ==================== -->
+        <LinearLayout
+            android:id="@+id/keypad_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:visibility="gone">
+
+            <!-- Dialed number + backspace -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/dial_number"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:hint="@string/dialpad_hint"
+                    android:textColorHint="#C4CDD3"
+                    android:textColor="#111111"
+                    android:textSize="36sp"
+                    android:maxLines="1"
+                    android:ellipsize="start" />
+
+                <ImageButton
+                    android:id="@+id/dial_backspace"
+                    android:layout_width="54dp"
+                    android:layout_height="54dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_dial_backspace"
+                    android:visibility="invisible"
+                    android:contentDescription="@string/dialpad_delete" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/DialpadRow">
+                <LinearLayout android:id="@+id/key_1" style="@style/DialpadKeyBox">
+                    <TextView style="@style/DialpadDigit" android:text="1"/>
+                    <TextView style="@style/DialpadLetters" android:text=" "/>
+                </LinearLayout>
+                <LinearLayout android:id="@+id/key_2" style="@style/DialpadKeyBox">
+                    <TextView style="@style/DialpadDigit" android:text="2"/>
+                    <TextView style="@style/DialpadLetters" android:text="ABC"/>
+                </LinearLayout>
+                <LinearLayout android:id="@+id/key_3" style="@style/DialpadKeyBox">
+                    <TextView style="@style/DialpadDigit" android:text="3"/>
+                    <TextView style="@style/DialpadLetters" android:text="DEF"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout style="@style/DialpadRow">
+                <LinearLayout android:id="@+id/key_4" style="@style/DialpadKeyBox">
+                    <TextView style="@style/DialpadDigit" android:text="4"/>
+                    <TextView style="@style/DialpadLetters" android:text="GHI"/>
+                </LinearLayout>
+                <LinearLayout android:id="@+id/key_5" style="@style/DialpadKeyBox">
+                    <TextView style="@style/DialpadDigit" android:text="5"/>
+                    <TextView style="@style/DialpadLetters" android:text="JKL"/>
+                </LinearLayout>
+                <LinearLayout android:id="@+id/key_6" style="@style/DialpadKeyBox">
+                    <TextView style="@style/DialpadDigit" android:text="6"/>
+                    <TextView style="@style/DialpadLetters" android:text="MNO"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout style="@style/DialpadRow">
+                <LinearLayout android:id="@+id/key_7" style="@style/DialpadKeyBox">
+                    <TextView style="@style/DialpadDigit" android:text="7"/>
+                    <TextView style="@style/DialpadLetters" android:text="PQRS"/>
+                </LinearLayout>
+                <LinearLayout android:id="@+id/key_8" style="@style/DialpadKeyBox">
+                    <TextView style="@style/DialpadDigit" android:text="8"/>
+                    <TextView style="@style/DialpadLetters" android:text="TUV"/>
+                </LinearLayout>
+                <LinearLayout android:id="@+id/key_9" style="@style/DialpadKeyBox">
+                    <TextView style="@style/DialpadDigit" android:text="9"/>
+                    <TextView style="@style/DialpadLetters" android:text="WXYZ"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout style="@style/DialpadRow">
+                <LinearLayout android:id="@+id/key_star" style="@style/DialpadKeyBox">
+                    <TextView style="@style/DialpadDigit" android:text="*"/>
+                    <TextView style="@style/DialpadLetters" android:text=" "/>
+                </LinearLayout>
+                <LinearLayout android:id="@+id/key_0" style="@style/DialpadKeyBox">
+                    <TextView style="@style/DialpadDigit" android:text="0"/>
+                    <TextView style="@style/DialpadLetters" android:text="+"/>
+                </LinearLayout>
+                <LinearLayout android:id="@+id/key_hash" style="@style/DialpadKeyBox">
+                    <TextView style="@style/DialpadDigit" android:text="#"/>
+                    <TextView style="@style/DialpadLetters" android:text=" "/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="18dp"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageButton
+                    android:id="@+id/dial_call"
+                    android:layout_width="70dp"
+                    android:layout_height="70dp"
+                    android:background="@drawable/bg_call_answer"
+                    android:src="@drawable/ic_call_answer"
+                    android:contentDescription="@string/dialpad_call" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#ECEFF1" />
+
+    <!-- ==================== BOTTOM TABS ==================== -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:background="#FFFFFF"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:id="@+id/tab_keypad"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackground"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:id="@+id/tab_keypad_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_tab_keypad"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/tab_keypad_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/tab_keypad"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/tab_recents"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackground"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:id="@+id/tab_recents_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_tab_recents"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/tab_recents_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/tab_recents"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

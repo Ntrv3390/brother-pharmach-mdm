@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Date section header (Today / Yesterday / date) for the recents list. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/log_header"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingStart="24dp"
+    android:paddingEnd="24dp"
+    android:paddingTop="16dp"
+    android:paddingBottom="6dp"
+    android:textColor="#9AA5AD"
+    android:textSize="13sp"
+    android:textStyle="bold" />
