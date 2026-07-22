@@ -4,6 +4,7 @@
   ~ omitted). Light, Samsung-style layout. Dependency-free so it renders under AppTheme on 23-36.
   -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/dialer_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#FFFFFF"

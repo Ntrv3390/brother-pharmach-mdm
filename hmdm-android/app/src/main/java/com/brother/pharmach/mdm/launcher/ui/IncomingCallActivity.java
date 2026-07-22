@@ -81,6 +81,8 @@ public class IncomingCallActivity extends Activity implements CallManager.Listen
         super.onCreate(savedInstanceState);
         applyWakeAndKeyguardFlags();
         setContentView(R.layout.activity_incoming_call);
+        com.brother.pharmach.mdm.launcher.util.InsetsUtils.applySystemBarPadding(
+                findViewById(R.id.incoming_root));
 
         statusView = findViewById(R.id.call_status);
         nameView = findViewById(R.id.caller_name);

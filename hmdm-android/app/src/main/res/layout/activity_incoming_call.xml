@@ -5,6 +5,7 @@
   ~ plain non-AppCompat fullscreen theme on API 23 through 36.
   -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/incoming_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#0E1621">

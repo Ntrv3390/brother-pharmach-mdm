@@ -82,6 +82,8 @@ public class DialerActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_dialer);
+        com.brother.pharmach.mdm.launcher.util.InsetsUtils.applySystemBarPadding(
+                findViewById(R.id.dialer_root));
 
         keypadContainer = findViewById(R.id.keypad_container);
         recentsContainer = findViewById(R.id.recents_container);

@@ -86,6 +86,8 @@ public class DefaultDialerGatekeeperActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_default_dialer_gatekeeper);
+        com.brother.pharmach.mdm.launcher.util.InsetsUtils.applySystemBarPadding(
+                findViewById(R.id.gatekeeper_root));
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
