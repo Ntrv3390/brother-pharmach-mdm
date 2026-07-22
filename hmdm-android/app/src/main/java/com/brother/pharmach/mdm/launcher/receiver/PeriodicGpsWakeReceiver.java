@@ -40,8 +40,8 @@ public class PeriodicGpsWakeReceiver extends BroadcastReceiver {
     static final String ACTION_LOCK_SCREEN =
             "com.brother.pharmach.mdm.launcher.ACTION_PERIODIC_LOCK_SCREEN";
 
-    // Screen-on + GPS upload cadence. 2.5 minutes.
-    private static final long INTERVAL_MS = TimeUnit.SECONDS.toMillis(150);
+    // Screen-on + GPS upload cadence. 20 minutes.
+    private static final long INTERVAL_MS = TimeUnit.MINUTES.toMillis(20);
 
     // Active window (device local time) for the autonomous screen-wake tracker. Outside this
     // window it does nothing — but manual "Get Latest GPS", live tracking, and the app's normal
@@ -68,8 +68,8 @@ public class PeriodicGpsWakeReceiver extends BroadcastReceiver {
         if (!ACTION.equals(action)) return;
 
         // Reschedule first so the chain survives even if the work below throws. schedule() picks
-        // the next fire time based on the active window: +2.5min while active, or a single jump to
-        // the next 08:00 while inactive (so there are no wasteful 2.5-min wakeups overnight).
+        // the next fire time based on the active window: +20min while active, or a single jump to
+        // the next 08:00 while inactive (so there are no wasteful periodic wakeups overnight).
         schedule(context);
 
         // Outside 08:00–21:00 the autonomous wake tracker stays idle. (Manual Get Latest GPS,
@@ -87,14 +87,14 @@ public class PeriodicGpsWakeReceiver extends BroadcastReceiver {
         boolean charging = isCharging(context);
 
         RemoteLogger.log(context, Const.LOG_INFO,
-                "PeriodicGpsWake: 2.5-min tick — waking screen and capturing GPS"
+                "PeriodicGpsWake: 20-min tick — waking screen and capturing GPS"
                         + " (screenWasOff=" + screenWasOff + ", charging=" + charging + ")");
 
         // Guaranteed screen wake (unthrottled) so the GPS chip is not suppressed, then run the
         // normal urgent capture+upload pipeline (which stamps the fix as current).
-        DozeExitHelper.wakeDeviceNow(context.getApplicationContext(), "periodic2.5min");
+        DozeExitHelper.wakeDeviceNow(context.getApplicationContext(), "periodic20min");
         LocationForegroundService.triggerUrgent(
-                context.getApplicationContext(), "periodic2.5minWake");
+                context.getApplicationContext(), "periodic20minWake");
 
         if (screenWasOff && !charging) {
             scheduleScreenOff(context);
