@@ -101,6 +101,30 @@ public class AppShortcutManager {
             appInfos.add(newInfo);
         }
 
+        // Built-in "Phone" tile: on the main grid, surface our own dial pad as a normal app icon so
+        // the user can place outgoing calls once the app is the default phone app. It is a DIAL
+        // intent shortcut (rendered with the dialer icon by BaseAppListAdapter) and resolves to our
+        // DialerActivity. Skipped if the admin already configured a DIAL shortcut, to avoid a
+        // duplicate. Sorted in with the rest via the comparator below (screenOrder null → by name).
+        if (!bottom) {
+            boolean hasDialShortcut = false;
+            for (AppInfo ai : appInfos) {
+                if (ai.type == AppInfo.TYPE_INTENT
+                        && "android.intent.action.DIAL".equals(ai.intent)) {
+                    hasDialShortcut = true;
+                    break;
+                }
+            }
+            if (!hasDialShortcut) {
+                AppInfo phone = new AppInfo();
+                phone.type = AppInfo.TYPE_INTENT;
+                phone.name = context.getString(com.brother.pharmach.mdm.launcher.R.string.phone_app_name);
+                phone.intent = "android.intent.action.DIAL";
+                phone.screenOrder = null;
+                appInfos.add(phone);
+            }
+        }
+
         // Apply manually set order
         Collections.sort(appInfos, new AppInfosComparator());
 

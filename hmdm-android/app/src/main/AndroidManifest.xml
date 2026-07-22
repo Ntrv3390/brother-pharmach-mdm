@@ -452,21 +452,32 @@
             android:taskAffinity=""
             android:theme="@style/IncomingCallTheme"/>
 
-        <!-- DIAL handler so the app is offered/settable as the default phone app
-             (ACTION_CHANGE_DEFAULT_DIALER / ROLE_DIALER accept only DIAL-capable apps). -->
+        <!-- Dial pad + DIAL handler so the app is a valid default phone app
+             (ACTION_CHANGE_DEFAULT_DIALER / ROLE_DIALER accept only DIAL-capable apps) AND so the
+             user can actually place outgoing calls once it is the default. -->
         <activity
             android:name=".ui.DialerActivity"
             android:exported="true"
-            android:excludeFromRecents="true"
-            android:theme="@android:style/Theme.NoDisplay">
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="stateAlwaysHidden"
+            android:theme="@style/AppTheme">
+            <!-- Dial intent, no data -->
             <intent-filter>
                 <action android:name="android.intent.action.DIAL"/>
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
+            <!-- Dial / view a tel: number -->
             <intent-filter>
                 <action android:name="android.intent.action.DIAL"/>
+                <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="tel"/>
+            </intent-filter>
+            <!-- Hardware/ software call button -->
+            <intent-filter>
+                <action android:name="android.intent.action.CALL_BUTTON"/>
+                <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
         </activity>
 

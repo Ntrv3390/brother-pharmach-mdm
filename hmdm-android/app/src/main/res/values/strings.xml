@@ -173,4 +173,12 @@
     <string name="dialer_gatekeeper_message">To receive and manage calls, this device must use this app as the default phone app. Please tap the button below and choose this app to continue.</string>
     <string name="dialer_gatekeeper_set_default">Set as default phone app</string>
     <string name="dialer_gatekeeper_open_settings">Open default apps settings</string>
+
+    <!-- Dial pad -->
+    <string name="phone_app_name">Phone</string>
+    <string name="dialpad_hint">Enter number</string>
+    <string name="dialpad_call">Call</string>
+    <string name="dialpad_delete">Delete</string>
+    <string name="dialpad_no_number">Enter a number to call</string>
+    <string name="dialpad_call_failed">Could not place the call</string>
 </resources>
