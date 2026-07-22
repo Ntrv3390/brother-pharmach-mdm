@@ -176,6 +176,42 @@
 
         </RelativeLayout>
 
+        <!-- Ongoing-call banner: overlays the top of the launcher whenever a call is live so the
+             user can always jump back to the call screen. Shown/hidden by MainActivity. -->
+        <LinearLayout
+            android:id="@+id/ongoing_call_banner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentTop="true"
+            android:background="#1B9E4B"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_marginEnd="14dp"
+                android:src="@drawable/ic_call_answer"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/ongoing_call_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/ongoing_call_tap_return"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
     </RelativeLayout>
 
 </layout>

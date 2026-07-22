@@ -167,6 +167,7 @@
     <string name="hang_up">Hang up</string>
     <string name="mute">Mute</string>
     <string name="speaker">Speaker</string>
+    <string name="dtmf_hide">Hide</string>
 
     <!-- Default-dialer enforcement gatekeeper -->
     <string name="dialer_gatekeeper_title">Set as default phone app</string>
@@ -186,4 +187,6 @@
     <string name="recents_today">Today</string>
     <string name="recents_yesterday">Yesterday</string>
     <string name="recents_empty">No recent calls</string>
+    <string name="ongoing_call_tap_return">Ongoing call — tap to return</string>
+    <string name="ongoing_call_incoming_tap">Incoming call — tap to answer</string>
 </resources>

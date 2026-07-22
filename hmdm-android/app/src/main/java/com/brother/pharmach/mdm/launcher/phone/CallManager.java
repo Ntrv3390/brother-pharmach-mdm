@@ -22,6 +22,8 @@ package com.brother.pharmach.mdm.launcher.phone;
 import android.content.Context;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.telecom.Call;
 import android.telecom.CallAudioState;
 import android.telecom.InCallService;
@@ -313,6 +315,34 @@ public final class CallManager {
             reject();
         } else {
             hangup();
+        }
+    }
+
+    private final Handler dtmfHandler = new Handler(Looper.getMainLooper());
+    private final Runnable stopDtmfRunnable = () -> {
+        try {
+            if (call != null) {
+                call.stopDtmfTone();
+            }
+        } catch (Exception ignored) {
+        }
+    };
+
+    /**
+     * Send a DTMF tone for the given key (0-9, *, #) on the current call — used to navigate IVR /
+     * "customer care" menus during an active call. Plays the tone briefly then stops it so each tap
+     * is a discrete beep the far end registers.
+     */
+    public void sendDtmf(char digit) {
+        if (call == null) {
+            return;
+        }
+        try {
+            call.playDtmfTone(digit);
+            dtmfHandler.removeCallbacks(stopDtmfRunnable);
+            dtmfHandler.postDelayed(stopDtmfRunnable, 200);
+        } catch (Exception e) {
+            Log.w(TAG, "sendDtmf failed: " + e.getMessage());
         }
     }
 

@@ -69,6 +69,19 @@
         <item name="android:minHeight">12dp</item>
     </style>
 
+    <!-- In-call DTMF keypad key (white digit on the dark call screen). -->
+    <style name="DtmfKey">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="android:textSize">28sp</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:background">?android:attr/selectableItemBackgroundBorderless</item>
+    </style>
+
     <!-- Fullscreen, no-action-bar theme for the incoming/in-call screen. Uses a plain framework
          parent (not AppCompat) so IncomingCallActivity can extend android.app.Activity and render
          reliably over the keyguard on API 23-36. -->

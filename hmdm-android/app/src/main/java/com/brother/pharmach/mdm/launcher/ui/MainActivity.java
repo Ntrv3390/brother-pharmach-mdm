@@ -152,6 +152,9 @@ public class MainActivity
     private ActivityMainBinding binding;
     private SettingsHelper settingsHelper;
 
+    // Ongoing-call banner controller (custom call receiver). Only instantiated on API 23+.
+    private com.brother.pharmach.mdm.launcher.phone.OngoingCallBanner ongoingCallBanner;
+
     private Dialog fileNotDownloadedDialog;
     private DialogFileDownloadingFailedBinding dialogFileDownloadingFailedBinding;
 
@@ -670,6 +673,10 @@ public class MainActivity
         } catch (Exception e) {
             Log.w(Const.LOG_TAG, "ensureCallSetup/enforce failed: " + e.getMessage());
         }
+
+        // Show the "return to call" banner if a call is live (so the call screen is always reachable
+        // from the launcher, even with no keyguard).
+        startOngoingCallBanner();
 
         if (interruptResumeFlow) {
             interruptResumeFlow = false;
@@ -2040,6 +2047,43 @@ public class MainActivity
      * (avoids blocking the main thread with PackageManager iteration + DPM IPC calls),
      * then optionally brings the launcher to the foreground on the main thread.
      */
+    /**
+     * Show/refresh the "return to call" banner. Guarded at API 23 (the call stack does not exist
+     * below that); {@link com.brother.pharmach.mdm.launcher.phone.OngoingCallBanner} keeps it in
+     * sync with the live call and re-opens the call screen on tap.
+     */
+    private void startOngoingCallBanner() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return;
+        }
+        try {
+            View banner = findViewById(R.id.ongoing_call_banner);
+            android.widget.TextView text = findViewById(R.id.ongoing_call_text);
+            if (banner == null) {
+                return;
+            }
+            if (ongoingCallBanner == null) {
+                ongoingCallBanner = new com.brother.pharmach.mdm.launcher.phone.OngoingCallBanner(
+                        this, banner, text);
+            }
+            ongoingCallBanner.start();
+            // A still-ringing call must not be left behind the launcher — pull it back to front.
+            ongoingCallBanner.returnIfRinging();
+        } catch (Throwable t) {
+            Log.w(Const.LOG_TAG, "startOngoingCallBanner failed: " + t.getMessage());
+        }
+    }
+
+    private void stopOngoingCallBanner() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || ongoingCallBanner == null) {
+            return;
+        }
+        try {
+            ongoingCallBanner.stop();
+        } catch (Throwable ignored) {
+        }
+    }
+
     private void enforceWorkTimeAsync(Context context, boolean bringToFront) {
         POLICY_EXECUTOR.execute(() -> {
             // This lambda runs via ExecutorService.execute() (not a scheduled executor), so any
@@ -2802,6 +2846,8 @@ public class MainActivity
         super.onPause();
 
         isBackground = true;
+
+        stopOngoingCallBanner();
 
         // Never leave the quick panel open across pause/screen-off; its open state
         // is intentionally not persisted so kiosk re-entry always starts closed

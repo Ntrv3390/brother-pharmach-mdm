@@ -66,6 +66,9 @@ public class IncomingCallActivity extends Activity implements CallManager.Listen
     private TextView declineLabel;
     private ImageButton muteButton;
     private ImageButton speakerButton;
+    private View dtmfDialpad;
+    private TextView dtmfDisplay;
+    private final StringBuilder dtmfDigits = new StringBuilder();
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean finishing;
@@ -93,6 +96,9 @@ public class IncomingCallActivity extends Activity implements CallManager.Listen
         declineLabel = findViewById(R.id.decline_label);
         muteButton = findViewById(R.id.btn_mute);
         speakerButton = findViewById(R.id.btn_speaker);
+        dtmfDialpad = findViewById(R.id.dtmf_dialpad);
+        dtmfDisplay = findViewById(R.id.dtmf_display);
+        setupDtmfKeypad();
 
         findViewById(R.id.btn_answer).setOnClickListener(v -> {
             CallManager.getInstance().answer();
@@ -109,6 +115,7 @@ public class IncomingCallActivity extends Activity implements CallManager.Listen
             CallManager.getInstance().toggleSpeaker();
             updateToggleStates();
         });
+        findViewById(R.id.btn_keypad).setOnClickListener(v -> showDtmfKeypad(true));
 
         CallManager.getInstance().register(this);
         refresh();
@@ -244,6 +251,54 @@ public class IncomingCallActivity extends Activity implements CallManager.Listen
     private void setStatus(int baseRes, String sim) {
         String base = getString(baseRes);
         statusView.setText(sim != null && !sim.isEmpty() ? base + "  ·  " + sim : base);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // In-call DTMF keypad (IVR / customer-care menus)
+    // ---------------------------------------------------------------------------------------------
+
+    private void setupDtmfKeypad() {
+        bindDtmf(R.id.dtmf_1, '1');
+        bindDtmf(R.id.dtmf_2, '2');
+        bindDtmf(R.id.dtmf_3, '3');
+        bindDtmf(R.id.dtmf_4, '4');
+        bindDtmf(R.id.dtmf_5, '5');
+        bindDtmf(R.id.dtmf_6, '6');
+        bindDtmf(R.id.dtmf_7, '7');
+        bindDtmf(R.id.dtmf_8, '8');
+        bindDtmf(R.id.dtmf_9, '9');
+        bindDtmf(R.id.dtmf_star, '*');
+        bindDtmf(R.id.dtmf_0, '0');
+        bindDtmf(R.id.dtmf_hash, '#');
+        findViewById(R.id.dtmf_hide).setOnClickListener(v -> showDtmfKeypad(false));
+    }
+
+    private void bindDtmf(int id, char c) {
+        View v = findViewById(id);
+        if (v != null) {
+            v.setOnClickListener(view -> {
+                CallManager.getInstance().sendDtmf(c);
+                dtmfDigits.append(c);
+                if (dtmfDisplay != null) {
+                    dtmfDisplay.setText(dtmfDigits.toString());
+                }
+            });
+        }
+    }
+
+    private void showDtmfKeypad(boolean show) {
+        if (dtmfDialpad == null) {
+            return;
+        }
+        if (show) {
+            dtmfDigits.setLength(0);
+            if (dtmfDisplay != null) {
+                dtmfDisplay.setText("");
+            }
+            dtmfDialpad.setVisibility(View.VISIBLE);
+        } else {
+            dtmfDialpad.setVisibility(View.GONE);
+        }
     }
 
     private void updateToggleStates() {
