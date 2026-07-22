@@ -22,15 +22,20 @@ package com.brother.pharmach.mdm.launcher.service;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.KeyguardManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
+import android.media.AudioAttributes;
+import android.media.RingtoneManager;
 import android.os.Build;
 import android.os.PowerManager;
 import android.telecom.Call;
 import android.telecom.InCallService;
 import android.util.Log;
+
+import com.brother.pharmach.mdm.launcher.phone.IncomingCallOverlay;
 
 import androidx.annotation.RequiresApi;
 import androidx.core.app.NotificationCompat;
@@ -82,11 +87,52 @@ public class CustomInCallService extends InCallService {
         // has time to take over the screen (the activity itself does turnScreenOn — §4).
         acquireBriefWakeLock();
 
-        // Foreground with a full-screen-intent notification (the sanctioned path for all scenarios).
+        // Foreground with a full-screen-intent notification. This is the reliable path when the
+        // device is LOCKED or the screen is OFF (the FSI launches the activity, keyguard bypassed).
         startCallForeground(call, ringing);
 
-        // Fast path: as the dialer-role InCallService we may start the UI directly (BAL-exempt).
-        // Belt-and-suspenders alongside the FSI so there is zero delay when our task is foreground.
+        presentCallUi(ringing);
+    }
+
+    /**
+     * Bring up the call UI, choosing the mechanism that actually works for the current screen state:
+     *
+     * <ul>
+     *   <li><b>Screen ON + unlocked</b> (user is in another app): a full-screen-intent notification
+     *       does NOT launch its activity on Android 14/15 — it only shows a heads-up — and a direct
+     *       startActivity is BAL-blocked. So we draw a {@code SYSTEM_ALERT_WINDOW} overlay, which is
+     *       exempt from all of that and paints on top of whatever app is showing.</li>
+     *   <li><b>Screen OFF / locked</b>: overlays cannot cover a secure keyguard, so we rely on the
+     *       FSI notification (already posted) plus the turn-screen-on / show-when-locked activity.</li>
+     * </ul>
+     */
+    private void presentCallUi(boolean ringing) {
+        boolean interactive;
+        boolean locked;
+        try {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            interactive = pm != null && (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH
+                    ? pm.isInteractive() : pm.isScreenOn());
+            KeyguardManager km = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+            locked = km != null && km.isKeyguardLocked();
+        } catch (Exception e) {
+            interactive = true;
+            locked = false;
+        }
+
+        if (interactive && IncomingCallOverlay.canShow(this)) {
+            // Screen is ON (locked or in another app) → System Window Overlay presents caller UI reliably
+            // bypassing Android 14/15 background activity launch restrictions.
+            try {
+                IncomingCallOverlay.getInstance(getApplicationContext()).show();
+                return;
+            } catch (Exception e) {
+                Log.w(TAG, "Overlay path failed, falling back to activity: " + e.getMessage());
+            }
+        }
+
+        // Screen off or overlays unavailable: wake screen and launch activity; FSI notification acts as fallback.
+        acquireBriefWakeLock();
         launchIncomingCallUi(ringing);
     }
 
@@ -107,6 +153,10 @@ public class CustomInCallService extends InCallService {
             cm.clearCall(call);
             stopCallForeground();
             releaseWakeLock();
+            try {
+                IncomingCallOverlay.getInstance(getApplicationContext()).dismiss();
+            } catch (Exception ignored) {
+            }
         } else {
             // Call waiting / conference leg ended: promote the next call so the foreground service
             // and UI keep tracking a live call instead of being torn down prematurely.
@@ -204,6 +254,11 @@ public class CustomInCallService extends InCallService {
                 NotificationManager.IMPORTANCE_HIGH);
         ch.setDescription(getString(R.string.incoming_call_channel_desc));
         ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        ch.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
+                new AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                        .build());
         ch.enableVibration(true);
         ch.setBypassDnd(true);
         nm.createNotificationChannel(ch);
