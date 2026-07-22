@@ -911,6 +911,13 @@ public class LocationForegroundService extends Service {
                 LocationDiag.timeline(appContext, reqId, "handleUrgentRequest:threadStarted");
                 LocationDiag.logProcessAndPowerState(appContext, "handleUrgentRequest:threadStarted");
 
+                // Force a screen/Doze wake for EVERY urgent capture up front — before the warm-cache
+                // shortcut below — so an operator "Get Latest GPS" / live request always lights the
+                // screen even when a recent fix already exists. force=true bypasses the wake
+                // throttles; no-op when the screen is already on.
+                com.brother.pharmach.mdm.launcher.util.DozeExitHelper.prepareForForegroundCapture(
+                        appContext, "urgentWake:" + reqId, true);
+
                 Location recent = latestContinuousFix;
                 long fixAge = recent != null
                         ? System.currentTimeMillis() - recent.getTime() : Long.MAX_VALUE;

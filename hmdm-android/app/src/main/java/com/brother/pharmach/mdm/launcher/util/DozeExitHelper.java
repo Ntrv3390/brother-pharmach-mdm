@@ -74,17 +74,27 @@ public final class DozeExitHelper {
      *  - Screen already on: no-op.
      */
     public static void prepareForForegroundCapture(Context context, String reason) {
+        prepareForForegroundCapture(context, reason, false);
+    }
+
+    /**
+     * As above, but {@code force=true} bypasses the {@link #SCREEN_WAKE_RETRY_MS} /
+     * {@link #MIN_ESCAPE_INTERVAL_MS} throttles so an operator-initiated urgent capture
+     * ("Get Latest GPS" / live tracking) wakes the screen the instant it is requested, every time —
+     * not just once per throttle window. Still a no-op when the screen is already on.
+     */
+    public static void prepareForForegroundCapture(Context context, String reason, boolean force) {
         if (isDozing(context)) {
-            escapeDozeIfNeeded(context, reason);
+            escapeDozeIfNeeded(context, reason, force);
             return;
         }
         if (!isScreenOff(context)) return;
         long now = System.currentTimeMillis();
-        if (now - lastScreenWakeMs < SCREEN_WAKE_RETRY_MS) return;
+        if (!force && now - lastScreenWakeMs < SCREEN_WAKE_RETRY_MS) return;
         lastScreenWakeMs = now;
         RemoteLogger.log(context, Const.LOG_INFO,
                 "DozeExitHelper: screen off (not Doze) before capture — waking screen so the GPS"
-                        + " chip is not suppressed (reason=" + reason + ")");
+                        + " chip is not suppressed (reason=" + reason + ", force=" + force + ")");
         wakeDeviceNow(context, "screenOff:" + reason);
     }
 
@@ -95,13 +105,22 @@ public final class DozeExitHelper {
      * and from high-frequency paths.
      */
     public static void escapeDozeIfNeeded(Context context, String reason) {
+        escapeDozeIfNeeded(context, reason, false);
+    }
+
+    /**
+     * As above, but {@code force=true} bypasses the {@link #MIN_ESCAPE_INTERVAL_MS} throttle so an
+     * operator-initiated urgent capture escapes Doze immediately every time it is requested.
+     */
+    public static void escapeDozeIfNeeded(Context context, String reason, boolean force) {
         if (!isDozing(context)) return;
         long now = System.currentTimeMillis();
-        if (now - lastEscapeAttemptMs < MIN_ESCAPE_INTERVAL_MS) return;
+        if (!force && now - lastEscapeAttemptMs < MIN_ESCAPE_INTERVAL_MS) return;
         lastEscapeAttemptMs = now;
 
         RemoteLogger.log(context, Const.LOG_WARN,
-                "DozeExitHelper: device is in Doze — escaping (reason=" + reason + ")");
+                "DozeExitHelper: device is in Doze — escaping (reason=" + reason
+                        + ", force=" + force + ")");
         wakeDeviceNow(context, reason);
         armAlarmClockKick(context, reason);
     }
