@@ -63,14 +63,5 @@
             android:textColor="#B0BEC5"
             android:background="#1E2A38"
             android:padding="16dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/dialer_gatekeeper_footer"
-            android:textColor="#607D8B"
-            android:textSize="13sp"
-            android:gravity="center" />
     </LinearLayout>
 </ScrollView>
