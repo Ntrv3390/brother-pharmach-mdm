@@ -165,7 +165,13 @@ public class CustomInCallService extends InCallService {
         //    a SECURE keyguard cannot be covered by an overlay — only the show-when-locked activity
         //    and the FSI notification can appear over it).
         if (!overlayShown || locked) {
-            acquireBriefWakeLock();
+            // Locked / screen-off: force the display on so the activity/FSI (and overlay, once the
+            // keyguard is dismissed) can actually be seen. Otherwise just a CPU wake lock.
+            if (locked || !interactive) {
+                acquireScreenWakeLock();
+            } else {
+                acquireBriefWakeLock();
+            }
             launchIncomingCallUi(ringing);
         }
     }
@@ -479,6 +485,35 @@ public class CustomInCallService extends InCallService {
             wakeLock.acquire(10_000L); // auto-release after 10s; the Activity keeps the screen on
         } catch (Exception e) {
             Log.w(TAG, "wake lock acquire failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Force the display ON for a locked / screen-off call. PARTIAL_WAKE_LOCK only keeps the CPU
+     * awake — the screen stays black, so an overlay is invisible and the activity has no lit screen.
+     * These SCREEN_BRIGHT / ACQUIRE_CAUSES_WAKEUP flags are deprecated but still the only way to
+     * actively turn the display on from a service; the Activity's turnScreenOn is the modern path
+     * but only fires if the activity actually launches. Belt-and-suspenders for the locked case.
+     */
+    @SuppressWarnings("deprecation")
+    private void acquireScreenWakeLock() {
+        try {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm == null) {
+                return;
+            }
+            releaseWakeLock();
+            wakeLock = pm.newWakeLock(
+                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK
+                            | PowerManager.ACQUIRE_CAUSES_WAKEUP
+                            | PowerManager.ON_AFTER_RELEASE,
+                    "hmdm:incoming-call-screen");
+            wakeLock.setReferenceCounted(false);
+            wakeLock.acquire(15_000L);
+            RemoteLogger.log(this, Const.LOG_INFO, "Screen wake lock acquired (locked/off call)");
+        } catch (Exception e) {
+            Log.w(TAG, "screen wake lock acquire failed: " + e.getMessage());
+            acquireBriefWakeLock();
         }
     }
 

@@ -37,8 +37,10 @@ import android.widget.TextView;
 
 import androidx.annotation.RequiresApi;
 
+import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.R;
 import com.brother.pharmach.mdm.launcher.phone.CallManager;
+import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
 /**
  * Full-screen incoming / in-call UI. Launched from {@code CustomInCallService} both directly and
@@ -82,6 +84,7 @@ public class IncomingCallActivity extends Activity implements CallManager.Listen
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        RemoteLogger.log(this, Const.LOG_INFO, "IncomingCallActivity CREATED");
         applyWakeAndKeyguardFlags();
         setContentView(R.layout.activity_incoming_call);
         com.brother.pharmach.mdm.launcher.util.InsetsUtils.applySystemBarPadding(
@@ -142,6 +145,7 @@ public class IncomingCallActivity extends Activity implements CallManager.Listen
     protected void onResume() {
         super.onResume();
         sForeground = true;
+        RemoteLogger.log(this, Const.LOG_INFO, "IncomingCallActivity RESUMED (visible)");
         refresh();
     }
 
@@ -149,6 +153,7 @@ public class IncomingCallActivity extends Activity implements CallManager.Listen
     protected void onPause() {
         super.onPause();
         sForeground = false;
+        RemoteLogger.log(this, Const.LOG_INFO, "IncomingCallActivity PAUSED");
     }
 
     @Override
