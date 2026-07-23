@@ -12,6 +12,8 @@ import android.os.PowerManager;
 import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.receiver.DozeExitReceiver;
 
+import java.util.Calendar;
+
 /**
  * Doze escape hatch for urgent GPS capture.
  *
@@ -26,15 +28,27 @@ import com.brother.pharmach.mdm.launcher.receiver.DozeExitReceiver;
  *     it entirely (the same reason an alarm's full-screen UI leaves the phone fully awake).
  *
  * {@link #escapeDozeIfNeeded} is a no-op when the device is not dozing and is throttled to one
- * attempt per {@link #MIN_ESCAPE_INTERVAL_MS}, so high-frequency callers (the 30-second location
- * heartbeat) can invoke it unconditionally.
+ * attempt per {@link #MIN_ESCAPE_INTERVAL_MS} (20 min), so high-frequency callers (the 30-second
+ * location heartbeat) can invoke it unconditionally. Automatic callers (force=false) are further
+ * gated to the {@link #ACTIVE_START_MIN}–{@link #ACTIVE_END_MIN} window (08:00–21:00), leaving the
+ * device asleep overnight. Operator-initiated captures ("Get Latest GPS" / live tracking) pass
+ * force=true and bypass BOTH the throttle and the active-hours window, so they wake the device 24h.
  *
  * On Android 5.x (API < 23) Doze does not exist and everything here degrades to a no-op or a
  * plain wake lock, so the class is safe across the app's full minSdk 21 → current range.
  */
 public final class DozeExitHelper {
 
-    private static final long MIN_ESCAPE_INTERVAL_MS = 2 * 60_000L;
+    private static final long MIN_ESCAPE_INTERVAL_MS = 20 * 60_000L;   // 20 minutes
+
+    // Active window (device local time) for the AUTOMATIC screen-wake/Doze-escape paths (the 30s
+    // heartbeat and the 15-min watchdog). Outside this window the automatic wake stays idle so the
+    // device is left to sleep overnight. Operator-initiated captures ("Get Latest GPS" / live
+    // tracking) call with force=true and are exempt — they wake the screen 24h, every time.
+    // Minutes-of-day, inclusive of the end boundary: active 08:00 → 21:00; inactive 21:01 → 07:59.
+    private static final int ACTIVE_START_MIN = 8 * 60;    // 08:00
+    private static final int ACTIVE_END_MIN = 21 * 60;     // 21:00
+
     private static final long SCREEN_WAKE_RETRY_MS = 30_000L;
     private static final long CPU_WAKELOCK_TIMEOUT_MS = 90_000L;
     private static final long SCREEN_WAKELOCK_TIMEOUT_MS = 10_000L;
@@ -64,6 +78,16 @@ public final class DozeExitHelper {
     }
 
     /**
+     * True when the device's local time is inside the automatic-wake window (08:00–21:00, end
+     * inclusive). Gates the automatic (force=false) wake paths only; operator captures ignore it.
+     */
+    private static boolean isWithinActiveHours() {
+        Calendar c = Calendar.getInstance();
+        int minuteOfDay = c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE);
+        return minuteOfDay >= ACTIVE_START_MIN && minuteOfDay <= ACTIVE_END_MIN;
+    }
+
+    /**
      * Call right before an urgent, foreground-initiated GPS capture. On ColorOS/MIUI the GPS
      * chip is suspended for background apps whenever the SCREEN IS OFF — even when the device is
      * NOT in Doze (confirmed in field logs: deviceIdle=false, screenInteractive=false, zero
@@ -89,6 +113,14 @@ public final class DozeExitHelper {
             return;
         }
         if (!isScreenOff(context)) return;
+        // Automatic paths (force=false) only wake the screen inside the active window; operator
+        // captures (force=true) are exempt and wake 24h.
+        if (!force && !isWithinActiveHours()) {
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "DozeExitHelper: outside active hours (08:00–21:00) — skipping automatic screen"
+                            + " wake (reason=" + reason + ")");
+            return;
+        }
         long now = System.currentTimeMillis();
         if (!force && now - lastScreenWakeMs < SCREEN_WAKE_RETRY_MS) return;
         lastScreenWakeMs = now;
@@ -114,6 +146,14 @@ public final class DozeExitHelper {
      */
     public static void escapeDozeIfNeeded(Context context, String reason, boolean force) {
         if (!isDozing(context)) return;
+        // Automatic paths (force=false) only wake the device inside the active window; operator
+        // captures (force=true) are exempt and wake 24h.
+        if (!force && !isWithinActiveHours()) {
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "DozeExitHelper: outside active hours (08:00–21:00) — skipping automatic Doze"
+                            + " escape (reason=" + reason + ")");
+            return;
+        }
         long now = System.currentTimeMillis();
         if (!force && now - lastEscapeAttemptMs < MIN_ESCAPE_INTERVAL_MS) return;
         lastEscapeAttemptMs = now;

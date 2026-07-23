@@ -103,7 +103,7 @@ public class LocationForegroundService extends Service {
     // only fires from WITHIN onLocationChanged() — if the listener gets zero callbacks (OEM
     // suppression, Doze, etc.), that logic never runs at all. This is an independent timer so
     // there's always a periodic upload attempt even during a total callback blackout.
-    private static final long HEARTBEAT_INTERVAL_SECONDS = 30L;
+    private static final long HEARTBEAT_INTERVAL_MINUTES = 20L;
 
     // Urgent: use the streaming in-memory fix if it's < 20s old (GPS is warm, instant response).
     private static final long URGENT_FIX_MAX_AGE_MS = 20_000L;
@@ -156,7 +156,7 @@ public class LocationForegroundService extends Service {
     private ExecutorService urgentExecutor;    // Thread.MAX_PRIORITY, non-daemon
     private ExecutorService uploadExecutor;    // background HTTP uploads from continuous stream
     private ScheduledExecutorService flushScheduler; // periodic queue-flush cycle
-    private ScheduledExecutorService heartbeatScheduler; // guaranteed every-30s upload
+    private ScheduledExecutorService heartbeatScheduler; // guaranteed every-20min upload
 
     // Track in-flight urgent task so duplicate pushes coalesce into it (see handleUrgentRequest).
     private volatile Future<?> currentUrgentTask;
@@ -409,14 +409,14 @@ public class LocationForegroundService extends Service {
                 LocationWorker.FIRE_PERIOD_MINS,
                 TimeUnit.MINUTES);
 
-        // Guaranteed upload every 30s regardless of whether the continuous listener has
-        // delivered any callback — see HEARTBEAT_INTERVAL_SECONDS for why this is independent
+        // Guaranteed upload every 20min regardless of whether the continuous listener has
+        // delivered any callback — see HEARTBEAT_INTERVAL_MINUTES for why this is independent
         // of considerUpload()'s own MAX_UPLOAD_INTERVAL_MS throttle.
         heartbeatScheduler.scheduleAtFixedRate(
                 this::runHeartbeatUpload,
-                HEARTBEAT_INTERVAL_SECONDS,
-                HEARTBEAT_INTERVAL_SECONDS,
-                TimeUnit.SECONDS);
+                HEARTBEAT_INTERVAL_MINUTES,
+                HEARTBEAT_INTERVAL_MINUTES,
+                TimeUnit.MINUTES);
 
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService started — continuous GPS active");
@@ -944,7 +944,7 @@ public class LocationForegroundService extends Service {
                 // even outside Doze, so the capture below would get zero GnssStatus callbacks.
                 // Waking the screen now gives GNSS the ~20s capture window to actually acquire.
                 com.brother.pharmach.mdm.launcher.util.DozeExitHelper.prepareForForegroundCapture(
-                        appContext, "urgentColdStart:" + reqId);
+                        appContext, "urgentColdStart:" + reqId, true);
 
                 // Snapshot the in-memory fix so we can tell if the parallel continuous listener
                 // delivers a NEWER one while the cold-start capture runs (see re-check below).
