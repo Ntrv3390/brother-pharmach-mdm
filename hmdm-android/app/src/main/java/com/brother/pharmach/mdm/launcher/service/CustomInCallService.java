@@ -72,6 +72,14 @@ public class CustomInCallService extends InCallService {
     private PowerManager.WakeLock wakeLock;
 
     @Override
+    public void onCreate() {
+        super.onCreate();
+        // Confirms Telecom actually bound us — if this never appears in the server log, the app is
+        // not being used as the default dialer (or the OEM stripped the InCallService).
+        RemoteLogger.log(this, Const.LOG_INFO, "CustomInCallService bound (default dialer active)");
+    }
+
+    @Override
     public void onCallAdded(Call call) {
         super.onCallAdded(call);
         Log.i(TAG, "onCallAdded: " + CallManager.stateName(stateOf(call)));
@@ -92,6 +100,7 @@ public class CustomInCallService extends InCallService {
         startCallForeground(call, ringing);
 
         presentCallUi(ringing);
+        startWatchdog();
     }
 
     /**
@@ -120,14 +129,31 @@ public class CustomInCallService extends InCallService {
             locked = false;
         }
 
-        if (interactive && IncomingCallOverlay.canShow(this)) {
-            // Screen is ON (locked or in another app) → System Window Overlay presents caller UI reliably
-            // bypassing Android 14/15 background activity launch restrictions.
+        boolean canOverlay = IncomingCallOverlay.canShow(this);
+        boolean useOverlay = interactive && canOverlay;
+
+        // Remote diagnostic: this single line (visible on the MDM server) tells us exactly which
+        // path ran and why, so a field failure can be diagnosed without physical access.
+        RemoteLogger.log(this, Const.LOG_INFO,
+                "Call UI present: ringing=" + ringing
+                        + " interactive=" + interactive
+                        + " keyguardLocked=" + locked
+                        + " canDrawOverlays=" + canOverlay
+                        + " defaultDialer=" + isDefaultDialerSelf()
+                        + " notifEnabled=" + areNotificationsEnabled()
+                        + " canUseFSI=" + canUseFullScreenIntent()
+                        + " path=" + (useOverlay ? "OVERLAY" : "ACTIVITY"));
+
+        if (useOverlay) {
+            // Screen is ON (locked or in another app) → System Window Overlay presents caller UI
+            // reliably, bypassing Android 14/15 background-activity-launch restrictions.
             try {
                 IncomingCallOverlay.getInstance(getApplicationContext()).show();
                 return;
             } catch (Exception e) {
                 Log.w(TAG, "Overlay path failed, falling back to activity: " + e.getMessage());
+                RemoteLogger.log(this, Const.LOG_ERROR,
+                        "Overlay show threw, falling back to activity: " + e.getMessage());
             }
         }
 
@@ -150,6 +176,7 @@ public class CustomInCallService extends InCallService {
         if (remaining == null || remaining.isEmpty()) {
             // Last call gone — tear everything down and dismiss the UI.
             Log.i(TAG, "onCallRemoved: no calls remain");
+            stopWatchdog();
             cm.clearCall(call);
             stopCallForeground();
             releaseWakeLock();
@@ -170,9 +197,76 @@ public class CustomInCallService extends InCallService {
 
     @Override
     public void onDestroy() {
+        stopWatchdog();
+        RemoteLogger.log(this, Const.LOG_INFO, "CustomInCallService unbound");
         CallManager.getInstance().detachService(this);
         releaseWakeLock();
         super.onDestroy();
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Keep-on-top watchdog: while a call is live, ensure our call UI stays visible. If it is ever
+    // not showing (activity got covered, overlay failed/was dismissed), re-assert it via
+    // presentCallUi(). The overlay floats above all apps and cannot be covered, so in practice this
+    // only fires when the overlay was never added or the activity path got buried — exactly the
+    // "ringtone but no accept screen" case. Debounced (2 consecutive misses ≈ 2s) to avoid flicker.
+    // ---------------------------------------------------------------------------------------------
+
+    private final android.os.Handler watchdogHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable watchdogRunnable;
+    private int uiMissCount;
+
+    private void startWatchdog() {
+        stopWatchdog();
+        uiMissCount = 0;
+        watchdogRunnable = new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    checkCallUiVisible();
+                } catch (Throwable ignored) {
+                }
+                watchdogHandler.postDelayed(this, 1000L);
+            }
+        };
+        // First check ~1.5s after present so the initial UI has time to attach.
+        watchdogHandler.postDelayed(watchdogRunnable, 1500L);
+    }
+
+    private void stopWatchdog() {
+        if (watchdogRunnable != null) {
+            watchdogHandler.removeCallbacks(watchdogRunnable);
+            watchdogRunnable = null;
+        }
+        uiMissCount = 0;
+    }
+
+    private void checkCallUiVisible() {
+        CallManager cm = CallManager.getInstance();
+        if (!cm.hasCall()) {
+            stopWatchdog();
+            return;
+        }
+        boolean visible;
+        try {
+            visible = com.brother.pharmach.mdm.launcher.ui.IncomingCallActivity.isForeground()
+                    || IncomingCallOverlay.getInstance(getApplicationContext()).isShown();
+        } catch (Exception e) {
+            visible = false;
+        }
+        if (visible) {
+            uiMissCount = 0;
+            return;
+        }
+        uiMissCount++;
+        if (uiMissCount >= 2) {
+            uiMissCount = 0;
+            RemoteLogger.log(this, Const.LOG_WARN,
+                    "Call UI not visible during live call — re-asserting (state="
+                            + CallManager.stateName(cm.getState()) + ")");
+            presentCallUi(cm.isIncomingRinging());
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -187,15 +281,56 @@ public class CustomInCallService extends InCallService {
         return call.getState();
     }
 
+    /** Whether this app is the current default dialer (should be true here — confirms it). */
+    private boolean isDefaultDialerSelf() {
+        try {
+            android.telecom.TelecomManager tm =
+                    (android.telecom.TelecomManager) getSystemService(Context.TELECOM_SERVICE);
+            return tm != null && getPackageName().equals(tm.getDefaultDialerPackage());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Whether notifications are enabled for us — if false, the FSI notification is suppressed. */
+    private boolean areNotificationsEnabled() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                NotificationManager nm =
+                        (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                return nm != null && nm.areNotificationsEnabled();
+            }
+        } catch (Exception ignored) {
+        }
+        return true;
+    }
+
+    /** API 34+: whether the OS will honor our full-screen intent (vs heads-up only). */
+    private boolean canUseFullScreenIntent() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                NotificationManager nm =
+                        (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                return nm != null && nm.canUseFullScreenIntent();
+            }
+        } catch (Exception ignored) {
+        }
+        return true;
+    }
+
     private void launchIncomingCallUi(boolean ringing) {
         try {
             Intent i = IncomingCallActivity.newIntent(this, ringing);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             startActivity(i);
+            RemoteLogger.log(this, Const.LOG_INFO, "Call activity startActivity issued");
         } catch (Exception e) {
-            // On some OEMs a background start can still be refused; the FSI notification is the
-            // guaranteed fallback and will bring the activity up.
+            // On some OEMs a background start can still be refused (BAL); the FSI notification is the
+            // fallback and will bring the activity up when the screen is locked/off.
             Log.w(TAG, "Direct activity start refused, relying on full-screen intent: " + e.getMessage());
+            RemoteLogger.log(this, Const.LOG_ERROR,
+                    "Call activity start REFUSED (BAL) — relying on FSI notification: "
+                            + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
 
@@ -216,6 +351,9 @@ public class CustomInCallService extends InCallService {
             // If FGS start is refused (e.g. missing type permission on a locked-down OEM), fall back
             // to a plain notification so the FSI still fires.
             Log.w(TAG, "startForeground failed, posting plain notification: " + e.getMessage());
+            RemoteLogger.log(this, Const.LOG_ERROR,
+                    "startForeground(phoneCall) failed, posting plain notification: "
+                            + e.getClass().getSimpleName() + ": " + e.getMessage());
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) {
                 try {

@@ -41,6 +41,7 @@ import androidx.annotation.RequiresApi;
 import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.R;
 import com.brother.pharmach.mdm.launcher.util.InsetsUtils;
+import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
 /**
  * Full-screen incoming / in-call UI drawn as a {@code SYSTEM_ALERT_WINDOW} overlay.
@@ -92,6 +93,11 @@ public final class IncomingCallOverlay implements CallManager.Listener {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(context);
     }
 
+    /** True while the overlay window is currently attached (read by the watchdog). */
+    public boolean isShown() {
+        return shown;
+    }
+
     @SuppressLint("InflateParams")
     public void show() {
         handler.post(() -> {
@@ -127,8 +133,12 @@ public final class IncomingCallOverlay implements CallManager.Listener {
                 shown = true;
                 refresh();
                 Log.i(TAG, "Overlay shown");
+                RemoteLogger.log(context, Const.LOG_INFO, "IncomingCallOverlay added OK");
             } catch (Exception e) {
                 Log.w(TAG, "show() failed: " + e.getMessage());
+                RemoteLogger.log(context, Const.LOG_ERROR,
+                        "IncomingCallOverlay FAILED to add: " + e.getClass().getSimpleName()
+                                + ": " + e.getMessage());
                 shown = false;
             }
         });

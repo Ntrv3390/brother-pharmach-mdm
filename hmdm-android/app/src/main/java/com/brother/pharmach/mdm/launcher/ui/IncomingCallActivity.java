@@ -128,14 +128,32 @@ public class IncomingCallActivity extends Activity implements CallManager.Listen
         refresh();
     }
 
+    /**
+     * True while this activity is resumed (on top). Read by the InCallService watchdog to decide
+     * whether the call UI is currently visible (so it does not needlessly re-assert it).
+     */
+    private static volatile boolean sForeground = false;
+
+    public static boolean isForeground() {
+        return sForeground;
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
+        sForeground = true;
         refresh();
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+        sForeground = false;
+    }
+
+    @Override
     protected void onDestroy() {
+        sForeground = false;
         CallManager.getInstance().unregister(this);
         handler.removeCallbacksAndMessages(null);
         super.onDestroy();
