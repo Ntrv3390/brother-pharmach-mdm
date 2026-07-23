@@ -130,7 +130,7 @@ public class CustomInCallService extends InCallService {
         }
 
         boolean canOverlay = IncomingCallOverlay.canShow(this);
-        boolean useOverlay = interactive && canOverlay;
+        boolean secureLock = isKeyguardSecure();
 
         // Remote diagnostic: this single line (visible on the MDM server) tells us exactly which
         // path ran and why, so a field failure can be diagnosed without physical access.
@@ -138,28 +138,46 @@ public class CustomInCallService extends InCallService {
                 "Call UI present: ringing=" + ringing
                         + " interactive=" + interactive
                         + " keyguardLocked=" + locked
+                        + " keyguardSecure=" + secureLock
                         + " canDrawOverlays=" + canOverlay
                         + " defaultDialer=" + isDefaultDialerSelf()
                         + " notifEnabled=" + areNotificationsEnabled()
-                        + " canUseFSI=" + canUseFullScreenIntent()
-                        + " path=" + (useOverlay ? "OVERLAY" : "ACTIVITY"));
+                        + " canUseFSI=" + canUseFullScreenIntent());
 
-        if (useOverlay) {
-            // Screen is ON (locked or in another app) → System Window Overlay presents caller UI
-            // reliably, bypassing Android 14/15 background-activity-launch restrictions.
+        // Always ATTEMPT the overlay when we can draw one. It is the only reliable presenter when
+        // the screen is on (in another app / on a swipe lock), and we cannot trust isInteractive()
+        // here — onCallAdded fires a moment before the ring lights the screen, so it often reads
+        // false even when the screen is (about to be) on. The overlay is idempotent.
+        boolean overlayShown = false;
+        if (canOverlay) {
             try {
                 IncomingCallOverlay.getInstance(getApplicationContext()).show();
-                return;
+                overlayShown = true;
             } catch (Exception e) {
-                Log.w(TAG, "Overlay path failed, falling back to activity: " + e.getMessage());
-                RemoteLogger.log(this, Const.LOG_ERROR,
-                        "Overlay show threw, falling back to activity: " + e.getMessage());
+                Log.w(TAG, "Overlay show threw: " + e.getMessage());
+                RemoteLogger.log(this, Const.LOG_ERROR, "Overlay show threw: " + e.getMessage());
             }
         }
 
-        // Screen off or overlays unavailable: wake screen and launch activity; FSI notification acts as fallback.
-        acquireBriefWakeLock();
-        launchIncomingCallUi(ringing);
+        // Also run the activity + full-screen-intent path when it is needed:
+        //  - no overlay available, OR
+        //  - the device is locked (screen-off wake needs the activity's turnScreenOn / the FSI, and
+        //    a SECURE keyguard cannot be covered by an overlay — only the show-when-locked activity
+        //    and the FSI notification can appear over it).
+        if (!overlayShown || locked) {
+            acquireBriefWakeLock();
+            launchIncomingCallUi(ringing);
+        }
+    }
+
+    /** True if the keyguard requires a PIN/pattern/password (an overlay cannot cover it). */
+    private boolean isKeyguardSecure() {
+        try {
+            KeyguardManager km = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+            return km != null && km.isKeyguardSecure();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @Override
