@@ -65,6 +65,15 @@ public class DefaultDialerGatekeeperActivity extends AppCompatActivity {
     private static final long REQUEST_GRACE_MS = 60_000L;
     private static volatile long sRequestInProgressUntil = 0;
 
+    /**
+     * Cooldown between role-picker presentations. Without it, overlapping createRequestRoleIntent()
+     * calls cancel each other (Android returns RESULT_CANCELED for the superseded one) and the
+     * dialog never stays on screen long enough for the user to tap "Set as default". So we present
+     * the picker at most once per this window and then leave it alone.
+     */
+    private static final long PICKER_COOLDOWN_MS = 12_000L;
+    private static volatile long sLastPickerAtMs = 0;
+
     // True while a system dialog we launched (role picker / permission / settings) is on top, so
     // onUserLeaveHint does not fight it.
     private boolean mRequesting = false;
@@ -182,6 +191,14 @@ public class DefaultDialerGatekeeperActivity extends AppCompatActivity {
             return;
         }
 
+        // Present the role picker at most once per cooldown so repeated auto-fires (onCreate,
+        // onNewIntent, launcher re-enforcement) don't overlap and cancel each other — that loop is
+        // exactly what produced resultCode=0 (CANCELED) without the user ever completing it.
+        long now = SystemClock.elapsedRealtime();
+        if (now - sLastPickerAtMs < PICKER_COOLDOWN_MS) {
+            return; // a picker was presented very recently — leave it on screen for the user to tap
+        }
+        sLastPickerAtMs = now;
         mRequesting = true;
         beginRequestGrace();
         DefaultDialerHelper.requestDefaultDialer(this, DefaultDialerHelper.REQUEST_DEFAULT_DIALER);
