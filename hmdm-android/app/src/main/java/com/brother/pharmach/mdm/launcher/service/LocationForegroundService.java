@@ -96,9 +96,19 @@ public class LocationForegroundService extends Service {
     // Upload throttle — prevents HTTP call on every GPS callback.
     private static final long MIN_UPLOAD_INTERVAL_MS = 15_000L; // don't upload more often than every 15s
     private static final float MIN_UPLOAD_DISTANCE_M = 100f;    // upload when device moved >= 100m
-    private static final long MAX_UPLOAD_INTERVAL_MS = 60_000L; // force upload every 60s regardless of movement
+    private static final long MAX_UPLOAD_INTERVAL_MS = 60_000L; // force upload every 60s WHILE ACTIVE (moving/screen-on)
+    // When parked (stationary AND screen off) the forced-upload cadence drops to this so idle devices
+    // stop streaming every 60s — the 20-min heartbeat already guarantees a floor. This is only a
+    // longer FORCE interval; any real movement still uploads immediately via the movedAndTimeOk path
+    // (>= MIN_UPLOAD_DISTANCE_M), and the moment the device moves >= MOVEMENT_DETECT_DISTANCE_M from
+    // the last upload (or the screen turns on) the 60s cadence is restored. Biased toward "active":
+    // when in doubt we keep uploading, so we never lose tracking on a moving device.
+    private static final long PARKED_MAX_UPLOAD_INTERVAL_MS = 20 * 60_000L; // 20 min when parked
+    // Distance from the last uploaded fix that counts as real movement (set above typical stationary
+    // GPS jitter of ~20-40m, below MIN_UPLOAD_DISTANCE_M so slow movement is still caught).
+    private static final float MOVEMENT_DETECT_DISTANCE_M = 50f;
 
-    // Guaranteed heartbeat: uploads a location every 30s regardless of whether the continuous
+    // Guaranteed heartbeat: uploads a location every 20 min regardless of whether the continuous
     // listener has delivered any callback at all. considerUpload()'s MAX_UPLOAD_INTERVAL_MS above
     // only fires from WITHIN onLocationChanged() — if the listener gets zero callbacks (OEM
     // suppression, Doze, etc.), that logic never runs at all. This is an independent timer so
@@ -692,7 +702,7 @@ public class LocationForegroundService extends Service {
      * Guaranteed periodic upload, independent of whether the continuous listener has delivered
      * any callback. Prefers the live in-memory fix; falls back to the device's best last-known
      * location (across GPS/Network/Passive) if nothing fresh has arrived — this is the "if fresh
-     * fails, send the last known location instead" behavior, applied every 30s rather than only
+     * fails, send the last known location instead" behavior, applied every 20 min rather than only
      * on-demand.
      */
     private void runHeartbeatUpload() {
@@ -704,7 +714,7 @@ public class LocationForegroundService extends Service {
             if (inMemoryAgeMs > HEARTBEAT_CACHE_RECHECK_AGE_MS) {
                 // Fix has gone stale — if that's because the device dozed off, wake it
                 // alarm-clock-style so the next cycles upload a genuinely fresh position.
-                // No-op when not dozing; throttled internally, so safe every 30s.
+                // No-op when not dozing; throttled internally, so safe at any cadence.
                 com.brother.pharmach.mdm.launcher.util.DozeExitHelper.escapeDozeIfNeeded(
                         getApplicationContext(), "heartbeat:staleFix");
                 // Indoors GNSS is physically unavailable — Wi-Fi scanning is what gives the
@@ -733,22 +743,22 @@ public class LocationForegroundService extends Service {
 
             if (location == null) {
                 RemoteLogger.log(this, Const.LOG_WARN,
-                        "LocationForegroundService: 30s heartbeat — no continuous fix and no"
+                        "LocationForegroundService: 20min heartbeat — no continuous fix and no"
                         + " cached location in any source, skipping this cycle");
                 return;
             }
 
             long ageS = (System.currentTimeMillis() - location.getTime()) / 1000;
             RemoteLogger.log(this, Const.LOG_INFO,
-                    "LocationForegroundService: 30s heartbeat uploading ("
+                    "LocationForegroundService: 20min heartbeat uploading ("
                     + (usedLastKnownFallback ? "lastKnownFallback" : "continuousFix")
                     + ", age=" + ageS + "s"
                     + ", accuracy=" + (location.hasAccuracy() ? location.getAccuracy() + "m" : "unknown") + ")");
             uploadFix(new Location(location), false,
-                    usedLastKnownFallback ? "heartbeat30sLastKnown" : "heartbeat30sContinuous");
+                    usedLastKnownFallback ? "heartbeat20mLastKnown" : "heartbeat20mContinuous");
         } catch (Exception e) {
             RemoteLogger.log(this, Const.LOG_WARN,
-                    "LocationForegroundService: 30s heartbeat failed: " + e.getMessage());
+                    "LocationForegroundService: 20min heartbeat failed: " + e.getMessage());
         }
     }
 
@@ -819,7 +829,16 @@ public class LocationForegroundService extends Service {
         float distSinceLast = lastUploadedFix != null
                 ? location.distanceTo(lastUploadedFix) : Float.MAX_VALUE;
 
-        boolean mustUpload = timeSinceLast >= MAX_UPLOAD_INTERVAL_MS;
+        // "Active" = the device is moving or in use → keep the fast 60s forced cadence.
+        // "Parked" = stationary AND screen off → drop the forced cadence to 20 min (the heartbeat
+        // still guarantees a floor). No previous fix (Float.MAX_VALUE) counts as active so the very
+        // first fix uploads immediately. Screen check is null-safe. Biased to active: any doubt → fast.
+        boolean active = distSinceLast == Float.MAX_VALUE
+                || distSinceLast >= MOVEMENT_DETECT_DISTANCE_M
+                || !com.brother.pharmach.mdm.launcher.util.DozeExitHelper.isScreenOff(getApplicationContext());
+        long forceIntervalMs = active ? MAX_UPLOAD_INTERVAL_MS : PARKED_MAX_UPLOAD_INTERVAL_MS;
+
+        boolean mustUpload = timeSinceLast >= forceIntervalMs;
         boolean movedAndTimeOk = timeSinceLast >= MIN_UPLOAD_INTERVAL_MS
                 && distSinceLast >= MIN_UPLOAD_DISTANCE_M;
 
