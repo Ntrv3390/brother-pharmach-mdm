@@ -39,8 +39,32 @@ public class PushSenderPolling implements PushSender {
             }
             deviceEntry.messages.add(message);
         }
-        deviceEntry.context.complete();
+        completeOrRequeue(deviceEntry);
         return 0;
+    }
+
+    /**
+     * Completes the device's long-poll async context to flush queued messages. If the context has
+     * already completed or timed out (the device is reconnecting), {@link AsyncContext#complete()}
+     * throws {@code IllegalStateException} ("...Async state [DISPATCHED]"). Previously that
+     * exception bubbled up to the caller — an admin "Get Latest GPS" returned an error and the
+     * queued messages were lost, because {@code getPendingMessagesForDelivery()} had already marked
+     * the DB rows delivered and the freshly-sent message was never persisted in the online branch.
+     * Here we instead drop the stale registration and persist everything back to the queue so it is
+     * delivered on the device's next poll, and never propagate the error to the caller.
+     */
+    private void completeOrRequeue(DeviceEntry deviceEntry) {
+        try {
+            deviceEntry.context.complete();
+        } catch (Exception e) {
+            unregister(deviceEntry.context);
+            synchronized (deviceEntry.messages) {
+                for (PushMessage m : deviceEntry.messages) {
+                    notificationDAO.send(m);
+                }
+                deviceEntry.messages.clear();
+            }
+        }
     }
 
     public void sendPending(int deviceId, List<PushMessage> messages) {
@@ -54,8 +78,7 @@ public class PushSenderPolling implements PushSender {
                 deviceEntry.messages.add(pending);
             }
         }
-        deviceEntry.context.complete();
-
+        completeOrRequeue(deviceEntry);
     }
 
     public List<PushMessage> getPendingMessages(AsyncContext asyncContext) {

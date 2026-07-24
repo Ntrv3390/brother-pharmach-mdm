@@ -66,6 +66,29 @@ esac
 
 ANDROID_SECONDARY_BASE_URL="${ANDROID_SECONDARY_BASE_URL:-$ANDROID_BASE_URL}"
 
+# --- MQTT (Push) per-environment wiring ---------------------------------------
+# The device must reach the MQTT broker directly (the panel host is behind Cloudflare, which can't
+# carry the raw MQTT TCP port). Derive a dedicated broker host "mqtt.<panel-host>" from the selected
+# base URL, and take the shared secret straight from the matching server env file so the app's
+# REQUEST_SIGNATURE can never drift from the server's HASH_SECRET (MQTT_AUTH requires them equal).
+_mqtt_panel_host="${ANDROID_BASE_URL#*://}"   # strip scheme
+_mqtt_panel_host="${_mqtt_panel_host%%/*}"    # strip path
+_mqtt_panel_host="${_mqtt_panel_host%%:*}"    # strip port
+ANDROID_MQTT_HOST="${ANDROID_MQTT_HOST:-mqtt.${_mqtt_panel_host}}"
+
+case "$BUILD_TYPE" in
+  stage)      SERVER_ENV_FILE="$ROOT_DIR/hmdm-server/.env.stage" ;;
+  production) SERVER_ENV_FILE="$ROOT_DIR/hmdm-server/.env.prod" ;;
+esac
+ANDROID_REQUEST_SIGNATURE="${ANDROID_REQUEST_SIGNATURE:-}"
+if [[ -z "$ANDROID_REQUEST_SIGNATURE" && -f "$SERVER_ENV_FILE" ]]; then
+  ANDROID_REQUEST_SIGNATURE="$(grep -E '^HASH_SECRET=' "$SERVER_ENV_FILE" | head -1 | cut -d= -f2- | tr -d '\r')"
+fi
+if [[ -z "$ANDROID_REQUEST_SIGNATURE" ]]; then
+  echo "ERROR: could not resolve HASH_SECRET for $BUILD_TYPE from $SERVER_ENV_FILE — MQTT auth would fail."
+  exit 1
+fi
+
 normalize_windows_path_for_unix() {
   local p="$1"
   if printf '%s' "$p" | grep -Eq '^[A-Za-z]:\\'; then
@@ -167,11 +190,15 @@ bump_android_version
 echo "Android BUILD_TYPE: $BUILD_TYPE"
 echo "Android BASE_URL: $ANDROID_BASE_URL"
 echo "Android SECONDARY_BASE_URL: $ANDROID_SECONDARY_BASE_URL"
+echo "Android MQTT_HOST: $ANDROID_MQTT_HOST"
+echo "Android REQUEST_SIGNATURE: (from ${SERVER_ENV_FILE##*/}, ${#ANDROID_REQUEST_SIGNATURE} chars)"
 
 chmod +x "$ANDROID_DIR/gradlew"
 (
   cd "$ANDROID_DIR"
-  ./gradlew -PmdmBaseUrl="$ANDROID_BASE_URL" -PmdmSecondaryBaseUrl="$ANDROID_SECONDARY_BASE_URL" bundleEnterpriseRelease assembleEnterpriseRelease --no-daemon
+  ./gradlew -PmdmBaseUrl="$ANDROID_BASE_URL" -PmdmSecondaryBaseUrl="$ANDROID_SECONDARY_BASE_URL" \
+    -PmdmMqttHost="$ANDROID_MQTT_HOST" -PmdmRequestSignature="$ANDROID_REQUEST_SIGNATURE" \
+    bundleEnterpriseRelease assembleEnterpriseRelease --no-daemon
 )
 
 APK_PATH="$ANDROID_DIR/app/build/outputs/apk/enterprise/release/app-enterprise-release.apk"

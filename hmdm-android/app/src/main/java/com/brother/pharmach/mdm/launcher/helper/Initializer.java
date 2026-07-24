@@ -35,6 +35,7 @@ import com.brother.pharmach.mdm.launcher.task.SendDeviceInfoTask;
 import com.brother.pharmach.mdm.launcher.util.ConnectionWaiter;
 import com.brother.pharmach.mdm.launcher.util.DeviceInfoProvider;
 import com.brother.pharmach.mdm.launcher.util.InstallUtils;
+import com.brother.pharmach.mdm.launcher.util.PushNotificationMqttWrapper;
 import com.brother.pharmach.mdm.launcher.util.LegacyUtils;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 import com.brother.pharmach.mdm.launcher.util.Utils;
@@ -162,7 +163,8 @@ public class Initializer {
                     Intent serviceStartIntent = new Intent();
                     serviceStartIntent.setClassName(context, MqttAndroidClient.SERVICE_NAME);
                     serviceStartIntent.putExtra(MqttAndroidClient.EXTRA_START_AT_BOOT, true);
-                    serviceStartIntent.putExtra(MqttAndroidClient.EXTRA_DOMAIN, url.getHost());
+                    serviceStartIntent.putExtra(MqttAndroidClient.EXTRA_DOMAIN,
+                            PushNotificationMqttWrapper.resolveMqttHost(url.getHost()));
                     serviceStartIntent.putExtra(MqttAndroidClient.EXTRA_KEEPALIVE_TIME, keepaliveTime);
                     serviceStartIntent.putExtra(MqttAndroidClient.EXTRA_PUSH_OPTIONS, pushOptions);
                     serviceStartIntent.putExtra(MqttAndroidClient.EXTRA_DEVICE_ID, settingsHelper.getDeviceId());

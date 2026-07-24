@@ -50,6 +50,14 @@ if (!appVersionName) {
 
 def mdmBaseUrl = (project.findProperty("mdmBaseUrl") ?: "https://brothers-mdm.com").toString().trim()
 def mdmSecondaryBaseUrl = (project.findProperty("mdmSecondaryBaseUrl") ?: mdmBaseUrl).toString().trim()
+// Dedicated host for the MQTT (Push) broker. The web panel is behind Cloudflare, which does NOT
+// proxy the raw MQTT TCP port, so the device must reach the broker directly (bypassing Cloudflare).
+// Set this to a DNS-only record pointing at the origin (e.g. "mqtt.brothers-mdm.com") or the raw
+// origin IP. Leave empty to fall back to the web panel host (only correct when NOT behind Cloudflare).
+def mdmMqttHost = (project.findProperty("mdmMqttHost") ?: "").toString().trim()
+// Shared secret (must equal the server HASH_SECRET). Default keeps the old literal; override with
+// -PmdmRequestSignature=... or a gitignored gradle.properties so the real secret is not committed.
+def mdmRequestSignature = (project.findProperty("mdmRequestSignature") ?: "changeme-C3z9vi54").toString().trim()
 
 android {
     compileSdkVersion 35
@@ -86,6 +94,8 @@ android {
         buildConfigField("Boolean", "ENABLE_PUSH", "true")
         // MQTT port for Push notifications
         buildConfigField("Integer", "MQTT_PORT", "31000")
+        // MQTT broker host (see mdmMqttHost above). Empty => fall back to the web panel host.
+        buildConfigField("String", "MQTT_HOST", "\"${mdmMqttHost}\"")
         // Set this parameter to true if you'll grant system privileges to Brother Pharmamach MDM (signing it by system keys).
         // This will enable silent installation and the launcher will try to get the device owner rights by updating system files.
         // This may be useful, for example, when your device doesn't have QR code provisioning capability.
@@ -93,8 +103,11 @@ android {
         // Set this parameter to true if you'd like to trust every certificate, for example, self-signed
         // Not recommended for security purposes!
         buildConfigField("Boolean", "TRUST_ANY_CERTIFICATE", "false")
-        // A shared secret to sign server config requests and MQTT (Push) messages
-        buildConfigField("String", "REQUEST_SIGNATURE", "\"changeme-C3z9vi54\"")
+        // A shared secret to sign server config requests and MQTT (Push) messages.
+        // MUST equal the server's HASH_SECRET for MQTT broker auth (MQTT_AUTH=1) to succeed.
+        // Override at build time (e.g. -PmdmRequestSignature=... or in a gitignored gradle.properties)
+        // so the real secret is never committed to git.
+        buildConfigField("String", "REQUEST_SIGNATURE", "\"${mdmRequestSignature}\"")
         // Set this parameter to true if the server signature should be checked
         // (additional protection against Man-In-The-Middle attacks)
         buildConfigField("Boolean", "CHECK_SIGNATURE", "false")

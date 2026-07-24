@@ -377,13 +377,18 @@ public class DeviceInfoResource {
                 final String requestId = UUID.randomUUID().toString();
                 final long requestedAt = System.currentTimeMillis();
 
-                // Send dedicated urgent GPS refresh signal first; keep config update as fallback for older clients.
+                // Send the dedicated urgent GPS refresh signal. The current client handles
+                // fetchGpsUrgent natively, so we no longer also fire a configUpdated push here:
+                // during live tracking this endpoint is hit every ~15-60s, and the extra
+                // configUpdated forced a full config re-sync AND a redundant second GPS capture on
+                // the device every time, doubling push volume and spamming the queue for no gain.
+                // (Re-enable notifyDeviceOnSettingUpdate below only if an old client that ignores
+                // fetchGpsUrgent is ever reintroduced.)
                 PushMessage urgentMessage = new PushMessage();
                 urgentMessage.setDeviceId(device.getId());
                 urgentMessage.setMessageType(PushMessage.TYPE_FETCH_GPS_URGENT);
                 urgentMessage.setPayload("{\"requestId\":\"" + requestId + "\",\"requestedAt\":" + requestedAt + "}");
                 this.pushService.send(urgentMessage);
-                this.pushService.notifyDeviceOnSettingUpdate(device.getId());
 
                 Map<String, Object> responseData = new HashMap<>();
                 responseData.put("requestId", requestId);

@@ -91,9 +91,27 @@ public class PushNotificationMqttWrapper {
         return instance;
     }
 
+    /**
+     * Returns the dedicated MQTT broker host ({@link BuildConfig#MQTT_HOST}) when configured,
+     * otherwise the supplied fallback (the web panel host). Needed because the panel sits behind
+     * Cloudflare, which cannot carry the raw MQTT TCP port to the origin broker.
+     */
+    public static String resolveMqttHost(String fallbackHost) {
+        String mqttHost = BuildConfig.MQTT_HOST;
+        if (mqttHost != null && !mqttHost.trim().isEmpty()) {
+            return mqttHost.trim();
+        }
+        return fallbackHost;
+    }
+
     public void connect(final Context context, String host, int port, String pushType, int keepaliveTime,
                         final String deviceId, final Runnable onSuccess, final Runnable onFailure) {
         this.context = context;
+        // The web panel host is served through Cloudflare, which does not proxy the raw MQTT TCP
+        // port. When a dedicated MQTT_HOST is configured (a DNS-only record / origin IP that
+        // bypasses Cloudflare), always use it instead of whatever host the caller passed. This is
+        // the single choke point for every connect path (worker, ConfigUpdater, reconnect worker).
+        final String mqttHost = resolveMqttHost(host);
         cancelReconnectionAfterFailure(context);
         if (client != null && client.isConnected()) {
             if (onSuccess != null) {
@@ -119,7 +137,7 @@ public class PushNotificationMqttWrapper {
         }
         connectOptions.setUserName("hmdm");
         connectOptions.setPassword(CryptoHelper.getSHA1String("hmdm" + BuildConfig.REQUEST_SIGNATURE).toCharArray());
-        String serverUri = "tcp://" + host + ":" + port;
+        String serverUri = "tcp://" + mqttHost + ":" + port;
 
         if (client != null) {
             // Here we go after reconnection.
@@ -174,7 +192,7 @@ public class PushNotificationMqttWrapper {
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
-                scheduleReconnectionAfterFailure(context, host, port, pushType, keepaliveTime, deviceId);
+                scheduleReconnectionAfterFailure(context, mqttHost, port, pushType, keepaliveTime, deviceId);
                 if (onFailure != null) {
                     handler.post(onFailure);
                 }
@@ -193,7 +211,7 @@ public class PushNotificationMqttWrapper {
                     e.printStackTrace();
                     connectHangupMonitorHandler.removeCallbacksAndMessages(null);
                     RemoteLogger.log(context, Const.LOG_WARN, "MQTT connection failure");
-                    scheduleReconnectionAfterFailure(context, host, port, pushType, keepaliveTime, deviceId);
+                    scheduleReconnectionAfterFailure(context, mqttHost, port, pushType, keepaliveTime, deviceId);
                     // We fail here but Mqtt client tries to reconnect and we need to subscribe
                     // after connection succeeds. This is done in the extended callback client.
                     // The flag needProcessConnectExtended prevents duplicate subscribe after
