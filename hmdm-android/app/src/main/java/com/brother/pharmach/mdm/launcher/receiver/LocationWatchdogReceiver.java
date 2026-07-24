@@ -32,9 +32,15 @@ public class LocationWatchdogReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (!ACTION.equals(intent.getAction())) return;
 
+        // DISABLED (simplified tracking): the 15-min watchdog is turned off. It is NOT rescheduled
+        // here, so a previously-armed alarm dies after this one final fire. cancel() is also called
+        // from Initializer to proactively clear any armed alarm on already-updated devices. The FGS
+        // no longer needs this keep-alive: it is (re)started on demand by the 20-min PeriodicGpsWake
+        // and by Get-Latest-GPS / Live-Tracking pushes.
         RemoteLogger.log(context, Const.LOG_INFO,
-                "LocationWatchdog: heartbeat — ensuring LocationForegroundService is alive");
-
+                "LocationWatchdog: disabled — not rescheduling (chain ends)");
+        cancel(context);
+        /*
         // Always reschedule next alarm first so the chain survives even if FGS start fails.
         schedule(context);
 
@@ -44,12 +50,8 @@ public class LocationWatchdogReceiver extends BroadcastReceiver {
         com.brother.pharmach.mdm.launcher.util.DozeExitHelper.escapeDozeIfNeeded(
                 context.getApplicationContext(), "watchdog15min");
 
-        // Reverted from the LocationService experiment back to LocationForegroundService —
-        // see LocationService.java for why the simplified version was rolled back.
-        // LocationService.start(context.getApplicationContext());
-        // start() is idempotent: if FGS is already running, onStartCommand fires with no
-        // action and returns immediately. If it was killed, it restarts from scratch.
         LocationForegroundService.start(context.getApplicationContext());
+        */
     }
 
     /** Arms the next watchdog alarm. Safe to call multiple times — UPDATE_CURRENT deduplicates. */

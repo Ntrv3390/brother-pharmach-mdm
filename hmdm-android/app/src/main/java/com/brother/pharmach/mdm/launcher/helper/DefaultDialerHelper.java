@@ -329,6 +329,38 @@ public final class DefaultDialerHelper {
     }
 
     /**
+     * Launch the system default-dialer picker from a non-Activity context (used by the overlay gate,
+     * which has no Activity to receive a result). We detect success afterwards by polling
+     * {@link #isDefaultDialer}. Adds NEW_TASK because the caller is not an Activity.
+     */
+    public static void requestDefaultDialerFromContext(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || isDefaultDialer(context)) {
+            return;
+        }
+        try {
+            Intent intent = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                RoleManager rm = (RoleManager) context.getSystemService(Context.ROLE_SERVICE);
+                if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_DIALER)) {
+                    intent = rm.createRequestRoleIntent(RoleManager.ROLE_DIALER);
+                }
+            }
+            if (intent == null) {
+                intent = new Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER);
+                intent.putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME,
+                        context.getPackageName());
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+            RemoteLogger.log(context, Const.LOG_INFO, "Default-dialer picker launched from gate overlay");
+        } catch (Exception e) {
+            Log.w(TAG, "requestDefaultDialerFromContext failed: " + e.getMessage());
+            RemoteLogger.log(context, Const.LOG_WARN,
+                    "Gate: default-dialer picker launch failed: " + e.getMessage());
+        }
+    }
+
+    /**
      * Interactive request (the reliable cross-OEM path when silent set is refused). Launches the
      * system role dialog; the result arrives in the activity's onActivityResult with requestCode.
      */

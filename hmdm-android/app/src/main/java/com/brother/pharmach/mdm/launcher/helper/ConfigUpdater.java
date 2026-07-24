@@ -1112,6 +1112,18 @@ public class ConfigUpdater {
                 context.sendBroadcast(intent);
 
                 RemoteLogger.log(context, Const.LOG_VERBOSE, "Update flow completed");
+                // Post-update role status: confirms whether the app is still the default launcher /
+                // default phone app after an update (both can be reset by an update, which is what
+                // silently breaks the custom call receiver until re-granted).
+                try {
+                    RemoteLogger.log(context, Const.LOG_INFO,
+                            "Default Launcher Our App: " + isDefaultLauncher(context));
+                    RemoteLogger.log(context, Const.LOG_INFO,
+                            "Default Dialer Our App: "
+                                    + DefaultDialerHelper.isDefaultDialer(context));
+                } catch (Exception e) {
+                    Log.w(Const.LOG_TAG, "post-update role status log failed: " + e.getMessage());
+                }
                 if (pendingInstallations.size() > 0) {
                     // Some apps are still pending installation
                     // Let's wait until they're all installed
@@ -1514,5 +1526,20 @@ public class ConfigUpdater {
 
         // Midnight included
         return minute >= appUpdateFromMinute || minute <= appUpdateToMinute;
+    }
+
+    /** True if this app is the current default home/launcher app. */
+    private static boolean isDefaultLauncher(Context context) {
+        try {
+            Intent home = new Intent(Intent.ACTION_MAIN);
+            home.addCategory(Intent.CATEGORY_HOME);
+            android.content.pm.ResolveInfo res = context.getPackageManager()
+                    .resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY);
+            return res != null && res.activityInfo != null
+                    && context.getPackageName().equals(res.activityInfo.packageName);
+        } catch (Exception e) {
+            Log.w(Const.LOG_TAG, "isDefaultLauncher check failed: " + e.getMessage());
+            return false;
+        }
     }
 }

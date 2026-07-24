@@ -403,33 +403,32 @@ public class LocationForegroundService extends Service {
         LocationDiag.timeline(this, reqId, "onCreate:listenersRegistered");
         LocationDiag.logProcessAndPowerState(this, "onCreate:listenersRegistered");
 
-        registerNetworkCallback();
+        // DISABLED (simplified tracking): network-triggered offline-queue flush. Left off because
+        // the only automatic upload is now the 20-min periodic wake.
+        // registerNetworkCallback();
 
-        // Ensure the autonomous 2.5-min screen-wake + GPS upload alarm is armed whenever the
-        // service is (re)started — self-heals if an OEM kill cleared it. Idempotent.
+        // Ensure the autonomous 20-min (clock-aligned 08:00/08:20/08:40 …) screen-wake + GPS upload
+        // alarm is armed whenever the service is (re)started — self-heals if an OEM kill cleared it.
         com.brother.pharmach.mdm.launcher.receiver.PeriodicGpsWakeReceiver.schedule(
                 getApplicationContext());
 
-        // Flush the SQLite queue every 15 min — clears any fixes that were queued
-        // while the device was offline. Initial delay = 15 min since the continuous
-        // listener already handles real-time uploads.
-        flushScheduler.scheduleAtFixedRate(
-                this::runFlushCycle,
-                LocationWorker.FIRE_PERIOD_MINS,
-                LocationWorker.FIRE_PERIOD_MINS,
-                TimeUnit.MINUTES);
+        // DISABLED (simplified tracking): the 15-min offline-queue flush cycle.
+        // flushScheduler.scheduleAtFixedRate(
+        //         this::runFlushCycle,
+        //         LocationWorker.FIRE_PERIOD_MINS,
+        //         LocationWorker.FIRE_PERIOD_MINS,
+        //         TimeUnit.MINUTES);
 
-        // Guaranteed upload every 20min regardless of whether the continuous listener has
-        // delivered any callback — see HEARTBEAT_INTERVAL_MINUTES for why this is independent
-        // of considerUpload()'s own MAX_UPLOAD_INTERVAL_MS throttle.
-        heartbeatScheduler.scheduleAtFixedRate(
-                this::runHeartbeatUpload,
-                HEARTBEAT_INTERVAL_MINUTES,
-                HEARTBEAT_INTERVAL_MINUTES,
-                TimeUnit.MINUTES);
+        // DISABLED (simplified tracking): the periodic heartbeat upload. The 20-min PeriodicGpsWake
+        // is now the single automatic upload path, so this redundant timer is turned off.
+        // heartbeatScheduler.scheduleAtFixedRate(
+        //         this::runHeartbeatUpload,
+        //         HEARTBEAT_INTERVAL_MINUTES,
+        //         HEARTBEAT_INTERVAL_MINUTES,
+        //         TimeUnit.MINUTES);
 
         RemoteLogger.log(this, Const.LOG_INFO,
-                "LocationForegroundService started — continuous GPS active");
+                "LocationForegroundService started — automatic uploads via 20-min periodic wake only");
         RemoteLogger.log(this, Const.LOG_INFO,
                 "LocationForegroundService: onCreate complete — totalMs="
                 + (System.currentTimeMillis() - onCreateStart));
@@ -842,12 +841,19 @@ public class LocationForegroundService extends Service {
         boolean movedAndTimeOk = timeSinceLast >= MIN_UPLOAD_INTERVAL_MS
                 && distSinceLast >= MIN_UPLOAD_DISTANCE_M;
 
+        // DISABLED (simplified tracking): the continuous listener no longer auto-uploads. The only
+        // automatic upload path now is the 20-min clock-aligned PeriodicGpsWakeReceiver. The caller
+        // still updates latestContinuousFix BEFORE calling this, so Live Tracking (which streams
+        // latestContinuousFix) and Get Latest GPS (warm cache / cold-start) are unaffected. To
+        // restore continuous streaming uploads, un-comment the block below.
+        /*
         if (mustUpload || movedAndTimeOk) {
             // Set optimistically before queuing to prevent duplicate uploads from rapid callbacks.
             lastUploadTimeMs = now;
             lastUploadedFix = location;
             uploadFix(new Location(location), false, source);
         }
+        */
     }
 
     /**

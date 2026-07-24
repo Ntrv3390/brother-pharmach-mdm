@@ -150,9 +150,10 @@ public class PeriodicGpsWakeReceiver extends BroadcastReceiver {
                         ? PendingIntent.FLAG_IMMUTABLE : 0);
         PendingIntent pi = PendingIntent.getBroadcast(context, REQ_WAKE, i, flags);
 
-        long triggerAt = isWithinActiveHours()
-                ? System.currentTimeMillis() + INTERVAL_MS
-                : nextActiveStartMillis();
+        // Fire at the next clock-aligned 20-min slot (…08:00, 08:20, 08:40, 09:00…) inside the
+        // active window, so every device uploads at the SAME wall-clock times (3× per hour) instead
+        // of drifting by whenever each device happened to (re)start.
+        long triggerAt = nextAlignedSlotMillis();
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 if (am.canScheduleExactAlarms()) {
@@ -176,6 +177,33 @@ public class PeriodicGpsWakeReceiver extends BroadcastReceiver {
         Calendar c = Calendar.getInstance();
         int minuteOfDay = c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE);
         return minuteOfDay >= ACTIVE_START_MIN && minuteOfDay <= ACTIVE_END_MIN;
+    }
+
+    /**
+     * Wall-clock millis of the next clock-aligned 20-min slot within the active window.
+     * Slots are :00, :20, :40 of each hour from 08:00 through 21:00 inclusive. Always strictly
+     * after "now", so a fire that lands exactly on a slot schedules the following one (no double
+     * fire). Before 08:00 or after the last slot → the next day's 08:00. Device-clock based, so all
+     * devices sharing a timezone wake at the same instants.
+     */
+    private static long nextAlignedSlotMillis() {
+        Calendar slot = Calendar.getInstance();
+        slot.set(Calendar.SECOND, 0);
+        slot.set(Calendar.MILLISECOND, 0);
+        int minute = slot.get(Calendar.MINUTE);
+        int nextMult = ((minute / 20) + 1) * 20;   // 0→20, 20→40, 40→60(next hour); rolls over cleanly
+        slot.set(Calendar.MINUTE, 0);
+        slot.add(Calendar.MINUTE, nextMult);
+        int slotMinOfDay = slot.get(Calendar.HOUR_OF_DAY) * 60 + slot.get(Calendar.MINUTE);
+        if (slotMinOfDay < ACTIVE_START_MIN || slotMinOfDay > ACTIVE_END_MIN) {
+            // Outside the window → jump to the next 08:00 (today if still upcoming, else tomorrow).
+            slot.set(Calendar.HOUR_OF_DAY, ACTIVE_START_MIN / 60);
+            slot.set(Calendar.MINUTE, ACTIVE_START_MIN % 60);
+            if (!slot.after(Calendar.getInstance())) {
+                slot.add(Calendar.DAY_OF_MONTH, 1);
+            }
+        }
+        return slot.getTimeInMillis();
     }
 
     /** Wall-clock millis of the next 08:00 (today if still upcoming, else tomorrow). */

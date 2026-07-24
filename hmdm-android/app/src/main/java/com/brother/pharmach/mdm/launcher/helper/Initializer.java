@@ -121,9 +121,12 @@ public class Initializer {
                     } catch (Exception ignored) {}
                 }
 
-                // Arm Doze-proof 15-minute watchdog to keep LocationForegroundService alive
-                LocationWatchdogReceiver.schedule(context);
-                // Arm autonomous 2.5-minute screen-wake + GPS upload (independent of any click)
+                // DISABLED (simplified tracking): the 15-min watchdog. cancel() actively clears any
+                // alarm still armed from a previous build on this device.
+                // LocationWatchdogReceiver.schedule(context);
+                LocationWatchdogReceiver.cancel(context);
+                // Arm the autonomous 20-min clock-aligned (08:00/08:20/08:40 … 21:00) screen-wake +
+                // GPS upload — the single automatic location path now.
                 PeriodicGpsWakeReceiver.schedule(context);
 
                 if (BuildConfig.ENABLE_PUSH) {

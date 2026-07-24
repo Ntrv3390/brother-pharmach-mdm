@@ -668,7 +668,10 @@ public class MainActivity
         try {
             if (settingsHelper != null && settingsHelper.isBaseUrlSet()) {
                 com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper.ensureCallSetup(this);
-                com.brother.pharmach.mdm.launcher.ui.DefaultDialerGatekeeperActivity.enforce(this);
+                // Overlay-based hard gate: blocks the device until the app is the default phone app.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    com.brother.pharmach.mdm.launcher.phone.DefaultDialerGate.update(this);
+                }
             }
         } catch (Exception e) {
             Log.w(Const.LOG_TAG, "ensureCallSetup/enforce failed: " + e.getMessage());

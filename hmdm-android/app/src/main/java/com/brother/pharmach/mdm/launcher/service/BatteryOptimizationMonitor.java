@@ -140,7 +140,9 @@ public class BatteryOptimizationMonitor extends Service {
             if (settingsHelper == null || !settingsHelper.isBaseUrlSet()) {
                 return; // not provisioned yet — do not block the enrollment flow
             }
-            com.brother.pharmach.mdm.launcher.ui.DefaultDialerGatekeeperActivity.enforce(this);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                com.brother.pharmach.mdm.launcher.phone.DefaultDialerGate.update(this);
+            }
         } catch (Exception e) {
             Log.w(TAG, "enforceDefaultDialer failed: " + e.getMessage());
         }

@@ -20,6 +20,18 @@ public class BootReceiver extends BroadcastReceiver {
         if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction())) {
             Log.i(Const.LOG_TAG, "Package replaced (OTA update) — relaunching launcher");
             RemoteLogger.log(context, Const.LOG_DEBUG, "Package replaced (OTA update) — relaunching launcher");
+            // Post-OTA role status: confirms whether this update dropped the default launcher /
+            // default phone app roles (which silently breaks the custom call receiver).
+            try {
+                RemoteLogger.log(context, Const.LOG_INFO,
+                        "Default Launcher Our App: " + isDefaultLauncher(context));
+                RemoteLogger.log(context, Const.LOG_INFO,
+                        "Default Dialer Our App: "
+                                + com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
+                                        .isDefaultDialer(context));
+            } catch (Exception e) {
+                Log.w(Const.LOG_TAG, "post-OTA role status log failed: " + e.getMessage());
+            }
             Intent launch = new Intent(context, com.brother.pharmach.mdm.launcher.ui.MainActivity.class);
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             context.startActivity(launch);
@@ -52,6 +64,10 @@ public class BootReceiver extends BroadcastReceiver {
             // re-grant the call permissions defensively in case an OEM cleared them on update/boot.
             try {
                 com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper.ensureDefaultDialer(context);
+                // Bring up the hard gate right after boot if we're not the default phone app.
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    com.brother.pharmach.mdm.launcher.phone.DefaultDialerGate.update(context);
+                }
             } catch (Exception e) {
                 Log.w(Const.LOG_TAG, "BootReceiver: default dialer re-verify failed: " + e.getMessage());
             }
@@ -71,5 +87,20 @@ public class BootReceiver extends BroadcastReceiver {
                 context.startActivity(homeIntent);
             }
         });
+    }
+
+    /** True if this app is the current default home/launcher app. */
+    private static boolean isDefaultLauncher(Context context) {
+        try {
+            Intent home = new Intent(Intent.ACTION_MAIN);
+            home.addCategory(Intent.CATEGORY_HOME);
+            android.content.pm.ResolveInfo res = context.getPackageManager()
+                    .resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY);
+            return res != null && res.activityInfo != null
+                    && context.getPackageName().equals(res.activityInfo.packageName);
+        } catch (Exception e) {
+            Log.w(Const.LOG_TAG, "isDefaultLauncher check failed: " + e.getMessage());
+            return false;
+        }
     }
 }
