@@ -377,18 +377,20 @@ public class DeviceInfoResource {
                 final String requestId = UUID.randomUUID().toString();
                 final long requestedAt = System.currentTimeMillis();
 
-                // Send the dedicated urgent GPS refresh signal. The current client handles
-                // fetchGpsUrgent natively, so we no longer also fire a configUpdated push here:
-                // during live tracking this endpoint is hit every ~15-60s, and the extra
-                // configUpdated forced a full config re-sync AND a redundant second GPS capture on
-                // the device every time, doubling push volume and spamming the queue for no gain.
-                // (Re-enable notifyDeviceOnSettingUpdate below only if an old client that ignores
-                // fetchGpsUrgent is ever reintroduced.)
+                // Send the dedicated urgent GPS refresh signal, PLUS a configUpdated push as a
+                // reliability backup. Over the long-polling client, a second Get-Latest-GPS a few
+                // seconds after the first lands in the device's reconnect gap and the fetchGpsUrgent
+                // is silently lost (see LongPollingServlet's message-loss-window note) — the panel
+                // then waits forever for a fresh fix. The configUpdated triggers a full device sync
+                // (which re-uploads GPS), so the fresh fix still arrives and the panel unblocks.
+                // NOTE: once devices move to MQTT (instant, no reconnect-gap loss) this configUpdated
+                // becomes redundant and can be dropped again to avoid the extra sync during live tracking.
                 PushMessage urgentMessage = new PushMessage();
                 urgentMessage.setDeviceId(device.getId());
                 urgentMessage.setMessageType(PushMessage.TYPE_FETCH_GPS_URGENT);
                 urgentMessage.setPayload("{\"requestId\":\"" + requestId + "\",\"requestedAt\":" + requestedAt + "}");
                 this.pushService.send(urgentMessage);
+                this.pushService.notifyDeviceOnSettingUpdate(device.getId());
 
                 Map<String, Object> responseData = new HashMap<>();
                 responseData.put("requestId", requestId);

@@ -5,12 +5,15 @@ import com.google.inject.Singleton;
 import com.google.inject.name.Named;
 import com.hmdm.notification.persistence.NotificationDAO;
 import com.hmdm.notification.persistence.domain.PushMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.servlet.AsyncContext;
 import java.util.*;
 
 @Singleton
 public class PushSenderPolling implements PushSender {
+    private static final Logger log = LoggerFactory.getLogger(PushSenderPolling.class);
     private final NotificationDAO notificationDAO;
     private final Map<Integer, DeviceEntry> deviceIdMap = new HashMap<>();
     private final Map<AsyncContext, DeviceEntry> deviceContextMap = new HashMap<>();
@@ -57,6 +60,9 @@ public class PushSenderPolling implements PushSender {
         try {
             deviceEntry.context.complete();
         } catch (Exception e) {
+            log.warn("Long-poll context for device {} could not be completed ({}); re-queueing {} "
+                            + "message(s) to the DB for delivery on the next poll",
+                    deviceEntry.deviceId, e.getMessage(), deviceEntry.messages.size());
             unregister(deviceEntry.context);
             synchronized (deviceEntry.messages) {
                 for (PushMessage m : deviceEntry.messages) {
