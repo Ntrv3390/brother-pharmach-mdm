@@ -57,6 +57,9 @@ angular.module('headwind-kiosk')
                 headers: {'Content-Type': undefined},
                 transformRequest: angular.identity
             },
+            getBackupEmail: {url: 'rest/private/settings/db/backup-email', method: 'GET'},
+            saveBackupEmail: {url: 'rest/private/settings/db/backup-email', method: 'POST'},
+            exportDatabaseByEmail: {url: 'rest/private/settings/db/export-email', method: 'POST'},
         })
     })
     .factory('updatesService', function ($resource) {

@@ -2702,4 +2702,36 @@
         </sql>
     </changeSet>
 
+    <changeSet id="2026-07-24-backup-settings" author="antigravity" context="common">
+        <comment>Single-row table storing the destination email for scheduled/manual database backups and the last time a backup was emailed</comment>
+        <createTable tableName="backup_settings">
+            <column name="id" type="SERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="email" type="VARCHAR(255)"/>
+            <column name="last_sent_at" type="BIGINT"/>
+            <column name="updated_at" type="BIGINT"/>
+        </createTable>
+        <rollback>
+            DROP TABLE backup_settings;
+        </rollback>
+    </changeSet>
+
+    <!-- Fallback for environments where context="common" change sets are not executed -->
+    <changeSet id="2026-07-24-backup-settings-fallback" author="antigravity">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="backup_settings"/>
+            </not>
+        </preConditions>
+        <createTable tableName="backup_settings">
+            <column name="id" type="SERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="email" type="VARCHAR(255)"/>
+            <column name="last_sent_at" type="BIGINT"/>
+            <column name="updated_at" type="BIGINT"/>
+        </createTable>
+    </changeSet>
+
 </databaseChangeLog>

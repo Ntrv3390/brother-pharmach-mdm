@@ -1,0 +1,53 @@
+/*
+ *
+ * Headwind MDM: Open Source Android MDM Software
+ * https://h-mdm.com
+ *
+ * Copyright (C) 2019 Headwind Solutions LLC (http://h-sms.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+package com.hmdm.persistence.mapper;
+
+import com.hmdm.persistence.domain.BackupSettings;
+import org.apache.ibatis.annotations.Insert;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Result;
+import org.apache.ibatis.annotations.Results;
+import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
+
+public interface BackupSettingsMapper {
+
+    @Select("SELECT id, email, last_sent_at, updated_at FROM backup_settings ORDER BY id LIMIT 1")
+    @Results({
+            @Result(property = "id", column = "id"),
+            @Result(property = "email", column = "email"),
+            @Result(property = "lastSentAt", column = "last_sent_at"),
+            @Result(property = "updatedAt", column = "updated_at")
+    })
+    BackupSettings getConfig();
+
+    // The backup configuration is a single global row (id = 1).
+    @Insert("INSERT INTO backup_settings (id, email, updated_at) " +
+            "VALUES (1, #{email}, #{updatedAt}) " +
+            "ON CONFLICT (id) DO UPDATE SET " +
+            "email = EXCLUDED.email, " +
+            "updated_at = EXCLUDED.updated_at")
+    void saveConfig(BackupSettings settings);
+
+    @Update("UPDATE backup_settings SET last_sent_at = #{lastSentAt} WHERE id = 1")
+    void updateLastSent(@Param("lastSentAt") long lastSentAt);
+}

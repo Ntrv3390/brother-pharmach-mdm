@@ -342,14 +342,20 @@ public final class DefaultDialerHelper {
                 if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_DIALER)) {
                     Intent intent = rm.createRequestRoleIntent(RoleManager.ROLE_DIALER);
                     activity.startActivityForResult(intent, requestCode);
+                    RemoteLogger.log(activity, Const.LOG_INFO,
+                            "Default-dialer role picker shown (RoleManager.ROLE_DIALER)");
                     return;
                 }
+                RemoteLogger.log(activity, Const.LOG_WARN,
+                        "ROLE_DIALER not available via RoleManager — using legacy change-dialer intent");
             }
             // API 23-28
             Intent intent = new Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER);
             intent.putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME,
                     activity.getPackageName());
             activity.startActivityForResult(intent, requestCode);
+            RemoteLogger.log(activity, Const.LOG_INFO,
+                    "Default-dialer request shown (ACTION_CHANGE_DEFAULT_DIALER)");
         } catch (Exception e) {
             Log.w(TAG, "requestDefaultDialer failed: " + e.getMessage());
             RemoteLogger.log(activity, Const.LOG_WARN,

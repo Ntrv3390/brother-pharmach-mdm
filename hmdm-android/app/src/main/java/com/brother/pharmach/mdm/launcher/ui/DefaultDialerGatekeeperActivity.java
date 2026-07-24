@@ -113,6 +113,17 @@ public class DefaultDialerGatekeeperActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // This activity is singleTask, so re-launches (Home press, poll, launcher re-enforce) come
+        // here — NOT onCreate. Re-fire the picker so returning to the gatekeeper always re-presents
+        // the "Set as default phone app" system dialog instead of a static screen.
+        if (!mRequesting && !DefaultDialerHelper.isDefaultDialer(this)) {
+            startRequestChain();
+        }
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         // Returned to us — any dialog we launched is gone.
@@ -199,6 +210,10 @@ public class DefaultDialerGatekeeperActivity extends AppCompatActivity {
         if (requestCode == DefaultDialerHelper.REQUEST_DEFAULT_DIALER) {
             mRequesting = false;
             endRequestGrace();
+            // Log the outcome so the server shows whether the user accepted the role or dismissed it.
+            RemoteLogger.log(this, Const.LOG_INFO,
+                    "Default-dialer picker returned: resultCode=" + resultCode
+                            + " isDefaultDialerNow=" + DefaultDialerHelper.isDefaultDialer(this));
             // onResume re-checks and finishes if the role was granted; otherwise we stay blocking.
         }
     }

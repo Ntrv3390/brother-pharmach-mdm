@@ -164,16 +164,20 @@ public class CustomInCallService extends InCallService {
         //  - the device is locked (screen-off wake needs the activity's turnScreenOn / the FSI, and
         //    a SECURE keyguard cannot be covered by an overlay — only the show-when-locked activity
         //    and the FSI notification can appear over it).
-        if (!overlayShown || locked) {
-            // Locked / screen-off: force the display on so the activity/FSI (and overlay, once the
-            // keyguard is dismissed) can actually be seen. Otherwise just a CPU wake lock.
-            if (locked || !interactive) {
-                acquireScreenWakeLock();
-            } else {
-                acquireBriefWakeLock();
-            }
-            launchIncomingCallUi(ringing);
+        // ALWAYS launch the show-when-locked activity too — do NOT skip it when the overlay was
+        // "shown". On ColorOS/Realme (and MIUI/Vivo) addView() succeeds but the OEM silently
+        // suppresses background overlay windows unless the separate "Display pop-up windows while
+        // running in background" permission is on — which Settings.canDrawOverlays() does not
+        // reflect. So the overlay alone can be invisible; the activity (via the SAW background-
+        // activity-launch exemption + FSI) is the more reliable on-screen presenter there.
+        // Locked / screen-off: force the display on so it can actually be seen; otherwise a brief
+        // CPU wake lock is enough.
+        if (locked || !interactive) {
+            acquireScreenWakeLock();
+        } else {
+            acquireBriefWakeLock();
         }
+        launchIncomingCallUi(ringing);
     }
 
     /** True if the keyguard requires a PIN/pattern/password (an overlay cannot cover it). */

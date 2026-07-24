@@ -36,11 +36,15 @@ import javax.ws.rs.core.HttpHeaders;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataParam;
 
+import com.hmdm.persistence.BackupSettingsDAO;
 import com.hmdm.persistence.CustomerDAO;
 import com.hmdm.persistence.UnsecureDAO;
 import com.hmdm.persistence.UserRoleSettingsDAO;
+import com.hmdm.persistence.domain.BackupSettings;
 import com.hmdm.persistence.domain.UserRoleSettings;
 import com.hmdm.security.SecurityContext;
+import com.hmdm.service.DatabaseExportService;
+import com.hmdm.service.EmailService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.Authorization;
@@ -50,6 +54,7 @@ import com.hmdm.rest.json.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -58,6 +63,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,9 +76,15 @@ public class SettingsResource {
 
     private static final Logger log = LoggerFactory.getLogger(SettingsResource.class);
 
+    private static final java.util.regex.Pattern EMAIL_PATTERN =
+            java.util.regex.Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+
     private CommonDAO commonDAO;
     private UserRoleSettingsDAO userRoleSettingsDAO;
     private UnsecureDAO unsecureDAO;
+    private BackupSettingsDAO backupSettingsDAO;
+    private DatabaseExportService databaseExportService;
+    private EmailService emailService;
 
     /**
      * <p>A constructor required by Swagger.</p>
@@ -81,10 +93,15 @@ public class SettingsResource {
     }
 
     @Inject
-    public SettingsResource(CommonDAO commonDAO, UserRoleSettingsDAO userRoleSettingsDAO, UnsecureDAO unsecureDAO) {
+    public SettingsResource(CommonDAO commonDAO, UserRoleSettingsDAO userRoleSettingsDAO, UnsecureDAO unsecureDAO,
+                            BackupSettingsDAO backupSettingsDAO, DatabaseExportService databaseExportService,
+                            EmailService emailService) {
         this.commonDAO = commonDAO;
         this.userRoleSettingsDAO = userRoleSettingsDAO;
         this.unsecureDAO = unsecureDAO;
+        this.backupSettingsDAO = backupSettingsDAO;
+        this.databaseExportService = databaseExportService;
+        this.emailService = emailService;
     }
 
     // =================================================================================================================
@@ -255,101 +272,11 @@ public class SettingsResource {
             return javax.ws.rs.core.Response.status(403).build();
         }
         try {
-            String dbHost = getEnv("DB_HOST", "postgres");
-            String dbPort = getEnv("DB_PORT", "5432");
-            String dbName = getEnv("DB_NAME", "hmdm");
-            String dbUser = getEnv("DB_USER", "hmdm");
-            String dbPassword = getEnv("DB_PASSWORD", "hmdm");
-
-            // Log tables: export only last 1 hour of data (timestamps are epoch milliseconds)
-            Map<String, String> logTableFilters = new LinkedHashMap<>();
-            logTableFilters.put("plugin_audit_log",
-                    "createtime > EXTRACT(EPOCH FROM NOW())::BIGINT * 1000 - 3600000");
-            logTableFilters.put("plugin_devicelog_log",
-                    "createtime > EXTRACT(EPOCH FROM NOW())::BIGINT * 1000 - 3600000");
-
-            List<String> pgDumpArgs = new ArrayList<>(Arrays.asList(
-                    "pg_dump",
-                    "-h", dbHost,
-                    "-p", dbPort,
-                    "-U", dbUser,
-                    "--no-password",
-                    "-d", dbName,
-                    "--format=plain",
-                    "--encoding=UTF8"
-            ));
-            for (String table : logTableFilters.keySet()) {
-                pgDumpArgs.add("--exclude-table-data=" + table);
-            }
-
-            ProcessBuilder pb = new ProcessBuilder(pgDumpArgs);
-            pb.environment().put("PGPASSWORD", dbPassword);
-            pb.redirectErrorStream(false);
-
-            Process process = pb.start();
-
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            String filename = "brothers_mdm_backup_" + timestamp + ".sql";
+            byte[] dump = databaseExportService.generateSqlDump();
+            String filename = databaseExportService.buildFilename("sql");
 
             StreamingOutput stream = output -> {
-                // Stream full dump (log table schemas included, but their data excluded)
-                try (InputStream in = process.getInputStream()) {
-                    byte[] buffer = new byte[8192];
-                    int bytesRead;
-                    while ((bytesRead = in.read(buffer)) != -1) {
-                        output.write(buffer, 0, bytesRead);
-                    }
-                }
-                try {
-                    int exitCode = process.waitFor();
-                    if (exitCode != 0) {
-                        log.error("pg_dump exited with code: {}", exitCode);
-                    }
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    log.warn("pg_dump wait interrupted");
-                }
-
-                // Append last 1 hour of each log table as COPY statements
-                for (Map.Entry<String, String> entry : logTableFilters.entrySet()) {
-                    String table = entry.getKey();
-                    String filter = entry.getValue();
-
-                    String copyHeader = "\n-- Last 1 hour of " + table + "\n" +
-                            "COPY " + table + " FROM stdin;\n";
-                    output.write(copyHeader.getBytes(StandardCharsets.UTF_8));
-
-                    ProcessBuilder copyPb = new ProcessBuilder(
-                            "psql",
-                            "-h", dbHost,
-                            "-p", dbPort,
-                            "-U", dbUser,
-                            "--no-password",
-                            "-d", dbName,
-                            "-c", "COPY (SELECT * FROM " + table + " WHERE " + filter + ") TO STDOUT"
-                    );
-                    copyPb.environment().put("PGPASSWORD", dbPassword);
-                    copyPb.redirectErrorStream(false);
-
-                    Process copyProcess = copyPb.start();
-                    try (InputStream copyIn = copyProcess.getInputStream()) {
-                        byte[] buffer = new byte[8192];
-                        int bytesRead;
-                        while ((bytesRead = copyIn.read(buffer)) != -1) {
-                            output.write(buffer, 0, bytesRead);
-                        }
-                    }
-                    try {
-                        int exitCode = copyProcess.waitFor();
-                        if (exitCode != 0) {
-                            log.warn("psql COPY for {} exited with code: {}", table, exitCode);
-                        }
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                    }
-
-                    output.write("\\.\n".getBytes(StandardCharsets.UTF_8));
-                }
+                output.write(dump);
                 output.flush();
             };
 
@@ -362,6 +289,119 @@ public class SettingsResource {
             log.error("Unexpected error during database export", e);
             return javax.ws.rs.core.Response.serverError().build();
         }
+    }
+
+    // =================================================================================================================
+    @ApiOperation(
+            value = "Get backup email",
+            notes = "Gets the destination email configured for scheduled/manual database backups"
+    )
+    @GET
+    @Path("/db/backup-email")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getBackupEmail() {
+        if (!SecurityContext.get().hasPermission("settings")) {
+            return Response.PERMISSION_DENIED();
+        }
+        try {
+            BackupSettings config = backupSettingsDAO.getConfig();
+            Map<String, Object> result = new HashMap<>();
+            result.put("email", config == null ? "" : (config.getEmail() == null ? "" : config.getEmail()));
+            result.put("smtpConfigured", emailService.isConfigured());
+            return Response.OK(result);
+        } catch (Exception e) {
+            log.error("Unexpected error when getting the backup email", e);
+            return Response.INTERNAL_ERROR();
+        }
+    }
+
+    // =================================================================================================================
+    @ApiOperation(
+            value = "Save backup email",
+            notes = "Creates or updates the destination email for database backups"
+    )
+    @POST
+    @Path("/db/backup-email")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response saveBackupEmail(BackupSettings request) {
+        if (!SecurityContext.get().hasPermission("settings")) {
+            return Response.PERMISSION_DENIED();
+        }
+        try {
+            String email = request == null || request.getEmail() == null ? "" : request.getEmail().trim();
+            if (!email.isEmpty() && !EMAIL_PATTERN.matcher(email).matches()) {
+                return Response.ERROR("error.backup.email.invalid");
+            }
+            backupSettingsDAO.saveEmail(email, System.currentTimeMillis());
+            log.info("Backup email updated to '{}' by user {}", email, SecurityContext.get().getCurrentUserName());
+            return Response.OK();
+        } catch (Exception e) {
+            log.error("Unexpected error when saving the backup email", e);
+            return Response.INTERNAL_ERROR();
+        }
+    }
+
+    // =================================================================================================================
+    @ApiOperation(
+            value = "Email a database backup",
+            notes = "Generates a database dump and emails it (gzipped) to the configured backup address"
+    )
+    @POST
+    @Path("/db/export-email")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response exportDatabaseByEmail() {
+        if (!SecurityContext.get().hasPermission("settings")) {
+            return Response.PERMISSION_DENIED();
+        }
+        try {
+            String email = backupSettingsDAO.getEmail();
+            Map<String, Object> result = new HashMap<>();
+
+            // No destination email configured -> nothing to send
+            if (email == null || email.trim().isEmpty()) {
+                result.put("result", "no_email");
+                return Response.OK(result);
+            }
+            result.put("email", email);
+
+            // Email configured but SMTP is not -> cannot send
+            if (!emailService.isConfigured()) {
+                result.put("result", "smtp_not_configured");
+                return Response.OK(result);
+            }
+
+            boolean sent = sendBackupEmail(email);
+            if (sent) {
+                backupSettingsDAO.updateLastSent(System.currentTimeMillis());
+                result.put("result", "sent");
+            } else {
+                result.put("result", "failed");
+            }
+            return Response.OK(result);
+        } catch (Exception e) {
+            log.error("Unexpected error while emailing the database backup", e);
+            Map<String, Object> result = new HashMap<>();
+            result.put("result", "failed");
+            return Response.OK(result);
+        }
+    }
+
+    /**
+     * <p>Generates the gzipped dump and emails it to the given address. Returns {@code true} on success.</p>
+     */
+    private boolean sendBackupEmail(String email) throws Exception {
+        byte[] dump = databaseExportService.generateSqlDump();
+        byte[] gzipped = databaseExportService.gzip(dump);
+        String filename = databaseExportService.buildFilename("sql.gz");
+
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        String subject = "Headwind MDM database backup - " + timestamp;
+        String body = "<p>Attached is the Headwind MDM database backup generated on " + timestamp + ".</p>" +
+                "<p>The dump is gzip-compressed (" + (gzipped.length / 1024) + " KB). " +
+                "Rename to <code>.sql</code> after decompressing to restore it.</p>";
+
+        return emailService.sendEmailWithAttachment(email, subject, body, gzipped, filename, "application/gzip");
     }
 
     // =================================================================================================================

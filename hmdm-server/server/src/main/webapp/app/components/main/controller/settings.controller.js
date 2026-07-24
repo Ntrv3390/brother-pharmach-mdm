@@ -299,6 +299,72 @@ angular.module('headwind-kiosk')
             fileName: null
         };
 
+        // Destination email for scheduled/manual database backups
+        $scope.backupEmail = {
+            value: '',
+            saved: '',
+            smtpConfigured: false,
+            saving: false
+        };
+
+        // Lightweight auto-dismissing toast for backup email actions
+        $scope.backupToast = {show: false, type: 'success', message: ''};
+        var backupToastTimer = null;
+        var showBackupToast = function (type, message) {
+            $scope.backupToast = {show: true, type: type, message: message};
+            if (backupToastTimer) {
+                $timeout.cancel(backupToastTimer);
+            }
+            backupToastTimer = $timeout(function () {
+                $scope.backupToast.show = false;
+            }, 5000);
+        };
+
+        $scope.loadBackupEmail = function () {
+            settingsService.getBackupEmail(function (response) {
+                if (response.status === 'OK' && response.data) {
+                    $scope.backupEmail.value = response.data.email || '';
+                    $scope.backupEmail.saved = response.data.email || '';
+                    $scope.backupEmail.smtpConfigured = !!response.data.smtpConfigured;
+                }
+            });
+        };
+
+        $scope.saveBackupEmail = function () {
+            $scope.backupEmail.saving = true;
+            settingsService.saveBackupEmail({email: $scope.backupEmail.value || ''}, function (response) {
+                $scope.backupEmail.saving = false;
+                if (response.status === 'OK') {
+                    $scope.backupEmail.saved = $scope.backupEmail.value || '';
+                    showBackupToast('success', localization.localize('success.backup.email.saved'));
+                } else {
+                    showBackupToast('error', localization.localize('error.backup.email.invalid'));
+                }
+            }, function () {
+                $scope.backupEmail.saving = false;
+                showBackupToast('error', localization.localize('error.request.failure'));
+            });
+        };
+
+        // After a manual export, also email the backup (when configured)
+        var emailBackupAfterExport = function () {
+            settingsService.exportDatabaseByEmail({}, function (response) {
+                if (response.status !== 'OK' || !response.data) {
+                    return;
+                }
+                var result = response.data.result;
+                if (result === 'sent') {
+                    showBackupToast('success',
+                        localization.localize('success.backup.email.sent') + ' ' + (response.data.email || ''));
+                } else if (result === 'smtp_not_configured') {
+                    showBackupToast('error', localization.localize('error.backup.smtp.notconfigured'));
+                } else if (result === 'failed') {
+                    showBackupToast('error', localization.localize('error.backup.email.failed'));
+                }
+                // result === 'no_email' -> silently skip (nothing configured)
+            });
+        };
+
         $scope.exportDatabase = function () {
             $scope.dbExport.loading = true;
             $scope.dbExport.error = null;
@@ -309,6 +375,7 @@ angular.module('headwind-kiosk')
                 responseType: 'blob'
             }).then(function (response) {
                 $scope.dbExport.loading = false;
+                emailBackupAfterExport();
                 var contentDisposition = response.headers('Content-Disposition') || '';
                 var match = contentDisposition.match(/filename="?([^"]+)"?/);
                 var filename = match ? match[1] : 'brothers_mdm_backup.sql';
@@ -376,5 +443,6 @@ angular.module('headwind-kiosk')
         };
 
         $scope.init();
+        $scope.loadBackupEmail();
 
     });

@@ -38,6 +38,7 @@ import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMessage;
 import javax.mail.internet.MimeMultipart;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Properties;
 
@@ -118,6 +119,86 @@ public class EmailService {
 
     public boolean sendEmail(String to, String subj, String body) {
         return sendEmail(to, subj, body, null);
+    }
+
+    /**
+     * <p>Sends an email with a single binary attachment.</p>
+     *
+     * @param to                the destination address.
+     * @param subj              the message subject.
+     * @param body              the HTML message body.
+     * @param attachment        the raw bytes of the attachment.
+     * @param attachmentName    the file name to present the attachment as.
+     * @param attachmentMime    the MIME type of the attachment (e.g. "application/gzip").
+     * @return {@code true} if the message was handed to the SMTP transport successfully.
+     */
+    public boolean sendEmailWithAttachment(String to, String subj, String body,
+                                           byte[] attachment, String attachmentName, String attachmentMime) {
+        if (smtpHost.equals("")) {
+            return false;
+        }
+        File tempFile = null;
+        try {
+            Properties properties = new Properties();
+            properties.put("mail.smtp.host", smtpHost);
+            properties.put("mail.smtp.port", smtpPort);
+            properties.put("mail.smtp.auth", !smtpUsername.equals(""));
+            properties.put("mail.smtp.ssl.enable", sslEnabled);
+            properties.put("mail.smtp.starttls.enable", startTlsEnabled);
+            if (!StringUtil.isEmpty(sslProtocols)) {
+                properties.put("mail.smtp.ssl.protocols", sslProtocols);
+            }
+            if (!StringUtil.isEmpty(sslTrust)) {
+                properties.put("mail.smtp.ssl.trust", sslTrust);
+            }
+
+            logger.info("SMTP connection (with attachment): " + smtpHost + ":" + smtpPort +
+                    ", ssl:" + sslEnabled + ", startTls:" + startTlsEnabled);
+
+            Session session = Session.getInstance(properties, new Authenticator() {
+                @Override
+                protected PasswordAuthentication getPasswordAuthentication() {
+                    return new PasswordAuthentication(smtpUsername, smtpPassword);
+                }
+            });
+
+            Message message = new MimeMessage(session);
+            message.setFrom(new InternetAddress(smtpFrom));
+            message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to));
+            message.setSubject(subj);
+
+            MimeBodyPart textPart = new MimeBodyPart();
+            textPart.setContent(body, "text/html; charset=utf-8");
+
+            // Write the attachment to a temp file so MimeBodyPart#attachFile can build the DataHandler
+            // internally (avoids a compile-time dependency on javax.activation, which is runtime-scoped).
+            tempFile = File.createTempFile("hmdm_backup_", ".tmp");
+            try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+                fos.write(attachment);
+            }
+
+            MimeBodyPart attachmentPart = new MimeBodyPart();
+            attachmentPart.attachFile(tempFile, attachmentMime, "base64");
+            attachmentPart.setFileName(attachmentName);
+
+            Multipart multipart = new MimeMultipart();
+            multipart.addBodyPart(textPart);
+            multipart.addBodyPart(attachmentPart);
+
+            message.setContent(multipart);
+
+            Transport.send(message);
+
+            return true;
+
+        } catch (Exception e) {
+            logger.warn("Failed to send backup email with attachment: " + e.getMessage());
+            return false;
+        } finally {
+            if (tempFile != null && !tempFile.delete()) {
+                tempFile.deleteOnExit();
+            }
+        }
     }
 
     public boolean sendEmail(String to, String subj, String body, String replyTo) {

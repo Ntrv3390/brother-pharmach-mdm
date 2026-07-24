@@ -8,6 +8,7 @@ import com.hmdm.persistence.UnsecureDAO;
 import com.hmdm.persistence.domain.User;
 import com.hmdm.service.RsaKeyService;
 import com.hmdm.task.CustomerStatusTask;
+import com.hmdm.task.DatabaseBackupTask;
 import com.hmdm.task.FileCheckTask;
 import com.hmdm.task.FileMigrateTask;
 import com.hmdm.util.BackgroundTaskRunnerService;
@@ -33,6 +34,7 @@ public class StartupTaskModule {
     private int deviceFastSearchChars;
     private String sqlInitScriptPath;
     private CustomerStatusTask customerStatusTask;
+    private DatabaseBackupTask databaseBackupTask;
     private FileCheckTask fileCheckTask;
     private FileMigrateTask fileMigrateTask;
     private boolean customerAutoStatus;
@@ -47,6 +49,7 @@ public class StartupTaskModule {
     @Inject
     public StartupTaskModule(CommonDAO commonDAO, UnsecureDAO unsecureDAO, BackgroundTaskRunnerService taskRunner,
                              CustomerStatusTask customerStatusTask,
+                             DatabaseBackupTask databaseBackupTask,
                              FileCheckTask fileCheckTask,
                              FileMigrateTask fileMigrateTask,
                              RsaKeyService rsaKeyService,
@@ -60,6 +63,7 @@ public class StartupTaskModule {
         this.deviceFastSearchChars = deviceFastSearchChars;
         this.sqlInitScriptPath = sqlInitScriptPath;
         this.customerStatusTask = customerStatusTask;
+        this.databaseBackupTask = databaseBackupTask;
         this.fileCheckTask = fileCheckTask;
         this.fileMigrateTask = fileMigrateTask;
         this.customerAutoStatus = customerAutoStatus;
@@ -80,6 +84,8 @@ public class StartupTaskModule {
         }
         // Shift a task to 5 min so they won't execute at the same time
         taskRunner.submitRepeatableTask(fileCheckTask, 5, 60, TimeUnit.MINUTES);
+        // Weekly database backup: ticks hourly; the task itself only sends at/after 12:00 Sunday IST
+        taskRunner.submitRepeatableTask(databaseBackupTask, 7, 60, TimeUnit.MINUTES);
         if (transmitPassword) {
             taskRunner.submitTask(new GenerateRsaKeysTask());
         }
