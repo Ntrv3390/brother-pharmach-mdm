@@ -210,6 +210,9 @@ public class MainActivity
     private volatile boolean contentLoadInProgress = false;
     private boolean pendingContentReload = false;
     private String lastContentSignature = null;
+    // Tracks the default-dialer enforce state so the launcher re-renders (empty <-> full) the moment
+    // it flips at runtime — e.g. the user changes the default phone app in Settings while running.
+    private Boolean lastDialerEnforceState = null;
     private int spanCount;
     private StatusBarUpdater statusBarUpdater = new StatusBarUpdater();
     private Boolean settingsLockedByWorkTime = null;
@@ -675,6 +678,25 @@ public class MainActivity
             }
         } catch (Exception e) {
             Log.w(Const.LOG_TAG, "ensureCallSetup/enforce failed: " + e.getMessage());
+        }
+
+        // If the default-dialer enforce state flipped since the last resume (e.g. the user just
+        // changed the default phone app in Settings), force the launcher to re-render so the grid
+        // blanks out (not default) or repopulates (default) immediately — the signature cache would
+        // otherwise keep showing the stale, tappable app list.
+        try {
+            boolean enforceNow = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                    && com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
+                            .shouldEnforceDefaultDialer(this);
+            if (lastDialerEnforceState == null || lastDialerEnforceState != enforceNow) {
+                lastDialerEnforceState = enforceNow;
+                lastContentSignature = null; // invalidate cache → next showContent re-renders
+                if (settingsHelper != null && settingsHelper.getConfig() != null) {
+                    showContent(settingsHelper.getConfig());
+                }
+            }
+        } catch (Exception e) {
+            Log.w(Const.LOG_TAG, "dialer enforce re-render check failed: " + e.getMessage());
         }
 
         // Show the "return to call" banner if a call is live (so the call screen is always reachable

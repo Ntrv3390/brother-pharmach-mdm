@@ -276,52 +276,90 @@ public final class DefaultDialerHelper {
      * TelecomManager path, all reflectively so the code compiles on the public SDK. Returns true
      * only if the app actually became the default dialer.
      */
+    /**
+     * True only on platform-signed / privileged builds that actually hold MANAGE_ROLE_HOLDERS
+     * (protection level {@code signature|installer}). This is the dividing line between privilege
+     * tier A (can set the dialer role silently) and tier B (ordinary Device Owner — cannot).
+     */
+    public static boolean hasManageRoleHolders(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return false;
+        }
+        try {
+            return context.checkSelfPermission("android.permission.MANAGE_ROLE_HOLDERS")
+                    == PackageManager.PERMISSION_GRANTED;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Attempt to set the default dialer with <b>no user interaction</b>.
+     *
+     * <p><b>Tier A</b> (platform-signed / privileged, holds MANAGE_ROLE_HOLDERS): API 29+ uses the
+     * {@code @SystemApi} {@code RoleManager.addRoleHolderAsUser(ROLE_DIALER, …)} (reflection, since
+     * it is not in the public SDK); pre-29 falls back to the hidden {@code TelecomManager
+     * .setDefaultDialer}. Both are truly silent and survive sideloaded updates.
+     *
+     * <p><b>Tier B</b> (ordinary Device Owner): honestly, none of this is granted — there is no
+     * silent public API to assign ROLE_DIALER. This method logs that consent is required and
+     * returns false; the caller (gate) then forces the one-time system picker.
+     */
     private static boolean trySilentSet(Context context) {
         if (!Utils.isDeviceOwner(context)) {
             return false;
         }
+        boolean tierA = hasManageRoleHolders(context);
+        RemoteLogger.log(context, Const.LOG_INFO,
+                "Silent dialer set attempt: MANAGE_ROLE_HOLDERS=" + tierA
+                        + " (" + (tierA ? "tier A — platform/privileged" : "tier B — ordinary DO") + ")");
+        if (!tierA) {
+            // Tier B: no silent path exists. Do not pretend otherwise.
+            return false;
+        }
         String pkg = context.getPackageName();
 
-        // Path 1 (API 29+): RoleManager.addRoleHolderAsUser(ROLE_DIALER, pkg, 0, user, executor, cb)
+        // Tier A, API 29+: RoleManager.addRoleHolderAsUser(ROLE_DIALER, pkg, 0, user, executor, cb).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 RoleManager rm = (RoleManager) context.getSystemService(Context.ROLE_SERVICE);
-                if (rm != null) {
+                if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_DIALER)) {
                     java.lang.reflect.Method m = RoleManager.class.getMethod(
                             "addRoleHolderAsUser",
                             String.class, String.class, int.class,
                             android.os.UserHandle.class,
                             java.util.concurrent.Executor.class,
                             java.util.function.Consumer.class);
+                    final Context app = context.getApplicationContext();
                     m.invoke(rm, RoleManager.ROLE_DIALER, pkg, 0,
                             Process.myUserHandle(),
                             (java.util.concurrent.Executor) Runnable::run,
                             (java.util.function.Consumer<Boolean>) granted ->
-                                    Log.i(TAG, "addRoleHolderAsUser result: " + granted));
-                    // Give the framework a moment; verification happens by the caller.
+                                    RemoteLogger.log(app, Const.LOG_INFO,
+                                            "addRoleHolderAsUser(ROLE_DIALER) callback granted=" + granted));
                     if (isDefaultDialer(context)) {
                         return true;
                     }
                 }
             } catch (Throwable t) {
                 Log.i(TAG, "addRoleHolderAsUser unavailable: " + t.getMessage());
+                RemoteLogger.log(context, Const.LOG_WARN,
+                        "addRoleHolderAsUser failed: " + t.getMessage());
             }
         }
 
-        // Path 2 (legacy): TelecomManager hidden setter, if the platform exposes one.
+        // Tier A, pre-29 (or as a secondary): hidden TelecomManager.setDefaultDialer(String).
         try {
             TelecomManager tm = (TelecomManager) context.getSystemService(Context.TELECOM_SERVICE);
             if (tm != null) {
-                try {
-                    java.lang.reflect.Method m =
-                            TelecomManager.class.getMethod("setDefaultDialer", String.class);
-                    m.invoke(tm, pkg);
-                    if (isDefaultDialer(context)) {
-                        return true;
-                    }
-                } catch (NoSuchMethodException ignored) {
+                java.lang.reflect.Method m =
+                        TelecomManager.class.getMethod("setDefaultDialer", String.class);
+                m.invoke(tm, pkg);
+                if (isDefaultDialer(context)) {
+                    return true;
                 }
             }
+        } catch (NoSuchMethodException ignored) {
         } catch (Throwable t) {
             Log.i(TAG, "TelecomManager.setDefaultDialer unavailable: " + t.getMessage());
         }

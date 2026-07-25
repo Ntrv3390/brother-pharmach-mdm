@@ -48,7 +48,63 @@ public final class DevicePolicyBootstrapper {
         applyKeyguardPolicy(dpm, adminComponent);
         applyLockTaskFeatures(dpm, adminComponent);
         applyStatusBarPolicy(dpm, adminComponent);
+        applyDialerPreferredActivity(context, dpm, adminComponent);
+        applyOverlayPermission(context);
         applyDefaultDialerPolicy(context);
+    }
+
+    /**
+     * Grant "Display over other apps" (SYSTEM_ALERT_WINDOW) up front at provisioning so the overlay
+     * gate and incoming-call overlay can render. Silent on platform/privileged builds; a no-op
+     * (caught) on ordinary Device Owner, where MainActivity's mandatory dialog handles it later.
+     * Cross-version: needed on API 23+ ; below that the permission is install-granted.
+     */
+    private static void applyOverlayPermission(Context context) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                    && !com.brother.pharmach.mdm.launcher.util.Utils.canDrawOverlays(context)) {
+                com.brother.pharmach.mdm.launcher.util.SystemUtils
+                        .autoSetOverlayPermission(context, context.getPackageName());
+                Log.i(TAG, "Overlay permission provisioning attempted, canDraw="
+                        + com.brother.pharmach.mdm.launcher.util.Utils.canDrawOverlays(context));
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "applyOverlayPermission failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * SUPPLEMENTARY (not the telephony role): as Device Owner, pin our dial UI as the persistent
+     * preferred activity for {@code ACTION_DIAL} / {@code tel:} intents via
+     * {@link DevicePolicyManager#addPersistentPreferredActivity} (API 21). This is intent
+     * <b>routing</b> only — it makes outgoing dial intents resolve to us and <b>persists across
+     * updates</b>, but it does NOT grant ROLE_DIALER and does NOT bind our InCallService for
+     * incoming calls. It keeps outbound dialing stable even on tier-B devices where the role is
+     * dropped by an update until re-consented.
+     */
+    private static void applyDialerPreferredActivity(Context context, DevicePolicyManager dpm,
+                                                     ComponentName admin) {
+        try {
+            android.content.ComponentName dialer = new android.content.ComponentName(
+                    context, "com.brother.pharmach.mdm.launcher.ui.DialerActivity");
+            // Clear our previous entries first so repeated provisioning doesn't stack duplicates.
+            dpm.clearPackagePersistentPreferredActivities(admin, context.getPackageName());
+
+            android.content.IntentFilter dial = new android.content.IntentFilter(
+                    android.content.Intent.ACTION_DIAL);
+            dial.addCategory(android.content.Intent.CATEGORY_DEFAULT);
+            dpm.addPersistentPreferredActivity(admin, dial, dialer);
+
+            android.content.IntentFilter dialTel = new android.content.IntentFilter(
+                    android.content.Intent.ACTION_DIAL);
+            dialTel.addCategory(android.content.Intent.CATEGORY_DEFAULT);
+            dialTel.addDataScheme("tel");
+            dpm.addPersistentPreferredActivity(admin, dialTel, dialer);
+
+            Log.i(TAG, "Persistent preferred DIAL activity applied (intent routing only, NOT the role)");
+        } catch (Exception e) {
+            Log.w(TAG, "applyDialerPreferredActivity failed: " + e.getMessage());
+        }
     }
 
     /**

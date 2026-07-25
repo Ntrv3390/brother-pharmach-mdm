@@ -64,10 +64,26 @@ import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 public final class DefaultDialerGate {
 
     private static final String TAG = "DefaultDialerGate";
-    private static final long TICK_MS = 2000L;
-    // While the system role picker is on screen we must NOT cover it with our overlay.
-    private static final long PICKER_GRACE_MS = 30_000L;
+    // Fast tick while blocking so a foreign app is re-covered / bounced Home within ~0.7s (like the
+    // WorkTime foreground enforcer). The loop only runs while the app is NOT the default dialer and
+    // stops entirely once the role is granted, so this is not a permanent background cost.
+    private static final long TICK_MS = 700L;
+    // Short bridge after we launch Settings / the picker, only long enough for that screen to come
+    // to the foreground (after which isSettingsOrPickerForeground() takes over the "stay hidden"
+    // decision). Kept small so that if the user backs/Home out WITHOUT setting the default, the gate
+    // re-blocks within ~1 tick instead of leaving a long free window.
+    private static final long PICKER_GRACE_MS = 3_500L;
     private static volatile long sPickerGraceUntil = 0;
+
+    /**
+     * Called by RoleRequestActivity when the picker returns (granted or cancelled). Ends the launch
+     * grace and re-evaluates immediately: if the role was granted the gate dismisses, otherwise it
+     * re-blocks right away — no disabled buttons, since the picker path works.
+     */
+    public static void onRoleRequestFinished(Context ctx) {
+        sPickerGraceUntil = 0;
+        update(ctx);
+    }
 
     private static DefaultDialerGate instance;
 
@@ -134,22 +150,88 @@ public final class DefaultDialerGate {
             }
             return false;
         }
-        // A picker is up — keep the overlay hidden so it doesn't cover the picker.
-        if (SystemClock.elapsedRealtime() < sPickerGraceUntil) {
+        // A picker is up (grace window) OR the user is actually in Settings / the system picker —
+        // keep the overlay hidden so it never covers the one screen where they can fix it. Without
+        // this, slow navigation in Settings would get re-blocked mid-way and deadlock the user.
+        if (SystemClock.elapsedRealtime() < sPickerGraceUntil || isSettingsOrPickerForeground()) {
             if (shown) {
                 dismiss();
             }
             return true;
         }
-        if (Settings.canDrawOverlays(context)) {
+        boolean canOverlay = Settings.canDrawOverlays(context);
+        if (!canOverlay) {
+            // Try to (re)grant "Display over other apps" silently — works on device-owner
+            // platform/privileged builds; on ordinary builds MainActivity.enforceOverlayPermission()
+            // shows the mandatory grant dialog. Rate-limited so we don't reflect every 0.7s tick.
+            canOverlay = ensureOverlayPermission();
+        }
+        if (canOverlay) {
             if (!shown) {
                 show();
             }
         } else {
-            // No overlay permission on this device — fall back to the blocking Activity.
+            // Overlay still unavailable — fall back to the blocking Activity gate so enforcement
+            // never silently disappears on a device that refuses the overlay.
             DefaultDialerGatekeeperActivity.enforce(context);
         }
+        // Worktime-style hard enforcement: if any OTHER app is in the foreground (i.e. not us and
+        // not Settings/the picker, already excluded above), bounce it to Home immediately so the
+        // user lands back on our default screen instead of glimpsing the app list. This closes the
+        // ~1-tick window after backing out of Settings, and covers the case where the overlay was
+        // momentarily suppressed by an OEM.
+        kickForeignAppToHome();
         return true;
+    }
+
+    private static volatile long sLastOverlayGrantAttempt = 0;
+
+    /**
+     * Ensure "Display over other apps" (SYSTEM_ALERT_WINDOW) is granted so the overlay gate can
+     * render. Cross-version: pre-M it is install-granted; M+ needs the appop. On a device-owner
+     * platform/privileged build we grant it silently via AppOps (SystemUtils.autoSetOverlayPermission,
+     * reflection); on an ordinary build that call fails harmlessly and the mandatory dialog in
+     * MainActivity handles it. Rate-limited to once per 15s to avoid reflecting on every tick.
+     *
+     * @return whether overlays can be drawn after the attempt.
+     */
+    private boolean ensureOverlayPermission() {
+        if (Settings.canDrawOverlays(context)) {
+            return true;
+        }
+        long now = SystemClock.elapsedRealtime();
+        if (now - sLastOverlayGrantAttempt < 15_000L) {
+            return false; // recently tried; wait
+        }
+        sLastOverlayGrantAttempt = now;
+        try {
+            if (com.brother.pharmach.mdm.launcher.util.Utils.isDeviceOwner(context)) {
+                com.brother.pharmach.mdm.launcher.util.SystemUtils
+                        .autoSetOverlayPermission(context, context.getPackageName());
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "silent overlay grant failed: " + e.getMessage());
+        }
+        boolean granted = Settings.canDrawOverlays(context);
+        RemoteLogger.log(context, granted ? Const.LOG_INFO : Const.LOG_WARN,
+                "Gate overlay permission " + (granted ? "granted" : "NOT granted — using activity fallback"));
+        return granted;
+    }
+
+    /** If a foreign app is foreground, send the device Home (our launcher) so the gate is shown. */
+    private void kickForeignAppToHome() {
+        String fg = foregroundPackage();
+        if (fg == null || fg.equals(context.getPackageName())) {
+            return; // already on our app/launcher — nothing to bounce
+        }
+        try {
+            Intent home = new Intent(Intent.ACTION_MAIN);
+            home.addCategory(Intent.CATEGORY_HOME);
+            home.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(home);
+        } catch (Exception e) {
+            Log.w(TAG, "kickForeignAppToHome failed: " + e.getMessage());
+        }
     }
 
     @SuppressLint("InflateParams")
@@ -212,10 +294,18 @@ public final class DefaultDialerGate {
 
     private void onSetDefaultTapped() {
         // Hide the overlay so the system picker (a normal activity, drawn below app overlays) is
-        // visible, grant a window during which we won't re-cover it, then launch the picker.
+        // visible, grant a window during which we won't re-cover it, then present the picker via a
+        // real Activity (startActivityForResult) — the only way it works on Android 14/15/16.
         sPickerGraceUntil = SystemClock.elapsedRealtime() + PICKER_GRACE_MS;
         dismiss();
-        DefaultDialerHelper.requestDefaultDialerFromContext(context);
+        try {
+            context.startActivity(com.brother.pharmach.mdm.launcher.ui.RoleRequestActivity
+                    .newIntent(context));
+        } catch (Exception e) {
+            Log.w(TAG, "launch RoleRequestActivity failed: " + e.getMessage());
+            // Couldn't launch the request activity — fall straight to manual settings.
+            onOpenSettingsTapped();
+        }
     }
 
     private void onOpenSettingsTapped() {
@@ -235,6 +325,58 @@ public final class DefaultDialerGate {
             context.startActivity(details);
         } catch (Exception e) {
             Log.w(TAG, "open settings failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * True when the foreground app is Settings, an OEM settings/default-apps screen, or the system
+     * role/permission picker — the places the user goes to set the default phone app. While one of
+     * these is up we must NOT re-cover it with the gate. Uses UsageStats (same source as the
+     * WorkTime foreground poller); if usage-access is unavailable this returns false, so the gate
+     * still enforces (fail toward blocking).
+     */
+    private boolean isSettingsOrPickerForeground() {
+        String pkg = foregroundPackage();
+        if (pkg == null) {
+            return false;
+        }
+        if (com.brother.pharmach.mdm.launcher.util.OemCompat.isSettingsFamilyPackage(pkg)) {
+            return true;
+        }
+        switch (pkg) {
+            case "com.android.settings":
+            case "com.android.permissioncontroller":
+            case "com.google.android.permissioncontroller":
+            case "com.android.packageinstaller":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private String foregroundPackage() {
+        try {
+            android.app.usage.UsageStatsManager usm =
+                    (android.app.usage.UsageStatsManager)
+                            context.getSystemService(Context.USAGE_STATS_SERVICE);
+            if (usm == null) {
+                return null;
+            }
+            long now = System.currentTimeMillis();
+            java.util.List<android.app.usage.UsageStats> stats = usm.queryUsageStats(
+                    android.app.usage.UsageStatsManager.INTERVAL_DAILY, now - 10_000, now);
+            if (stats == null || stats.isEmpty()) {
+                return null;
+            }
+            android.app.usage.UsageStats recent = null;
+            for (android.app.usage.UsageStats s : stats) {
+                if (recent == null || s.getLastTimeUsed() > recent.getLastTimeUsed()) {
+                    recent = s;
+                }
+            }
+            return recent != null ? recent.getPackageName() : null;
+        } catch (Exception e) {
+            return null;
         }
     }
 

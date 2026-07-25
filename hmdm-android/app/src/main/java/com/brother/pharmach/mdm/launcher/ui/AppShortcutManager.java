@@ -50,6 +50,18 @@ public class AppShortcutManager {
     }
 
     public List<AppInfo> getInstalledApps(Context context, boolean bottom) {
+        // Default-dialer hard gate: while the app is NOT the default phone app (and the device can
+        // hold the role), render an EMPTY launcher — no app icons anywhere — so that even if the
+        // user reaches our launcher they have nothing to tap and can only satisfy the gate. The grid
+        // repopulates automatically once the role is granted and the screen re-renders.
+        try {
+            if (com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
+                    .shouldEnforceDefaultDialer(context)) {
+                return new ArrayList<>();
+            }
+        } catch (Exception ignored) {
+        }
+
         Map<String, Application> requiredPackages = new HashMap();
         Map<String, Application> requiredLinks = new HashMap();
         getConfiguredApps(context, bottom, requiredPackages, requiredLinks);

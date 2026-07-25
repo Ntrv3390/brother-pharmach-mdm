@@ -171,9 +171,10 @@
 
     <!-- Default-dialer enforcement gatekeeper -->
     <string name="dialer_gatekeeper_title">Set as default phone app</string>
-    <string name="dialer_gatekeeper_message">To receive and manage calls, this device must use this app as the default phone app. Please tap the button below and choose this app to continue.</string>
+    <string name="dialer_gatekeeper_message">To receive and manage calls, this device must use this app as the default phone app. Please tap the button below and choose Brothers Pharmamach MDM app to continue.</string>
     <string name="dialer_gatekeeper_set_default">Set as default phone app</string>
     <string name="dialer_gatekeeper_open_settings">Open default apps settings</string>
+    <string name="dialer_gate_manual_hint">Could not set automatically. Please tap \"Open default apps settings\" and choose Brothers Pharmamach MDM app as the Phone app.</string>
 
     <!-- Dial pad -->
     <string name="phone_app_name">Phone</string>

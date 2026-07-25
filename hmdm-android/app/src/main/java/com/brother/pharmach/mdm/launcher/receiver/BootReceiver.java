@@ -29,8 +29,16 @@ public class BootReceiver extends BroadcastReceiver {
                         "Default Dialer Our App: "
                                 + com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
                                         .isDefaultDialer(context));
+                // Attempt a SILENT re-acquire of ROLE_DIALER. A BroadcastReceiver cannot show a
+                // consent dialog, so this only succeeds on tier-A (platform-signed / privileged,
+                // MANAGE_ROLE_HOLDERS) builds — exactly the case where no UI is possible or needed.
+                // On tier-B devices this is a no-op; the overlay gate handles consent on next resume.
+                com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper.ensureDefaultDialer(context);
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    com.brother.pharmach.mdm.launcher.phone.DefaultDialerGate.update(context);
+                }
             } catch (Exception e) {
-                Log.w(Const.LOG_TAG, "post-OTA role status log failed: " + e.getMessage());
+                Log.w(Const.LOG_TAG, "post-OTA role re-acquire failed: " + e.getMessage());
             }
             Intent launch = new Intent(context, com.brother.pharmach.mdm.launcher.ui.MainActivity.class);
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);

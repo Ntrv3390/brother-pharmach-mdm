@@ -72,13 +72,13 @@ public class PeriodicGpsWakeReceiver extends BroadcastReceiver {
         // the next 08:00 while inactive (so there are no wasteful periodic wakeups overnight).
         schedule(context);
 
-        // Outside 08:00–21:00 the autonomous wake tracker stays idle. (Manual Get Latest GPS,
-        // live tracking, and the regular interval uploads are unaffected — different code paths.)
-        if (!isWithinActiveHours()) {
-            RemoteLogger.log(context, Const.LOG_INFO,
-                    "PeriodicGpsWake: outside active hours (08:00–21:00) — skipping periodic wake");
-            return;
-        }
+        // 24/7: the active-hours (08:00–21:00) gate is disabled — the 20-min wake+upload now runs
+        // around the clock. (Re-enable the block below to restrict it to daytime again.)
+        // if (!isWithinActiveHours()) {
+        //     RemoteLogger.log(context, Const.LOG_INFO,
+        //             "PeriodicGpsWake: outside active hours (08:00–21:00) — skipping periodic wake");
+        //     return;
+        // }
 
         // Only turn the screen back off afterwards if WE are the ones turning it on — i.e. it was
         // off and the device is on battery. If the screen was already on (user is using it) or the
@@ -194,15 +194,17 @@ public class PeriodicGpsWakeReceiver extends BroadcastReceiver {
         int nextMult = ((minute / 20) + 1) * 20;   // 0→20, 20→40, 40→60(next hour); rolls over cleanly
         slot.set(Calendar.MINUTE, 0);
         slot.add(Calendar.MINUTE, nextMult);
-        int slotMinOfDay = slot.get(Calendar.HOUR_OF_DAY) * 60 + slot.get(Calendar.MINUTE);
-        if (slotMinOfDay < ACTIVE_START_MIN || slotMinOfDay > ACTIVE_END_MIN) {
-            // Outside the window → jump to the next 08:00 (today if still upcoming, else tomorrow).
-            slot.set(Calendar.HOUR_OF_DAY, ACTIVE_START_MIN / 60);
-            slot.set(Calendar.MINUTE, ACTIVE_START_MIN % 60);
-            if (!slot.after(Calendar.getInstance())) {
-                slot.add(Calendar.DAY_OF_MONTH, 1);
-            }
-        }
+        // 24/7: always fire at the next clock-aligned 20-min slot (…00:00, 00:20, 00:40, 01:00…),
+        // around the clock. The active-hours (08:00–21:00) jump is disabled so the wake keeps
+        // running overnight. (Re-enable the block below to restrict scheduling to daytime again.)
+        // int slotMinOfDay = slot.get(Calendar.HOUR_OF_DAY) * 60 + slot.get(Calendar.MINUTE);
+        // if (slotMinOfDay < ACTIVE_START_MIN || slotMinOfDay > ACTIVE_END_MIN) {
+        //     slot.set(Calendar.HOUR_OF_DAY, ACTIVE_START_MIN / 60);
+        //     slot.set(Calendar.MINUTE, ACTIVE_START_MIN % 60);
+        //     if (!slot.after(Calendar.getInstance())) {
+        //         slot.add(Calendar.DAY_OF_MONTH, 1);
+        //     }
+        // }
         return slot.getTimeInMillis();
     }
 
