@@ -292,10 +292,12 @@ public class Initializer {
                 DeviceInfo deviceInfo = DeviceInfoProvider.getDeviceInfo(context, true, true);
                 sendDeviceInfoTask.execute(deviceInfo);
                 SendDeviceInfoWorker.scheduleDeviceInfoSending(context);
-                // Reverted from the LocationService experiment back to LocationForegroundService —
-                // see LocationService.java for why the simplified version was rolled back.
-                // LocationService.triggerUrgent(context, "initializerConfigComplete");
-                LocationForegroundService.triggerUrgent(context, "initializerConfigComplete");
+                // DISABLED (simplified tracking): do NOT trigger a GPS upload every time a config
+                // update completes. Config updates happen on the 20-min staleness refresh, on push,
+                // and via PushNotificationWorker — coupling GPS to them defeats the 08:00–21:00 gate.
+                // GPS now comes only from the 20-min PeriodicGpsWakeReceiver and the server's
+                // fetchGpsUrgent push (Get Latest GPS / Live Tracking).
+                // LocationForegroundService.triggerUrgent(context, "initializerConfigComplete");
             }
 
             @Override

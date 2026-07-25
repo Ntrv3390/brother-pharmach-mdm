@@ -54,9 +54,16 @@ public final class DozeExitHelper {
     private static final long SCREEN_WAKELOCK_TIMEOUT_MS = 10_000L;
     private static final int ALARM_REQUEST_CODE = 2002;
     private static final int KEYCODE_WAKEUP = 224;
+    // Anti-cascade: the alarm-clock kick may re-arm at most once per this interval, EVEN for
+    // force=true. Without this, an urgent capture on a device that resists waking from Doze (Realme/
+    // ColorOS) loops: escape→kick→DozeExitReceiver→urgent→escape→kick… hundreds of times, flooding
+    // uploads and even auto-tripping live mode. One kick per 90s is plenty to pierce Doze; the actual
+    // capture still runs each urgent request regardless of whether a new kick was armed.
+    private static final long KICK_MIN_INTERVAL_MS = 90_000L;
 
     private static volatile long lastEscapeAttemptMs;
     private static volatile long lastScreenWakeMs;
+    private static volatile long lastKickArmedMs;
 
     private DozeExitHelper() {}
 
@@ -225,6 +232,17 @@ public final class DozeExitHelper {
      * guarantee.
      */
     private static void armAlarmClockKick(Context context, String reason) {
+        // Anti-cascade throttle: never re-arm a kick within KICK_MIN_INTERVAL_MS, regardless of
+        // force. This breaks the escape→kick→urgent→escape→kick loop on devices that don't leave
+        // Doze immediately. The in-flight urgent capture still runs; we just don't stack kicks.
+        long now = System.currentTimeMillis();
+        if (now - lastKickArmedMs < KICK_MIN_INTERVAL_MS) {
+            RemoteLogger.log(context, Const.LOG_INFO,
+                    "DozeExitHelper: alarm-clock kick suppressed — one was armed "
+                            + ((now - lastKickArmedMs) / 1000) + "s ago (anti-cascade, reason=" + reason + ")");
+            return;
+        }
+        lastKickArmedMs = now;
         try {
             AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
             if (am == null) return;

@@ -118,13 +118,17 @@ public class ConfigUpdater {
     }
 
     public static void notifyConfigUpdate(final Context context) {
-        try {
-            // Request immediate detailed GPS upload independently from config reload state.
-            DetailedInfoWorker.requestConfigUpdate(context);
-        } catch (Exception e) {
-            RemoteLogger.log(context, Const.LOG_WARN,
-                    "Failed to request immediate DeviceInfo refresh: " + e.getMessage());
-        }
+        // DISABLED (simplified tracking): GPS upload is no longer coupled to a config refresh.
+        // The background "config is stale" refresh runs every 20 min 24/7, and this call made it
+        // upload location each time — including overnight, defeating the 08:00–21:00 gate. GPS now
+        // comes only from the 20-min PeriodicGpsWakeReceiver and from the server's direct
+        // fetchGpsUrgent push (Get Latest GPS / Live Tracking), which does NOT go through here.
+        // try {
+        //     DetailedInfoWorker.requestConfigUpdate(context);
+        // } catch (Exception e) {
+        //     RemoteLogger.log(context, Const.LOG_WARN,
+        //             "Failed to request immediate DeviceInfo refresh: " + e.getMessage());
+        // }
 
         if (SettingsHelper.getInstance(context).isMainActivityRunning()) {
             Log.d(Const.LOG_TAG, "Main activity is running, using activity updater");
@@ -156,7 +160,11 @@ public class ConfigUpdater {
 
         Log.i(Const.LOG_TAG, "updateConfig(): set configInitializing=true");
         configInitializing = true;
-        DetailedInfoWorker.requestConfigUpdate(context);
+        // DISABLED (simplified tracking): do NOT trigger a GPS upload on every config refresh.
+        // The 20-min background "config is stale" refresh (MainActivity) runs 24/7, so this made
+        // the device upload location ~every 20 min overnight too. GPS is now driven only by the
+        // 20-min PeriodicGpsWakeReceiver (08:00–21:00) and the server's fetchGpsUrgent push.
+        // DetailedInfoWorker.requestConfigUpdate(context);
         this.context = context;
         this.uiNotifier = uiNotifier;
         this.userInteraction = userInteraction;
