@@ -88,7 +88,14 @@ public final class DevicePolicyBootstrapper {
             android.content.ComponentName dialer = new android.content.ComponentName(
                     context, "com.brother.pharmach.mdm.launcher.ui.DialerActivity");
             // Clear our previous entries first so repeated provisioning doesn't stack duplicates.
+            // WARNING: clearPackagePersistentPreferredActivities() is all-or-nothing for this
+            // package — there is no per-filter removal — so this ALSO drops the HOME pin that makes
+            // us the unchangeable launcher. It must therefore be re-applied below, in the same
+            // method, or kiosk mode silently loses its launcher lock on every provisioning run.
             dpm.clearPackagePersistentPreferredActivities(admin, context.getPackageName());
+
+            // HOME first: the launcher pin is the more important of the two.
+            applyHomeLauncherPin(context, dpm, admin);
 
             android.content.IntentFilter dial = new android.content.IntentFilter(
                     android.content.Intent.ACTION_DIAL);
@@ -108,17 +115,58 @@ public final class DevicePolicyBootstrapper {
     }
 
     /**
-     * Custom call receiver: make the app the default dialer so incoming cellular calls are routed
-     * to our {@code CustomInCallService} and our full-screen UI. Runs LAST so that the call
-     * permissions it grants (including POST_NOTIFICATIONS, needed for the full-screen-intent
-     * notification) win over the kiosk-default deny applied in {@link #applyNotificationPolicy}.
+     * Pins this app as the device's home (launcher) app so it cannot be changed by the user.
      *
-     * POLICY-NOTE: self-guards on device owner + API 23; idempotent (skips if already the dialer).
+     * <p>This is the mechanism that replaces lock-task for kiosk mode: a persistent preferred
+     * activity for {@code ACTION_MAIN + CATEGORY_HOME} is set by the Device Owner, survives reboots
+     * and updates, and cannot be overridden from Settings — Home always comes back here, with no
+     * "screen pinned" UI and with Recents left usable.
+     *
+     * <p>Skipped when the admin has asked for the stock launcher instead
+     * ({@code runDefaultLauncher}), which is the same condition {@code ConfigUpdater} uses, so the
+     * two never fight over the pin.
+     */
+    private static void applyHomeLauncherPin(Context context, DevicePolicyManager dpm,
+                                             ComponentName admin) {
+        try {
+            com.brother.pharmach.mdm.launcher.json.ServerConfig config =
+                    SettingsHelper.getInstance(context.getApplicationContext()).getConfig();
+            if (config != null && Boolean.TRUE.equals(config.getRunDefaultLauncher())) {
+                Log.i(TAG, "Home launcher pin skipped — config asks for the stock launcher");
+                return;
+            }
+            android.content.IntentFilter home = new android.content.IntentFilter(
+                    android.content.Intent.ACTION_MAIN);
+            home.addCategory(android.content.Intent.CATEGORY_HOME);
+            home.addCategory(android.content.Intent.CATEGORY_DEFAULT);
+            dpm.addPersistentPreferredActivity(admin, home,
+                    new ComponentName(context, com.brother.pharmach.mdm.launcher.ui.MainActivity.class));
+            Log.i(TAG, "Home launcher pinned — this app is the unchangeable default launcher");
+        } catch (Exception e) {
+            Log.w(TAG, "applyHomeLauncherPin failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Call permissions for the launcher. Runs LAST so the permissions it grants (including
+     * POST_NOTIFICATIONS) win over the kiosk-default deny applied in
+     * {@link #applyNotificationPolicy}.
+     *
+     * <p>REQUIREMENT CHANGE: the app no longer needs to be the default dialer. Incoming calls are
+     * presented by whichever dialer the device already uses, and {@link CallStatusBarLift} unlocks
+     * the shade while the phone rings so that dialer's notification gets through. We still grant the
+     * call permissions, because READ_PHONE_STATE is what lets us detect the ring and READ_CALL_LOG
+     * is what feeds the call-log upload worker.
+     *
+     * POLICY-NOTE: self-guards on device owner + API 23; idempotent.
      */
     private static void applyDefaultDialerPolicy(Context context) {
         try {
-            boolean ok = DefaultDialerHelper.ensureDefaultDialer(context);
-            Log.i(TAG, "Default dialer policy applied, isDefaultDialer=" + ok);
+            DefaultDialerHelper.grantCallPermissions(context);
+            Log.i(TAG, "Call permissions granted (default-dialer role no longer required)");
+            // Default-dialer role acquisition is intentionally disabled — see the note above.
+            // boolean ok = DefaultDialerHelper.ensureDefaultDialer(context);
+            // Log.i(TAG, "Default dialer policy applied, isDefaultDialer=" + ok);
         } catch (Exception e) {
             Log.w(TAG, "applyDefaultDialerPolicy failed: " + e.getMessage());
         }
@@ -219,15 +267,14 @@ public final class DevicePolicyBootstrapper {
                                               ComponentName adminComponent) {
         // API-DIFF: Android 9.0 (API 28)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            // Disable status bar expansion by omitting LOCK_TASK_FEATURE_NOTIFICATIONS.
-            // Enable SYSTEM_INFO to show time, battery and network icons.
-            // Enable OVERVIEW to keep the Recents button functional.
-            int flags = DevicePolicyManager.LOCK_TASK_FEATURE_HOME 
-                    | DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD
-                    | DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
-                    | DevicePolicyManager.LOCK_TASK_FEATURE_OVERVIEW;
+            // The feature set is owned by CallStatusBarLift: normally it omits
+            // LOCK_TASK_FEATURE_NOTIFICATIONS (blocking shade expansion + heads-up alerts), and
+            // includes it only while a call is ringing. Reading it from there means provisioning
+            // that happens to run mid-ring cannot clobber the lift.
+            int flags = CallStatusBarLift.currentLockTaskFeatures();
             dpm.setLockTaskFeatures(adminComponent, flags);
-            Log.i(TAG, "LockTask features applied (HOME | KEYGUARD | SYSTEM_INFO | OVERVIEW)");
+            Log.i(TAG, "LockTask features applied (HOME | KEYGUARD | SYSTEM_INFO | OVERVIEW"
+                    + (CallStatusBarLift.isLifted() ? " | NOTIFICATIONS (call ringing)" : "") + ")");
         }
     }
 
@@ -235,9 +282,16 @@ public final class DevicePolicyBootstrapper {
      * Disables the notification shade/status bar expansion for kiosk-style operation.
      * This is a best-effort device-owner mitigation; Android still reserves some system
      * notifications and privacy indicators for the framework itself.
+     *
+     * <p>Skipped while a call is ringing — {@link CallStatusBarLift} owns the status bar state then,
+     * and re-locking here would suppress the incoming-call notification.
      */
     private static void applyStatusBarPolicy(DevicePolicyManager dpm,
                                              ComponentName adminComponent) {
+        if (CallStatusBarLift.isLifted()) {
+            Log.i(TAG, "Status bar lock deferred — a call is ringing (CallStatusBarLift owns it)");
+            return;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             dpm.setStatusBarDisabled(adminComponent, true);
             Log.i(TAG, "Status bar disabled for kiosk operation");

@@ -94,16 +94,32 @@ public final class DefaultDialerGate {
         return instance;
     }
 
-    /** Entry point: evaluate and show/hide the gate. Safe to call from any thread/context. */
+    /**
+     * Entry point: evaluate and show/hide the gate. Safe to call from any thread/context.
+     *
+     * <p>REQUIREMENT CHANGE — DISABLED: the app no longer requires the default-dialer role, so this
+     * gate must never appear. It is neutralised here as well as at every call site, so a call site
+     * that is missed or re-added later still cannot bring the gate back. Any gate left on screen
+     * from a previous version is torn down on the first call.
+     */
     public static void update(Context ctx) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             return;
         }
+        // Tear down a gate overlay left over from a build that still enforced the role.
+        try {
+            if (instance != null && instance.shown) {
+                instance.handler.post(instance::dismiss);
+            }
+        } catch (Exception ignored) {
+        }
+        /* Original enforcement — kept for reference:
         try {
             getInstance(ctx).kick();
         } catch (Exception e) {
             Log.w(TAG, "update failed: " + e.getMessage());
         }
+        */
     }
 
     private final Context context;

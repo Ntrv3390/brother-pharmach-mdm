@@ -71,6 +71,9 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Lets CallStatusBarLift collapse a shade the user left open when it re-locks the status bar
+         after a ringing call. Normal permission, granted at install. -->
+    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
 
     <!-- Custom call receiver (default dialer). CALL_PHONE / ANSWER_PHONE_CALLS let us control the
          cellular call; FOREGROUND_SERVICE_PHONE_CALL is required (API 34+) for the InCallService
@@ -494,8 +497,15 @@
             android:name=".receiver.CallActionReceiver"
             android:exported="false"/>
 
-        <!-- Blocking enforcement screen: shown until the app is the default phone app.
-             Back disabled; Home re-launches; singleTask so re-entry reuses the instance. -->
+        <!-- REQUIREMENT CHANGE — REMOVED: the app no longer requires or asks to be the default
+             phone app, so neither the blocking enforcement screen nor the role picker exists any
+             more. Both declarations are commented out (rather than deleted) so the previous
+             behaviour can be restored if the requirement ever comes back. The Java entry points
+             (DefaultDialerGate.update / DefaultDialerGatekeeperActivity.enforce) are neutralised
+             too, so nothing tries to start an unregistered activity.
+
+        <!- - Blocking enforcement screen: shown until the app is the default phone app.
+             Back disabled; Home re-launches; singleTask so re-entry reuses the instance. - ->
         <activity
             android:name=".ui.DefaultDialerGatekeeperActivity"
             android:launchMode="singleTask"
@@ -505,9 +515,9 @@
             android:screenOrientation="portrait"
             android:exported="false"/>
 
-        <!-- Invisible activity that presents the system default-dialer picker via
+        <!- - Invisible activity that presents the system default-dialer picker via
              startActivityForResult (the only way the picker works — an overlay/service cannot).
-             Launched by the gate's "Set as default" button. -->
+             Launched by the gate's "Set as default" button. - ->
         <activity
             android:name=".ui.RoleRequestActivity"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
@@ -515,6 +525,7 @@
             android:noHistory="true"
             android:taskAffinity=""
             android:exported="false"/>
+        -->
 
     </application>
 

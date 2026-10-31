@@ -91,6 +91,17 @@ public class CustomInCallService extends InCallService {
 
         boolean ringing = stateOf(call) == Call.STATE_RINGING;
 
+        // Status-bar lockdown: drop it while the call rings so the shade and heads-up alerts work,
+        // and put it straight back for an outgoing/answered call. Done before anything else so the
+        // lift is in place by the time the notification below is posted.
+        if (ringing) {
+            com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift
+                    .liftForRingingCall(this, "InCallService");
+        } else {
+            com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift
+                    .relock(this, "InCallService/not-ringing");
+        }
+
         // Doze safety net: a brief partial wake lock so the notification is posted and the activity
         // has time to take over the screen (the activity itself does turnScreenOn — §4).
         acquireBriefWakeLock();
@@ -208,6 +219,9 @@ public class CustomInCallService extends InCallService {
             cm.clearCall(call);
             stopCallForeground();
             releaseWakeLock();
+            // Call gone — the kiosk status-bar lockdown goes straight back on.
+            com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift
+                    .relock(this, "InCallService/call-removed");
             try {
                 IncomingCallOverlay.getInstance(getApplicationContext()).dismiss();
             } catch (Exception ignored) {
@@ -272,6 +286,12 @@ public class CustomInCallService extends InCallService {
 
     private void checkCallUiVisible() {
         CallManager cm = CallManager.getInstance();
+        // Piggyback on this 1s tick to keep the status-bar lockdown aligned with the call state:
+        // lifted only while ringing, re-locked the moment the call is answered or ends.
+        try {
+            com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift.reconcile(this);
+        } catch (Exception ignored) {
+        }
         if (!cm.hasCall()) {
             stopWatchdog();
             return;

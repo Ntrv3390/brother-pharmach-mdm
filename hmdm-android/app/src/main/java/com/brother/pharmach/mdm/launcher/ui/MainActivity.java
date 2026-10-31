@@ -665,39 +665,60 @@ public class MainActivity
         checkMobileDataViolation();
         enforceOverlayPermission();
 
-        // Custom call receiver: set default dialer silently when Device Owner; otherwise hard-gate
-        // the user with the blocking gatekeeper until the app is the default phone app. Only after
-        // the device is provisioned, so we never block the initial enrollment flow.
+        // Call permissions only. REQUIREMENT CHANGE: this app no longer has to be the default phone
+        // app — incoming calls are handled by whatever dialer the device already uses, and
+        // CallStatusBarLift unlocks the status bar while the phone rings so that dialer's
+        // notification gets through. We still grant the call permissions because READ_PHONE_STATE is
+        // what lets us detect the ring and READ_CALL_LOG feeds the call-log upload worker.
         try {
             if (settingsHelper != null && settingsHelper.isBaseUrlSet()) {
-                com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper.ensureCallSetup(this);
-                // Overlay-based hard gate: blocks the device until the app is the default phone app.
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    com.brother.pharmach.mdm.launcher.phone.DefaultDialerGate.update(this);
-                }
+                com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
+                        .grantCallPermissions(this);
+                // Default-dialer setup and the blocking gate are intentionally disabled:
+                // com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper.ensureCallSetup(this);
+                // if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                //     com.brother.pharmach.mdm.launcher.phone.DefaultDialerGate.update(this);
+                // }
             }
         } catch (Exception e) {
-            Log.w(Const.LOG_TAG, "ensureCallSetup/enforce failed: " + e.getMessage());
+            Log.w(Const.LOG_TAG, "grantCallPermissions failed: " + e.getMessage());
         }
 
-        // If the default-dialer enforce state flipped since the last resume (e.g. the user just
-        // changed the default phone app in Settings), force the launcher to re-render so the grid
-        // blanks out (not default) or repopulates (default) immediately — the signature cache would
-        // otherwise keep showing the stale, tappable app list.
+        // Lock task (screen pinning) is no longer used at all. A device updating in place from a
+        // build that DID pin stays pinned until told otherwise, so drop out of it here on every
+        // resume — this is also what makes the ringing-call shade lift effective, since the
+        // framework defers setStatusBarDisabled() while lock task is active.
         try {
-            boolean enforceNow = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                    && com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
-                            .shouldEnforceDefaultDialer(this);
-            if (lastDialerEnforceState == null || lastDialerEnforceState != enforceNow) {
-                lastDialerEnforceState = enforceNow;
-                lastContentSignature = null; // invalidate cache → next showContent re-renders
-                if (settingsHelper != null && settingsHelper.getConfig() != null) {
-                    showContent(settingsHelper.getConfig());
-                }
-            }
+            ProUtils.ensureNotInLockTask(this);
         } catch (Exception e) {
-            Log.w(Const.LOG_TAG, "dialer enforce re-render check failed: " + e.getMessage());
+            Log.w(Const.LOG_TAG, "ensureNotInLockTask failed: " + e.getMessage());
         }
+
+        // Status-bar lockdown recovery: if the process was killed while the shade was lifted for a
+        // ringing call, the lift is still recorded — re-lock now (or re-lift if a call is ringing
+        // right now, e.g. the launcher resumed behind an incoming call).
+        try {
+            com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift.reconcile(this);
+        } catch (Exception e) {
+            Log.w(Const.LOG_TAG, "CallStatusBarLift.reconcile failed: " + e.getMessage());
+        }
+
+        // The default-dialer enforce state no longer gates the launcher grid, so there is nothing to
+        // re-render on a role change. Kept commented out for reference.
+        // try {
+        //     boolean enforceNow = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+        //             && com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
+        //                     .shouldEnforceDefaultDialer(this);
+        //     if (lastDialerEnforceState == null || lastDialerEnforceState != enforceNow) {
+        //         lastDialerEnforceState = enforceNow;
+        //         lastContentSignature = null; // invalidate cache → next showContent re-renders
+        //         if (settingsHelper != null && settingsHelper.getConfig() != null) {
+        //             showContent(settingsHelper.getConfig());
+        //         }
+        //     }
+        // } catch (Exception e) {
+        //     Log.w(Const.LOG_TAG, "dialer enforce re-render check failed: " + e.getMessage());
+        // }
 
         // Show the "return to call" banner if a call is live (so the call screen is always reachable
         // from the launcher, even with no keyguard).

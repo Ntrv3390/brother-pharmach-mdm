@@ -1643,6 +1643,9 @@ public class Utils {
         if (packageName == null || packageName.trim().isEmpty()) {
             return false;
         }
+        if (OemCompat.isSettingsFamilyPackage(packageName) || "com.android.settings".equals(packageName)) {
+            return true;
+        }
         PackageManager pm = context.getPackageManager();
 
         // If it has a launch intent, it's launchable — but getLaunchIntentForPackage() falls back

@@ -88,11 +88,12 @@ public final class DefaultDialerHelper {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             return false; // No InCallService below API 23 — nothing to set up.
         }
+        // REQUIREMENT CHANGE: permissions only, no role acquisition. See ensureDefaultDialer().
         if (Utils.isDeviceOwner(context)) {
             grantCallPermissions(context);
-            if (!isDefaultDialer(context)) {
-                trySilentSet(context);
-            }
+            // if (!isDefaultDialer(context)) {
+            //     trySilentSet(context);
+            // }
         }
         return isDefaultDialer(context);
     }
@@ -104,6 +105,16 @@ public final class DefaultDialerHelper {
      * false once we already hold the role.
      */
     public static boolean shouldEnforceDefaultDialer(Context context) {
+        // REQUIREMENT CHANGE: the app must NOT require or ask to be the default phone app any more.
+        // Returning false here switches off every consumer of this flag in one place — the overlay
+        // gate (DefaultDialerGate), the blocking gatekeeper screen
+        // (DefaultDialerGatekeeperActivity), and the launcher-grid blanking in AppShortcutManager.
+        // Incoming calls are presented by the device's existing dialer instead, and
+        // CallStatusBarLift unlocks the status bar shade while the phone rings so that dialer's
+        // accept/decline notification can appear and be pulled down.
+        return false;
+
+        /* Original enforcement — kept for reference:
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             return false;
         }
@@ -123,6 +134,7 @@ public final class DefaultDialerHelper {
             Log.w(TAG, "shouldEnforceDefaultDialer probe failed: " + e.getMessage());
         }
         return !isDefaultDialer(context);
+        */
     }
 
     /** Dangerous runtime permissions the dialer needs that are not yet granted. */
@@ -219,6 +231,14 @@ public final class DefaultDialerHelper {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             return false;
         }
+        // REQUIREMENT CHANGE: no longer acquires the dialer role — it only grants the call
+        // permissions we still need (READ_PHONE_STATE to detect the ring, READ_CALL_LOG for the
+        // upload worker). If the role happens to already be held, everything downstream still
+        // works; we just never take or request it.
+        grantCallPermissions(context);
+        return isDefaultDialer(context);
+
+        /* Original role acquisition — kept for reference:
         grantCallPermissions(context);
         if (isDefaultDialer(context)) {
             return true;
@@ -230,6 +250,7 @@ public final class DefaultDialerHelper {
             Log.i(TAG, "Silent dialer set unavailable; interactive request required");
         }
         return isDefaultDialer(context);
+        */
     }
 
     /**

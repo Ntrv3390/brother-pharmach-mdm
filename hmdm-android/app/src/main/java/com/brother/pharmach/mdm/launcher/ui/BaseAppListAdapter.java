@@ -346,6 +346,11 @@ public class BaseAppListAdapter extends RecyclerView.Adapter<BaseAppListAdapter.
                     launchIntent = pm.getLaunchIntentForPackage(appInfo.packageName);
                 }
 
+                if (launchIntent == null && (com.brother.pharmach.mdm.launcher.util.OemCompat.isSettingsFamilyPackage(appInfo.packageName)
+                        || "com.android.settings".equals(appInfo.packageName))) {
+                    launchIntent = new Intent(android.provider.Settings.ACTION_SETTINGS);
+                }
+
                 // In kiosk (lock-task) mode the system silently refuses to launch any package that
                 // isn't in the lock-task whitelist. Make sure the target is whitelisted first.
                 com.brother.pharmach.mdm.launcher.pro.ProUtils.ensureLockTaskWhitelisted(

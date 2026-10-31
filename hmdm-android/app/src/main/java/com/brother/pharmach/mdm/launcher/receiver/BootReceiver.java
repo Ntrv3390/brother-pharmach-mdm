@@ -29,16 +29,17 @@ public class BootReceiver extends BroadcastReceiver {
                         "Default Dialer Our App: "
                                 + com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
                                         .isDefaultDialer(context));
-                // Attempt a SILENT re-acquire of ROLE_DIALER. A BroadcastReceiver cannot show a
-                // consent dialog, so this only succeeds on tier-A (platform-signed / privileged,
-                // MANAGE_ROLE_HOLDERS) builds — exactly the case where no UI is possible or needed.
-                // On tier-B devices this is a no-op; the overlay gate handles consent on next resume.
-                com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper.ensureDefaultDialer(context);
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                    com.brother.pharmach.mdm.launcher.phone.DefaultDialerGate.update(context);
-                }
+                // REQUIREMENT CHANGE: no dialer-role re-acquire and no gate. Only re-grant the call
+                // permissions, in case the update cleared them — READ_PHONE_STATE is what lets us
+                // detect an incoming ring and lift the status-bar lock for it.
+                com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
+                        .grantCallPermissions(context);
+                // com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper.ensureDefaultDialer(context);
+                // if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                //     com.brother.pharmach.mdm.launcher.phone.DefaultDialerGate.update(context);
+                // }
             } catch (Exception e) {
-                Log.w(Const.LOG_TAG, "post-OTA role re-acquire failed: " + e.getMessage());
+                Log.w(Const.LOG_TAG, "post-OTA call permission re-grant failed: " + e.getMessage());
             }
             Intent launch = new Intent(context, com.brother.pharmach.mdm.launcher.ui.MainActivity.class);
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
@@ -68,16 +69,20 @@ public class BootReceiver extends BroadcastReceiver {
         Initializer.init(context, () -> {
             Initializer.startServicesAndLoadConfig(context);
 
-            // Custom call receiver: the dialer role persists across reboots, but re-assert it and
-            // re-grant the call permissions defensively in case an OEM cleared them on update/boot.
+            // Re-grant the call permissions defensively in case an OEM cleared them on update/boot,
+            // and re-assert the status-bar lockdown (a reboot during a ringing call would otherwise
+            // leave the persisted lift in place — setStatusBarDisabled survives reboots).
+            // REQUIREMENT CHANGE: no dialer-role re-acquire and no hard gate.
             try {
-                com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper.ensureDefaultDialer(context);
-                // Bring up the hard gate right after boot if we're not the default phone app.
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                    com.brother.pharmach.mdm.launcher.phone.DefaultDialerGate.update(context);
-                }
+                com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
+                        .grantCallPermissions(context);
+                com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift.reconcile(context);
+                // com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper.ensureDefaultDialer(context);
+                // if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                //     com.brother.pharmach.mdm.launcher.phone.DefaultDialerGate.update(context);
+                // }
             } catch (Exception e) {
-                Log.w(Const.LOG_TAG, "BootReceiver: default dialer re-verify failed: " + e.getMessage());
+                Log.w(Const.LOG_TAG, "BootReceiver: call setup re-verify failed: " + e.getMessage());
             }
 
             // Start the battery optimization compliance monitor.

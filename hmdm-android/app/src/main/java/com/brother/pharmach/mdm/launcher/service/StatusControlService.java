@@ -42,6 +42,7 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import com.brother.pharmach.mdm.launcher.BuildConfig;
 import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.R;
+import com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 import com.brother.pharmach.mdm.launcher.pro.service.CheckForegroundAppAccessibilityService;
 import com.brother.pharmach.mdm.launcher.ui.MainActivity;
@@ -131,6 +132,11 @@ public class StatusControlService extends Service {
     private List<PhoneStateListener> phoneStateListeners = new ArrayList<>();
     private SubscriptionManager.OnSubscriptionsChangedListener subscriptionsChangedListener;
 
+    // Call-state watchers, kept separate from the mobile-data ones above because they must be
+    // registered on EVERY API level (23+), not just P+ — see registerCallStateWatcher().
+    private List<Object> callStateTelephonyCallbacks = new ArrayList<>();
+    private List<PhoneStateListener> callStatePhoneStateListeners = new ArrayList<>();
+
     private static class PackageInfo {
         public String packageName;
         public String className;
@@ -178,6 +184,7 @@ public class StatusControlService extends Service {
     private final Runnable simChangeRunnable = () -> {
         try {
             registerMobileDataCallback();
+            registerCallStateWatcher();
             threadPoolExecutor.execute(() -> {
                 controlStatus();
                 enforceMobileDataPolicy();
@@ -194,6 +201,7 @@ public class StatusControlService extends Service {
         unregisterSmsObserver();
         unregisterMobileDataObserver();
         unregisterMobileDataCallback();
+        unregisterCallStateWatcher();
         unregisterSubscriptionsChangedListener();
         unregisterGpsStateReceiver();
 
@@ -334,6 +342,121 @@ public class StatusControlService extends Service {
         }
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // Call-state watcher — the FASTEST ring signal available to us.
+    //
+    // This is an in-process telephony callback, so it fires directly from the telephony stack with
+    // no broadcast queue in between; it beats the PHONE_STATE broadcast that CallStateReceiver
+    // listens for (which is the backup path, kept for when this service is not running). On RINGING
+    // we drop the kiosk status-bar lockdown so the dialer's incoming-call notification can be posted
+    // and pulled down; on every other state we put the lockdown straight back.
+    //
+    // API-DIFF: Android 12 (API 31) replaced PhoneStateListener with TelephonyCallback and made the
+    // old listen() path a no-op for call state, so both are wired here. Registration happens on the
+    // main thread, which owns a Looper — mandatory for the pre-31 PhoneStateListener constructor.
+    // ---------------------------------------------------------------------------------------------
+
+    private void registerCallStateWatcher() {
+        unregisterCallStateWatcher();
+        TelephonyManager tm = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
+        if (tm == null) {
+            return;
+        }
+
+        SubscriptionManager sm = null;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+            sm = (SubscriptionManager) getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+        }
+
+        if (sm != null) {
+            try {
+                List<SubscriptionInfo> subs = sm.getActiveSubscriptionInfoList();
+                if (subs != null && !subs.isEmpty()) {
+                    for (SubscriptionInfo sub : subs) {
+                        int subId = sub.getSubscriptionId();
+                        TelephonyManager subTm = tm;
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            subTm = tm.createForSubscriptionId(subId);
+                        }
+                        registerCallStateCallbackForManager(subTm);
+                    }
+                } else {
+                    registerCallStateCallbackForManager(tm);
+                }
+            } catch (SecurityException e) {
+                registerCallStateCallbackForManager(tm);
+            } catch (Exception e) {
+                registerCallStateCallbackForManager(tm);
+            }
+        } else {
+            registerCallStateCallbackForManager(tm);
+        }
+    }
+
+    private void registerCallStateCallbackForManager(TelephonyManager tm) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                class CallStateCallback extends TelephonyCallback
+                        implements TelephonyCallback.CallStateListener {
+                    @Override
+                    public void onCallStateChanged(int state) {
+                        handleCallState(state);
+                    }
+                }
+                CallStateCallback cb = new CallStateCallback();
+                tm.registerTelephonyCallback(getMainExecutor(), cb);
+                callStateTelephonyCallbacks.add(cb);
+            } else {
+                PhoneStateListener listener = new PhoneStateListener() {
+                    @Override
+                    public void onCallStateChanged(int state, String incomingNumber) {
+                        handleCallState(state);
+                    }
+                };
+                tm.listen(listener, PhoneStateListener.LISTEN_CALL_STATE);
+                callStatePhoneStateListeners.add(listener);
+            }
+            Log.i(Const.LOG_TAG, "StatusControlService: call-state watcher registered for " + tm);
+        } catch (Exception e) {
+            Log.w(Const.LOG_TAG, "call-state watcher registration failed: " + e.getMessage());
+        }
+    }
+
+    /** RINGING → unlock the shade. Answered / ended / idle / anything else → re-lock it. */
+    private void handleCallState(int state) {
+        try {
+            if (state == TelephonyManager.CALL_STATE_RINGING) {
+                CallStatusBarLift.liftForRingingCall(this, "telephony-callback");
+            } else {
+                CallStatusBarLift.relock(this, "telephony-callback/"
+                        + (state == TelephonyManager.CALL_STATE_OFFHOOK ? "offhook" : "idle"));
+            }
+        } catch (Exception e) {
+            Log.w(Const.LOG_TAG, "handleCallState failed: " + e.getMessage());
+        }
+    }
+
+    private void unregisterCallStateWatcher() {
+        TelephonyManager tm = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
+        if (tm != null) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    for (Object cb : callStateTelephonyCallbacks) {
+                        tm.unregisterTelephonyCallback((TelephonyCallback) cb);
+                    }
+                } else {
+                    for (PhoneStateListener listener : callStatePhoneStateListeners) {
+                        tm.listen(listener, PhoneStateListener.LISTEN_NONE);
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        callStateTelephonyCallbacks.clear();
+        callStatePhoneStateListeners.clear();
+    }
+
     private void unregisterMobileDataCallback() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             TelephonyManager tm = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
@@ -392,7 +515,11 @@ public class StatusControlService extends Service {
         registerSmsObserverIfNeeded();
         registerMobileDataObserver();
         registerMobileDataCallback();
+        registerCallStateWatcher();
         registerSubscriptionsChangedListener();
+        // Recovery: if the process was killed while the shade was lifted for a ring, the persisted
+        // flag is still set — put the kiosk lockdown back now that we are running again.
+        CallStatusBarLift.reconcile(this);
         applyInitialGpsPolicy();
         registerGpsStateReceiver();
 
@@ -683,6 +810,14 @@ public class StatusControlService extends Service {
     }
 
     private void controlStatus() {
+        // Outermost safety net for the status-bar lift: independent of the config/controlDisabled
+        // checks below, so a lift can never outlive the ring even when status control is disabled.
+        try {
+            CallStatusBarLift.reconcile(this);
+        } catch (Exception e) {
+            Log.w(Const.LOG_TAG, "CallStatusBarLift.reconcile failed: " + e.getMessage());
+        }
+
         ServerConfig config = settingsHelper.getConfig();
         if (config == null || controlDisabled) {
             return;

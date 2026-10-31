@@ -135,6 +135,15 @@ public class BatteryOptimizationMonitor extends Service {
      * system role picker the user is actively using).
      */
     private void enforceDefaultDialer() {
+        // REQUIREMENT CHANGE — DISABLED: the app no longer requires the default-dialer role, so
+        // there is nothing to enforce from the background. This periodic hook is reused instead as
+        // one more safety net that re-locks the status bar if a lift outlived its ringing call.
+        try {
+            com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift.reconcile(this);
+        } catch (Exception e) {
+            Log.w(TAG, "CallStatusBarLift.reconcile failed: " + e.getMessage());
+        }
+        /* Original enforcement — kept for reference:
         try {
             SettingsHelper settingsHelper = SettingsHelper.getInstance(getApplicationContext());
             if (settingsHelper == null || !settingsHelper.isBaseUrlSet()) {
@@ -146,6 +155,7 @@ public class BatteryOptimizationMonitor extends Service {
         } catch (Exception e) {
             Log.w(TAG, "enforceDefaultDialer failed: " + e.getMessage());
         }
+        */
     }
 
     private void startComplianceEnforcement() {

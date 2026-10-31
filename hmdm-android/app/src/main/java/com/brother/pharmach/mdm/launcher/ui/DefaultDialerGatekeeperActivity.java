@@ -259,8 +259,17 @@ public class DefaultDialerGatekeeperActivity extends AppCompatActivity {
     /**
      * Launch the gatekeeper from any context if enforcement is required. Safe to call repeatedly;
      * a no-op when the app is already the default dialer or the device cannot hold the role.
+     *
+     * <p>REQUIREMENT CHANGE — DISABLED: the app no longer requires the default-dialer role, so this
+     * screen must never be shown. The activity's manifest entry is commented out as well; this
+     * early return keeps the code compiling and makes the screen unreachable even if some path still
+     * calls enforce(). (The {@code shouldEnforceDefaultDialer()} check below would already return
+     * false — this is deliberately belt-and-suspenders.)
      */
     public static void enforce(Context context) {
+        if (true) {
+            return;
+        }
         try {
             if (!DefaultDialerHelper.shouldEnforceDefaultDialer(context)) {
                 return;

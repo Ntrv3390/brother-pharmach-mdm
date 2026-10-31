@@ -113,6 +113,12 @@ public class ProUtils {
             return;
         }
 
+        // A call is ringing right now — CallStatusBarLift owns the status bar state until it stops
+        // ringing. Re-locking here would suppress the incoming-call notification.
+        if (com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift.isLifted()) {
+            return;
+        }
+
         try {
             ComponentName adminComponent = new ComponentName(activity, AdminReceiver.class);
             if (dpm.isDeviceOwnerApp(activity.getPackageName())) {
@@ -126,6 +132,63 @@ public class ProUtils {
         }
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // Transparent status-bar touch blocker. Held statically (added with the APPLICATION context's
+    // WindowManager, so it outlives the Activity) because CallStatusBarLift must be able to drop it
+    // the instant a call rings and put it back afterwards, from a service or a receiver that has no
+    // Activity at hand.
+    // ---------------------------------------------------------------------------------------------
+
+    private static View sBlockerView;
+    private static int sBlockerHeightPx;
+
+    /**
+     * Adds/removes the transparent bar over the status bar strip.
+     *
+     * <p>Callable from any thread: adding/removing a View through the WindowManager must happen on
+     * the main thread, and the callers include a background status-control tick, so the work is
+     * hopped onto the main looper when needed.
+     *
+     * @param enabled true to block status-bar touches, false to let them through (ringing call).
+     */
+    public static void setStatusBarBlockerEnabled(final Context context, final boolean enabled) {
+        if (context == null) {
+            return;
+        }
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+            new android.os.Handler(android.os.Looper.getMainLooper())
+                    .post(() -> setStatusBarBlockerEnabled(context, enabled));
+            return;
+        }
+        Context app = context.getApplicationContext();
+        if (enabled) {
+            if (sBlockerView == null && sBlockerHeightPx > 0) {
+                // Only re-create a blocker we previously owned: a zero height means
+                // preventStatusBarExpansion never ran for this config (e.g. kiosk mode, where the
+                // native lock-task policy does the blocking) and there is nothing to restore.
+                sBlockerView = addBlockingOverlay(app, sBlockerHeightPx);
+            }
+        } else {
+            removeBlockingOverlay(app);
+        }
+    }
+
+    private static void removeBlockingOverlay(Context app) {
+        View view = sBlockerView;
+        sBlockerView = null;
+        if (view == null) {
+            return;
+        }
+        try {
+            WindowManager wm = (WindowManager) app.getSystemService(Context.WINDOW_SERVICE);
+            if (wm != null) {
+                wm.removeView(view);
+            }
+        } catch (Exception e) {
+            Log.w("ProUtils", "removeBlockingOverlay failed", e);
+        }
+    }
+
     private static View addBlockingOverlay(Activity activity) {
         int resourceId = activity.getResources().getIdentifier("status_bar_height", "dimen", "android");
         int statusBarHeight = 0;
@@ -136,7 +199,16 @@ public class ProUtils {
             statusBarHeight = (int) (24 * activity.getResources().getDisplayMetrics().density);
         }
 
-        View blockingView = new BlockingBar(activity);
+        // Remember the geometry so a blocker dropped for a ringing call can be rebuilt afterwards
+        // without an Activity (see setStatusBarBlockerEnabled).
+        sBlockerHeightPx = statusBarHeight;
+        removeBlockingOverlay(activity.getApplicationContext());
+        sBlockerView = addBlockingOverlay(activity.getApplicationContext(), statusBarHeight);
+        return sBlockerView;
+    }
+
+    private static View addBlockingOverlay(Context app, int statusBarHeight) {
+        View blockingView = new BlockingBar(app);
         blockingView.setBackgroundColor(Color.TRANSPARENT);
         blockingView.setClickable(true);
         blockingView.setFocusable(true);
@@ -152,7 +224,7 @@ public class ProUtils {
         params.gravity = Gravity.TOP | Gravity.START;
         params.format = PixelFormat.TRANSPARENT;
 
-        WindowManager windowManager = (WindowManager) activity.getApplicationContext().getSystemService(Context.WINDOW_SERVICE);
+        WindowManager windowManager = (WindowManager) app.getSystemService(Context.WINDOW_SERVICE);
         if (windowManager != null) {
             try {
                 windowManager.addView(blockingView, params);
@@ -165,7 +237,28 @@ public class ProUtils {
         return blockingView;
     }
 
-    // Add a transparent view on top of the status bar which prevents user interaction with the status bar
+    /**
+     * Blocks status-bar expansion without hiding the status bar.
+     *
+     * <p>Two layers, both of which leave the clock / battery / signal icons visible:
+     * <ol>
+     *   <li>{@code setStatusBarDisabled} (API 24+, device owner). Contrary to its name this does not
+     *       blank the bar — the platform applies only {@code DISABLE_EXPAND},
+     *       {@code DISABLE_NOTIFICATION_ICONS}, {@code DISABLE_NOTIFICATION_ALERTS},
+     *       {@code DISABLE_SEARCH} and {@code DISABLE2_QUICK_SETTINGS}, so system info stays put
+     *       while the shade and quick settings become unreachable.</li>
+     *   <li>A transparent touch blocker over the status-bar strip, which is what covers Android 6
+     *       (API 23), where {@code setStatusBarDisabled} does not exist.</li>
+     * </ol>
+     *
+     * <p>REQUIREMENT CHANGE — this now runs in kiosk mode too. It used to bail out when kiosk mode
+     * was configured, because lock-task did the blocking; with lock-task gone these two layers are
+     * the entire mechanism, so they must always be applied.
+     *
+     * <p>Deliberately does NOT hide the bars: the earlier Android 12+ immersive/fullscreen path is
+     * commented out below because hiding the bar is what produced the black status bar that only
+     * revealed itself on hover/swipe. Blocking expansion is the requirement; hiding is not.
+     */
     public static View preventStatusBarExpansion(Activity activity) {
         if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
             return null;
@@ -173,12 +266,22 @@ public class ProUtils {
 
         applyDevicePolicyStatusBarLock(activity);
 
-        if (kioskModeRequired(activity)) {
-            return null;
-        }
-
         View overlayView = addBlockingOverlay(activity);
 
+        // If a call started ringing while the launcher was coming up, hand the state straight back
+        // to the lift (which drops the blocker again) instead of leaving the shade blocked.
+        if (com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift.isLifted()) {
+            setStatusBarBlockerEnabled(activity, false);
+            overlayView = null;
+        }
+
+        return overlayView;
+    }
+
+    /* DISABLED — hiding the system bars is what caused the black status bar that only appeared on
+     * hover. Kept for reference; preventStatusBarExpansion() above now blocks expansion while
+     * leaving the bar (clock, battery, signal) fully visible.
+    private static void hideSystemBarsLegacy(Activity activity) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             // Android 12+ (API 31+): keep the bars hidden and re-hide them if the framework
             // tries to reveal them after the overlay intercepts the swipe.
@@ -224,9 +327,8 @@ public class ProUtils {
                 return insets;
             });
         }
-
-        return overlayView;
     }
+    */
 
     // Add a transparent view on top of a swipeable area at the right (opens app list on Samsung tablets)
     public static View preventApplicationsList(Activity activity) {
@@ -256,7 +358,26 @@ public class ProUtils {
         return false;
     }
 
+    /**
+     * True when kiosk mode is ENGAGED.
+     *
+     * <p>REQUIREMENT CHANGE: the app no longer uses Android lock-task (pinning) at all, so this can
+     * no longer be answered by asking the platform. Kiosk mode is now purely our own policy —
+     * launcher pinned as the unchangeable home app + status bar locked — so "engaged" means "the
+     * server config asks for kiosk mode". A genuine lock-task state is still ORed in so that a
+     * device upgrading from a build that DID pin keeps behaving correctly until we drop out of it.
+     *
+     * <p>Defining it this way keeps every existing caller correct: the launcher render path, the
+     * lock-task allowlist upkeep, and the kiosk flag reported to the MDM server all continue to see
+     * kiosk mode as active when the admin has switched it on. Callers that need the literal platform
+     * state must use {@link #isInLockTask(Context)} instead.
+     */
     public static boolean isKioskModeRunning(Context context) {
+        return kioskModeRequired(context) || isInLockTask(context);
+    }
+
+    /** The literal platform lock-task (screen pinning) state. Should always be false now. */
+    public static boolean isInLockTask(Context context) {
         try {
             ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
             if (am == null) return false;
@@ -270,6 +391,24 @@ public class ProUtils {
         }
     }
 
+    /**
+     * Leaves lock-task mode if the device is somehow in it — the upgrade path from a build that
+     * called {@code startLockTask()}, since lock-task survives an in-place app update. Called early
+     * in the launcher lifecycle so a device updating into this build drops out of pinning on the
+     * first render instead of staying pinned forever.
+     */
+    public static void ensureNotInLockTask(Activity activity) {
+        if (activity == null || !isInLockTask(activity)) {
+            return;
+        }
+        try {
+            activity.stopLockTask();
+            Log.i("ProUtils", "Left lock-task mode — lock task is no longer used by this build");
+        } catch (Exception e) {
+            Log.w("ProUtils", "stopLockTask failed", e);
+        }
+    }
+
     public static Intent getKioskAppIntent(String kioskApp, Activity activity) {
         try {
             return activity.getPackageManager().getLaunchIntentForPackage(kioskApp);
@@ -278,7 +417,28 @@ public class ProUtils {
         }
     }
 
-    // Start COSU kiosk mode
+    /**
+     * Engage kiosk mode.
+     *
+     * <p>REQUIREMENT CHANGE — NO LOCK TASK: this used to call {@code startLockTask()} (Android
+     * screen pinning / COSU). It no longer does, and nothing else in the app does either. Kiosk mode
+     * is now enforced entirely by our own policy:
+     * <ul>
+     *   <li>the launcher is pinned as the unchangeable default home app
+     *       ({@code addPersistentPreferredActivity}, see DevicePolicyBootstrapper /
+     *       Utils.setDefaultLauncher), so Home always returns here and the user cannot switch it;</li>
+     *   <li>the status bar cannot be expanded ({@code setStatusBarDisabled} + our touch blocker),
+     *       except while a call is ringing (see CallStatusBarLift).</li>
+     * </ul>
+     * Dropping lock-task also removes its side effects: no "screen pinned" system UI, Recents and
+     * Home behave normally, whitelisted-app launching is no longer silently filtered, and — the
+     * reason this matters most here — the shade lift for a ringing call now takes effect on Android
+     * 7+ instead of only Android 9+, because {@code setStatusBarDisabled} is no longer deferred by
+     * the framework while lock-task is active.
+     *
+     * <p>The lock-task allowlist is still maintained (a cheap, idempotent DPM call) so that turning
+     * pinning back on would need only the one commented-out line below.
+     */
     public static boolean startCosuKioskMode(String kioskApp, Activity activity, boolean enableSettings) {
         try {
             DevicePolicyManager dpm = (DevicePolicyManager) activity.getSystemService(Context.DEVICE_POLICY_SERVICE);
@@ -294,8 +454,12 @@ public class ProUtils {
                 String[] packages = pkgSet.toArray(new String[0]);
                 dpm.setLockTaskPackages(adminComponent, packages);
                 updateKioskOptions(activity);
-                activity.startLockTask();
-                
+                // Lock task (screen pinning) is intentionally NOT started any more:
+                // activity.startLockTask();
+                // Belt-and-suspenders for the upgrade path: if this device is still pinned from a
+                // previous build, leave pinning now.
+                ensureNotInLockTask(activity);
+
                 if (!kioskApp.equals(activity.getPackageName())) {
                     Intent intent = activity.getPackageManager().getLaunchIntentForPackage(kioskApp);
                     if (intent != null) {
@@ -318,13 +482,13 @@ public class ProUtils {
             ComponentName adminComponent = new ComponentName(activity, AdminReceiver.class);
             if (dpm != null && dpm.isDeviceOwnerApp(activity.getPackageName())) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    // Disable status bar expansion by omitting LOCK_TASK_FEATURE_NOTIFICATIONS
-                    // Enable SYSTEM_INFO to show time, battery and network icons.
-                    // Enable OVERVIEW to keep the Recents button functional.
-                    int flags = DevicePolicyManager.LOCK_TASK_FEATURE_HOME 
-                            | DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD
-                            | DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
-                            | DevicePolicyManager.LOCK_TASK_FEATURE_OVERVIEW;
+                    // Feature set comes from CallStatusBarLift, the single authority: normally it
+                    // omits LOCK_TASK_FEATURE_NOTIFICATIONS (so shade expansion and heads-up alerts
+                    // are blocked) but includes it while a call is ringing. Reading it from there
+                    // means re-applying kiosk options mid-ring cannot clobber the lift.
+                    // SYSTEM_INFO keeps the clock/battery/network icons; OVERVIEW keeps Recents.
+                    int flags = com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift
+                            .currentLockTaskFeatures();
                     dpm.setLockTaskFeatures(adminComponent, flags);
                     Log.i("ProUtils", "Kiosk lock task features updated: " + flags);
                 }

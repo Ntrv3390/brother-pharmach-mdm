@@ -32,6 +32,7 @@ import androidx.work.NetworkType;
 import androidx.work.OneTimeWorkRequest;
 import androidx.work.WorkManager;
 
+import com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift;
 import com.brother.pharmach.mdm.launcher.worker.CallLogUploadWorker;
 
 import java.util.concurrent.TimeUnit;
@@ -53,7 +54,30 @@ public class CallStateReceiver extends BroadcastReceiver {
             } else if (TelephonyManager.EXTRA_STATE_RINGING.equals(stateStr)) {
                 state = TelephonyManager.CALL_STATE_RINGING;
             }
+            // FIRST thing, before any other work: unlock / re-lock the status bar shade. A ringing
+            // call needs the shade (and heads-up alerts) available or the dialer's accept/decline
+            // notification is suppressed by the kiosk lockdown; every other state must put the
+            // lockdown straight back. This is a couple of direct binder calls, so doing it inline
+            // here — rather than posting it — is what makes it land "super fast".
+            applyStatusBarLift(context, state);
             onCallStateChanged(context, state);
+        }
+    }
+
+    /**
+     * RINGING → shade unlocked. OFFHOOK (answered / in call), IDLE (ended, declined, missed) and
+     * anything else → shade re-locked.
+     */
+    private void applyStatusBarLift(Context context, int state) {
+        try {
+            if (state == TelephonyManager.CALL_STATE_RINGING) {
+                CallStatusBarLift.liftForRingingCall(context, "PHONE_STATE");
+            } else {
+                CallStatusBarLift.relock(context, "PHONE_STATE/"
+                        + (state == TelephonyManager.CALL_STATE_OFFHOOK ? "offhook" : "idle"));
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "status bar lift/relock failed: " + e.getMessage());
         }
     }
 
