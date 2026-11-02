@@ -152,6 +152,40 @@ resolve_android_sdk_dir() {
   echo "Using Android SDK: $sdk"
 }
 
+# AGP 8.2.2 requires JDK 17 (JDK 11 is too old, JDK 21 is not supported by this AGP).
+resolve_java_home() {
+  local candidates=()
+  [[ -n "${JAVA_HOME:-}" ]] && candidates+=("$(normalize_windows_path_for_unix "${JAVA_HOME}")")
+  candidates+=(
+    "/usr/lib/jvm/java-17-openjdk-amd64"
+    "/usr/lib/jvm/java-1.17.0-openjdk-amd64"
+    "/usr/lib/jvm/java-17-openjdk"
+    "/opt/java/openjdk"
+  )
+
+  local extra
+  for extra in /usr/lib/jvm/*17*; do
+    [[ -d "$extra" ]] && candidates+=("$extra")
+  done
+
+  local c ver
+  for c in "${candidates[@]}"; do
+    [[ -z "$c" || ! -x "$c/bin/javac" ]] && continue
+    ver="$("$c/bin/javac" -version 2>&1 | awk '{print $2}' | cut -d. -f1)"
+    if [[ "$ver" == "17" ]]; then
+      export JAVA_HOME="$c"
+      export PATH="$JAVA_HOME/bin:$PATH"
+      echo "Using JDK 17: $JAVA_HOME"
+      return 0
+    fi
+  done
+
+  echo "ERROR: JDK 17 not found (required by Android Gradle Plugin 8.2.2)."
+  echo "Install it with: sudo apt-get install -y openjdk-17-jdk"
+  echo "Or set JAVA_HOME to a JDK 17 installation before running this script."
+  exit 1
+}
+
 bump_android_version() {
   local cur_code cur_name
   cur_code="$(grep '^VERSION_CODE=' "$VERSION_FILE" | head -1 | cut -d= -f2 | tr -d '[:space:]')"
@@ -185,6 +219,7 @@ bump_android_version() {
 }
 
 resolve_android_sdk_dir
+resolve_java_home
 bump_android_version
 
 echo "Android BUILD_TYPE: $BUILD_TYPE"
