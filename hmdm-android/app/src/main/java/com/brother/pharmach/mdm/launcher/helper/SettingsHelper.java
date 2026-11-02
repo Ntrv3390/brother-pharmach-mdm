@@ -115,7 +115,8 @@ public class SettingsHelper {
     }
 
     public boolean setQrProvisioning(boolean value) {
-        return sharedPreferences.edit().putBoolean(PACKAGE_NAME + PREF_QR_PROVISIONING, value).commit();
+        sharedPreferences.edit().putBoolean(PACKAGE_NAME + PREF_QR_PROVISIONING, value).apply();
+        return true;
     }
 
     public boolean isIntegratedProvisioningFlow() {
@@ -123,7 +124,8 @@ public class SettingsHelper {
     }
 
     public boolean setIntegratedProvisioningFlow(boolean value) {
-        return sharedPreferences.edit().putBoolean(PACKAGE_NAME + PREF_KEY_INTEGRATED_PROVISIONING_FLOW, value).commit();
+        sharedPreferences.edit().putBoolean(PACKAGE_NAME + PREF_KEY_INTEGRATED_PROVISIONING_FLOW, value).apply();
+        return true;
     }
 
     public boolean isStartupSyncComplete() {
@@ -131,7 +133,8 @@ public class SettingsHelper {
     }
 
     public boolean setStartupSyncComplete(boolean value) {
-        return sharedPreferences.edit().putBoolean(PACKAGE_NAME + PREF_KEY_STARTUP_SYNC_COMPLETE, value).commit();
+        sharedPreferences.edit().putBoolean(PACKAGE_NAME + PREF_KEY_STARTUP_SYNC_COMPLETE, value).apply();
+        return true;
     }
 
     public boolean isBaseUrlSet() {
@@ -143,7 +146,8 @@ public class SettingsHelper {
     }
 
     public boolean setBaseUrl( String baseUrl ) {
-        return sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_BASE_URL, baseUrl ).commit();
+        sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_BASE_URL, baseUrl ).apply();
+        return true;
     }
 
     public String getSecondaryBaseUrl() {
@@ -151,7 +155,8 @@ public class SettingsHelper {
     }
 
     public boolean setSecondaryBaseUrl( String secondaryBaseUrl ) {
-        return sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_SECONDARY_BASE_URL, secondaryBaseUrl ).commit();
+        sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_SECONDARY_BASE_URL, secondaryBaseUrl ).apply();
+        return true;
     }
 
     public String getServerProject() {
@@ -159,7 +164,8 @@ public class SettingsHelper {
     }
 
     public boolean setServerProject( String serverProject ) {
-        return sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_SERVER_PROJECT, serverProject ).commit();
+        sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_SERVER_PROJECT, serverProject ).apply();
+        return true;
     }
 
     public String getCertUrls() {
@@ -167,7 +173,8 @@ public class SettingsHelper {
     }
 
     public boolean setCertUrls( String certUrls ) {
-        return sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_CERT_URLS, certUrls ).commit();
+        sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_CERT_URLS, certUrls ).apply();
+        return true;
     }
 
     public String getDeviceId() {
@@ -175,7 +182,8 @@ public class SettingsHelper {
     }
 
     public boolean setDeviceId( String deviceId ) {
-        return sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_DEVICE_ID, deviceId ).commit();
+        sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_DEVICE_ID, deviceId ).apply();
+        return true;
     }
 
     public String getExternalIp() {
@@ -186,7 +194,8 @@ public class SettingsHelper {
         if (externalIp == null) {
             externalIp = "";
         }
-        return sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_IP_ADDRESS, externalIp ).commit();
+        sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_IP_ADDRESS, externalIp ).apply();
+        return true;
     }
 
     public boolean isMainActivityRunning() {
@@ -194,7 +203,8 @@ public class SettingsHelper {
     }
 
     public boolean setMainActivityRunning(boolean running) {
-        return sharedPreferences.edit().putBoolean(PACKAGE_NAME + PREF_KEY_ACTIVITY_RUNNING, running ).commit();
+        sharedPreferences.edit().putBoolean(PACKAGE_NAME + PREF_KEY_ACTIVITY_RUNNING, running ).apply();
+        return true;
     }
 
     public boolean isRestoreLauncher() {
@@ -202,7 +212,8 @@ public class SettingsHelper {
     }
 
     public boolean setRestoreLauncher(boolean restore) {
-        return sharedPreferences.edit().putBoolean(PACKAGE_NAME + PREF_KEY_RESTORE_LAUNCHER, restore ).commit();
+        sharedPreferences.edit().putBoolean(PACKAGE_NAME + PREF_KEY_RESTORE_LAUNCHER, restore ).apply();
+        return true;
     }
 
     public long getConfigUpdateTimestamp() {
@@ -210,15 +221,17 @@ public class SettingsHelper {
     }
 
     public boolean setConfigUpdateTimestamp(long timestamp) {
-        return sharedPreferences.edit().putLong(PACKAGE_NAME + PREF_CFG_UPDATE_TIMESTAMP, timestamp).commit();
+        sharedPreferences.edit().putLong(PACKAGE_NAME + PREF_CFG_UPDATE_TIMESTAMP, timestamp).apply();
+        return true;
     }
 
     public boolean setEnrollOptionCustomer(String customer) {
         if (customer == null) {
-            return sharedPreferences.edit().remove(PACKAGE_NAME + PREF_KEY_CUSTOMER).commit();
+            sharedPreferences.edit().remove(PACKAGE_NAME + PREF_KEY_CUSTOMER).apply();
         } else {
-            return sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_CUSTOMER, customer ).commit();
+            sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_CUSTOMER, customer ).apply();
         }
+        return true;
     }
 
     public String getEnrollOptionCustomer() {
@@ -227,10 +240,11 @@ public class SettingsHelper {
 
     public boolean setDeviceIdUse(String deviceIdUse) {
         if (deviceIdUse == null) {
-            return sharedPreferences.edit().remove(PACKAGE_NAME + PREF_KEY_DEVICE_ID_USE).commit();
+            sharedPreferences.edit().remove(PACKAGE_NAME + PREF_KEY_DEVICE_ID_USE).apply();
         } else {
-            return sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_DEVICE_ID_USE, deviceIdUse ).commit();
+            sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_DEVICE_ID_USE, deviceIdUse ).apply();
         }
+        return true;
     }
 
     public String getDeviceIdUse() {
@@ -238,7 +252,8 @@ public class SettingsHelper {
     }
 
     public boolean setLastAppUpdateState(boolean lastAppUpdateState) {
-        return sharedPreferences.edit().putBoolean(PACKAGE_NAME + PREF_KEY_LAST_APP_UPDATE_STATE, lastAppUpdateState).commit();
+        sharedPreferences.edit().putBoolean(PACKAGE_NAME + PREF_KEY_LAST_APP_UPDATE_STATE, lastAppUpdateState).apply();
+        return true;
     }
 
     public boolean getLastAppUpdateState() {
@@ -246,7 +261,8 @@ public class SettingsHelper {
     }
 
     public boolean setAppStartTime(long time) {
-        return sharedPreferences.edit().putLong(PACKAGE_NAME + PREF_KEY_APP_START_TIME, time).commit();
+        sharedPreferences.edit().putLong(PACKAGE_NAME + PREF_KEY_APP_START_TIME, time).apply();
+        return true;
     }
 
     public long getAppStartTime() {
@@ -255,7 +271,8 @@ public class SettingsHelper {
 
 
     public boolean setSatelliteCount(int count) {
-        return sharedPreferences.edit().putInt(PACKAGE_NAME + PREF_KEY_SATELLITE_COUNT, count).commit();
+        sharedPreferences.edit().putInt(PACKAGE_NAME + PREF_KEY_SATELLITE_COUNT, count).apply();
+        return true;
     }
 
     public int getSatelliteCount() {
@@ -264,10 +281,11 @@ public class SettingsHelper {
 
     public boolean setEnrollOptionConfigName(String configName) {
         if (configName == null) {
-            return sharedPreferences.edit().remove(PACKAGE_NAME + PREF_KEY_CONFIG_NAME).commit();
+            sharedPreferences.edit().remove(PACKAGE_NAME + PREF_KEY_CONFIG_NAME).apply();
         } else {
-            return sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_CONFIG_NAME, configName ).commit();
+            sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_CONFIG_NAME, configName ).apply();
         }
+        return true;
     }
 
     public String getEnrollOptionConfigName() {
@@ -276,10 +294,11 @@ public class SettingsHelper {
 
     public boolean setEnrollOptionGroup(Set<String> group) {
         if (group == null) {
-            return sharedPreferences.edit().remove(PACKAGE_NAME + PREF_KEY_GROUP).commit();
+            sharedPreferences.edit().remove(PACKAGE_NAME + PREF_KEY_GROUP).apply();
         } else {
-            return sharedPreferences.edit().putStringSet(PACKAGE_NAME + PREF_KEY_GROUP, group).commit();
+            sharedPreferences.edit().putStringSet(PACKAGE_NAME + PREF_KEY_GROUP, group).apply();
         }
+        return true;
     }
 
     public Set<String> getEnrollOptionGroup() {
@@ -287,7 +306,8 @@ public class SettingsHelper {
     }
 
     public boolean setUserCustom1(String userCustom) {
-        return sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_USER_CUSTOM_1, userCustom).commit();
+        sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_USER_CUSTOM_1, userCustom).apply();
+        return true;
     }
 
     public String getUserCustom1() {
@@ -295,7 +315,8 @@ public class SettingsHelper {
     }
 
     public boolean setUserCustom2(String userCustom) {
-        return sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_USER_CUSTOM_2, userCustom).commit();
+        sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_USER_CUSTOM_2, userCustom).apply();
+        return true;
     }
 
     public String getUserCustom2() {
@@ -303,7 +324,8 @@ public class SettingsHelper {
     }
 
     public boolean setUserCustom3(String userCustom) {
-        return sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_USER_CUSTOM_3, userCustom).commit();
+        sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_USER_CUSTOM_3, userCustom).apply();
+        return true;
     }
 
     public String getUserCustom3() {
@@ -313,7 +335,7 @@ public class SettingsHelper {
     public void updateConfig( ServerConfig config ) {
         try {
             ObjectMapper objectMapper = new ObjectMapper();
-            sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_CONFIG, objectMapper.writeValueAsString( config ) ).commit();
+            sharedPreferences.edit().putString(PACKAGE_NAME + PREF_KEY_CONFIG, objectMapper.writeValueAsString( config ) ).apply();
         } catch ( Exception e ) {
             e.printStackTrace();
             // Do not apply changes when there's an error while writing settings

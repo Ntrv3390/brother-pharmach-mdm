@@ -548,6 +548,7 @@ async function precheckDeviceOwner(serial, adminComponent) {
 }
 
 async function getExistingDeviceOwner(serial) {
+  // Try the legacy command first (pre-Android 15)
   const result = await runAdb(
     ["-s", serial, "shell", "cmd", "device_policy", "get-device-owner"],
     30000,
@@ -566,10 +567,25 @@ async function getExistingDeviceOwner(serial) {
     return output;
   }
 
+  // Android 15+: get-device-owner was removed; use list-owners instead
+  if (/unknown command/i.test(output)) {
+    const fallback = await runAdb(
+      ["-s", serial, "shell", "cmd", "device_policy", "list-owners"],
+      30000,
+    );
+    const fbOut = `${fallback.stdout}\n${fallback.stderr}`.trim();
+    // "1 owner:\nUser  0: admin=com.pkg/.Admin,DeviceOwner,Affiliated"
+    const match = fbOut.match(/admin=([^,\s]+)/);
+    if (match && !/no owners/i.test(fbOut)) {
+      return match[1];
+    }
+  }
+
   return null;
 }
 
 async function listDeviceAdmins(serial) {
+  // Try the legacy dpm command first
   const result = await runAdb(
     ["-s", serial, "shell", "dpm", "list-active-admins"],
     30000);
@@ -577,6 +593,22 @@ async function listDeviceAdmins(serial) {
 
   if (result.code === 0 && output && !output.toLowerCase().includes("no active")) {
     return output.split(/\r?\n/).filter(line => line.trim().length > 0);
+  }
+
+  // Android 15+: list-active-admins was removed; parse dumpsys device_policy
+  if (/unknown command/i.test(output)) {
+    const fallback = await runAdb(
+      ["-s", serial, "shell", "dumpsys", "device_policy"],
+      30000,
+    );
+    const fbOut = `${fallback.stdout || ""}`;
+    const admins = [];
+    const re = /^\s+([\w.]+\/[\w.]+):\s*$/gm;
+    let m;
+    while ((m = re.exec(fbOut)) !== null) {
+      admins.push(m[1]);
+    }
+    return admins;
   }
 
   return [];
@@ -590,10 +622,17 @@ async function aggressiveClearDevicePolicy(serial, launcherPackage) {
   for (const admin of admins) {
     if (!admin.includes(launcherPackage)) {
       sendLog(`[${serial}] Removing non-launcher admin: ${admin}`, "warn");
-      await runAdb(
+      // Try dpm first, then cmd device_policy (Android 15+)
+      let removeResult = await runAdb(
         ["-s", serial, "shell", "dpm", "remove-active-admin", admin],
         30000,
       );
+      if (removeResult.code !== 0) {
+        await runAdb(
+          ["-s", serial, "shell", "cmd", "device_policy", "remove-active-admin", admin],
+          30000,
+        );
+      }
     }
   }
 
@@ -675,6 +714,17 @@ async function setDeviceOwnerWithFallbacks(serial, adminComponent) {
       "0",
       adminComponent,
     ],
+    // Android 15+: dpm routes to cmd device_policy but may behave differently;
+    // try the direct cmd invocation as a final fallback.
+    [
+      "-s",
+      serial,
+      "shell",
+      "cmd",
+      "device_policy",
+      "set-device-owner",
+      adminComponent,
+    ],
   ];
 
   let lastCombined = "";
@@ -687,7 +737,7 @@ async function setDeviceOwnerWithFallbacks(serial, adminComponent) {
     const combined = `${result.stdout}\n${result.stderr}`.trim();
     lastCombined = combined;
 
-    if (result.code === 0) {
+    if (result.code === 0 || /Success:\s*Device owner set/i.test(combined)) {
       return { ok: true, output: combined };
     }
 

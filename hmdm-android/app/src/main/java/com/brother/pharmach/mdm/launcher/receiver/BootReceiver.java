@@ -19,31 +19,31 @@ public class BootReceiver extends BroadcastReceiver {
         // user is not stranded on the system launcher.
         if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction())) {
             Log.i(Const.LOG_TAG, "Package replaced (OTA update) — relaunching launcher");
-            RemoteLogger.log(context, Const.LOG_DEBUG, "Package replaced (OTA update) — relaunching launcher");
-            // Post-OTA role status: confirms whether this update dropped the default launcher /
-            // default phone app roles (which silently breaks the custom call receiver).
-            try {
-                RemoteLogger.log(context, Const.LOG_INFO,
-                        "Default Launcher Our App: " + isDefaultLauncher(context));
-                RemoteLogger.log(context, Const.LOG_INFO,
-                        "Default Dialer Our App: "
-                                + com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
-                                        .isDefaultDialer(context));
-                // REQUIREMENT CHANGE: no dialer-role re-acquire and no gate. Only re-grant the call
-                // permissions, in case the update cleared them — READ_PHONE_STATE is what lets us
-                // detect an incoming ring and lift the status-bar lock for it.
-                com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
-                        .grantCallPermissions(context);
-                // com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper.ensureDefaultDialer(context);
-                // if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                //     com.brother.pharmach.mdm.launcher.phone.DefaultDialerGate.update(context);
-                // }
-            } catch (Exception e) {
-                Log.w(Const.LOG_TAG, "post-OTA call permission re-grant failed: " + e.getMessage());
-            }
+            // Launch the activity first (fast, no binder IPC) so the user isn't stranded.
             Intent launch = new Intent(context, com.brother.pharmach.mdm.launcher.ui.MainActivity.class);
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             context.startActivity(launch);
+            // Heavy work (RemoteLogger network I/O, DPM binder calls for permission grants,
+            // PackageManager queries) runs off the main thread via goAsync().
+            final PendingResult pendingResult = goAsync();
+            final Context appContext = context.getApplicationContext();
+            new Thread(() -> {
+                try {
+                    RemoteLogger.log(appContext, Const.LOG_DEBUG, "Package replaced (OTA update) — relaunching launcher");
+                    RemoteLogger.log(appContext, Const.LOG_INFO,
+                            "Default Launcher Our App: " + isDefaultLauncher(appContext));
+                    RemoteLogger.log(appContext, Const.LOG_INFO,
+                            "Default Dialer Our App: "
+                                    + com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
+                                            .isDefaultDialer(appContext));
+                    com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
+                            .grantCallPermissions(appContext);
+                } catch (Exception e) {
+                    Log.w(Const.LOG_TAG, "post-OTA call permission re-grant failed: " + e.getMessage());
+                } finally {
+                    pendingResult.finish();
+                }
+            }).start();
             return;
         }
 

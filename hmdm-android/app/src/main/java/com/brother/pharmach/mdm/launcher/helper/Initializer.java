@@ -73,6 +73,7 @@ public class Initializer {
 
             Utils.lockSafeBoot(context);
             Utils.initPasswordReset(context);
+            DevicePolicyBootstrapper.ensurePoliciesApplied(context);
 
             RemoteLogger.log(context, Const.LOG_INFO, "MDM Launcher " + BuildConfig.VERSION_NAME + "-" + Utils.getLauncherVariant() + " started");
 

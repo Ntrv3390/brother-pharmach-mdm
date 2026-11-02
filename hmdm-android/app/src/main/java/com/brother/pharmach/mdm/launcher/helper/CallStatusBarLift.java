@@ -27,6 +27,9 @@ import com.brother.pharmach.mdm.launcher.AdminReceiver;
 import com.brother.pharmach.mdm.launcher.Const;
 import com.brother.pharmach.mdm.launcher.util.RemoteLogger;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 /**
  * Single authority over the kiosk status-bar (notification shade) lockdown, and the ONE place that
  * temporarily lifts it so an arriving call can present itself.
@@ -104,6 +107,7 @@ public final class CallStatusBarLift {
     private static volatile long sLiftedAtElapsed;
     private static Handler sHandler;
     private static Runnable sWatchdog;
+    private static final ExecutorService sDpmExecutor = Executors.newSingleThreadExecutor();
 
     // ---------------------------------------------------------------------------------------------
     // Lock-task feature sets. Callers that (re)configure kiosk mode MUST use
@@ -248,39 +252,37 @@ public final class CallStatusBarLift {
     // ---------------------------------------------------------------------------------------------
 
     private static void applyStatusBarLock(Context app, boolean locked) {
-        DevicePolicyManager dpm =
-                (DevicePolicyManager) app.getSystemService(Context.DEVICE_POLICY_SERVICE);
-        ComponentName admin = new ComponentName(app, AdminReceiver.class);
-        boolean deviceOwner = false;
-        try {
-            deviceOwner = dpm != null && dpm.isDeviceOwnerApp(app.getPackageName());
-        } catch (Exception ignored) {
-        }
+        // DPM binder calls (10-50ms each) run on a background executor so the calling thread
+        // (often main) is not blocked. The overlay toggle already handles its own main-thread hop.
+        sDpmExecutor.execute(() -> {
+            DevicePolicyManager dpm =
+                    (DevicePolicyManager) app.getSystemService(Context.DEVICE_POLICY_SERVICE);
+            ComponentName admin = new ComponentName(app, AdminReceiver.class);
+            boolean deviceOwner = false;
+            try {
+                deviceOwner = dpm != null && dpm.isDeviceOwnerApp(app.getPackageName());
+            } catch (Exception ignored) {
+            }
 
-        if (deviceOwner) {
-            // Lever 1 (PRIMARY) — the actual shade gate now that lock-task is gone. Applied FIRST
-            // because it is what unblocks the incoming-call heads-up.
-            // API-DIFF: Android 7.0 (API 24).
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                try {
-                    dpm.setStatusBarDisabled(admin, locked);
-                } catch (Exception e) {
-                    Log.w(TAG, "setStatusBarDisabled(" + locked + ") failed: " + e.getMessage());
+            if (deviceOwner) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    try {
+                        dpm.setStatusBarDisabled(admin, locked);
+                    } catch (Exception e) {
+                        Log.w(TAG, "setStatusBarDisabled(" + locked + ") failed: " + e.getMessage());
+                    }
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    try {
+                        dpm.setLockTaskFeatures(admin,
+                                locked ? lockedLockTaskFeatures() : liftedLockTaskFeatures());
+                    } catch (Exception e) {
+                        Log.w(TAG, "setLockTaskFeatures(" + (locked ? "locked" : "lifted") + ") failed: "
+                                + e.getMessage());
+                    }
                 }
             }
-            // Lever 3 — vestigial: only has any effect while lock-task is running, which this build
-            // never starts. Kept in sync so a device still pinned from an older build behaves.
-            // API-DIFF: Android 9.0 (API 28).
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                try {
-                    dpm.setLockTaskFeatures(admin,
-                            locked ? lockedLockTaskFeatures() : liftedLockTaskFeatures());
-                } catch (Exception e) {
-                    Log.w(TAG, "setLockTaskFeatures(" + (locked ? "locked" : "lifted") + ") failed: "
-                            + e.getMessage());
-                }
-            }
-        }
+        });
 
         // Lever 2 — our own transparent blocking bar. Present on every API level and the ONLY
         // blocker on Android 6, so it must be dropped too or the user still cannot pull the shade
@@ -395,10 +397,15 @@ public final class CallStatusBarLift {
 
     private static void persist(Context app, boolean lifted) {
         try {
-            // commit(), not apply(): the caller may be a short-lived manifest receiver whose
-            // process can be killed before an async write lands, which would lose the flag that
-            // reconcile() relies on to undo a stale lift.
-            prefs(app).edit().putBoolean(PREF_LIFTED, lifted).commit();
+            // Relock persists synchronously (commit) because the caller may be a short-lived
+            // manifest receiver whose process can die before an async write lands. Lift persists
+            // asynchronously (apply) because the process is alive for the duration of the ring
+            // and blocking the main thread here delays the incoming-call UI.
+            if (lifted) {
+                prefs(app).edit().putBoolean(PREF_LIFTED, true).apply();
+            } else {
+                prefs(app).edit().putBoolean(PREF_LIFTED, false).commit();
+            }
         } catch (Exception ignored) {
         }
     }

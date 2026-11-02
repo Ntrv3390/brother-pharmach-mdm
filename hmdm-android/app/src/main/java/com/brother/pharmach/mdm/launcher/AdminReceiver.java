@@ -53,8 +53,9 @@ public class AdminReceiver extends DeviceAdminReceiver {
         // We come here after both successful provisioning and manual activation of the device owner
         SharedPreferences preferences = context.getApplicationContext().getSharedPreferences( Const.PREFERENCES, MODE_PRIVATE );
         PreferenceLogger.log(preferences, "Administrator enabled");
-        preferences.edit().putInt(Const.PREFERENCES_ADMINISTRATOR, Const.PREFERENCES_ON).commit();
-        DevicePolicyBootstrapper.applyPolicies(context);
+        preferences.edit().putInt(Const.PREFERENCES_ADMINISTRATOR, Const.PREFERENCES_ON).apply();
+        final Context app = context.getApplicationContext();
+        new Thread(() -> DevicePolicyBootstrapper.applyPolicies(app)).start();
     }
 
     @Override

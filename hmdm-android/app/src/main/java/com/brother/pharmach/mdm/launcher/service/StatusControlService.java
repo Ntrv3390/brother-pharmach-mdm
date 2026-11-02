@@ -517,9 +517,8 @@ public class StatusControlService extends Service {
         registerMobileDataCallback();
         registerCallStateWatcher();
         registerSubscriptionsChangedListener();
-        // Recovery: if the process was killed while the shade was lifted for a ring, the persisted
-        // flag is still set — put the kiosk lockdown back now that we are running again.
-        CallStatusBarLift.reconcile(this);
+        final Context svc = this;
+        new Thread(() -> CallStatusBarLift.reconcile(svc)).start();
         applyInitialGpsPolicy();
         registerGpsStateReceiver();
 

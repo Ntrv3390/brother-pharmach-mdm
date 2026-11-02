@@ -76,9 +76,20 @@ import java.util.List;
 import java.util.Set;
 
 public class Utils {
+    private static volatile boolean sCachedDeviceOwner;
+    private static volatile long sCachedDeviceOwnerTs;
+    private static final long DEVICE_OWNER_CACHE_TTL_MS = 30_000L;
+
     public static boolean isDeviceOwner(Context context) {
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (now - sCachedDeviceOwnerTs < DEVICE_OWNER_CACHE_TTL_MS) {
+            return sCachedDeviceOwner;
+        }
         DevicePolicyManager dpm = (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
-        return dpm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && dpm.isDeviceOwnerApp(context.getPackageName());
+        boolean result = dpm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && dpm.isDeviceOwnerApp(context.getPackageName());
+        sCachedDeviceOwner = result;
+        sCachedDeviceOwnerTs = now;
+        return result;
     }
 
     // In the open source variant, there are no flavors, so by default it's "opensource"
@@ -517,7 +528,7 @@ public class Utils {
             context.getSharedPreferences(Const.PREFERENCES, Context.MODE_PRIVATE)
                     .edit()
                     .putString(Const.PREFERENCES_DATA_TOKEN, token)
-                    .commit();
+                    .apply();
         }
         return token;
     }

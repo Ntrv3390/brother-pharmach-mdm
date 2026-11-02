@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.util.Log;
 
@@ -15,8 +16,31 @@ import java.util.LinkedHashSet;
 public final class DevicePolicyBootstrapper {
 
     private static final String TAG = "DPBootstrapper";
+    private static final String PREFS = "DPBootstrapper";
+    private static final String PREF_POLICIES_APPLIED = "policies_applied";
 
     private DevicePolicyBootstrapper() {}
+
+    /**
+     * Called from app startup (e.g. Initializer or MainActivity): applies device-owner policies
+     * if the app is device owner but policies were never applied (covers the case where device
+     * owner was set via adb AFTER the admin was already enabled, so onEnabled never re-fires).
+     */
+    public static void ensurePoliciesApplied(Context context) {
+        if (context == null) return;
+        Context app = context.getApplicationContext();
+        DevicePolicyManager dpm =
+                (DevicePolicyManager) app.getSystemService(Context.DEVICE_POLICY_SERVICE);
+        if (dpm == null || !dpm.isDeviceOwnerApp(app.getPackageName())) {
+            return;
+        }
+        SharedPreferences prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        if (prefs.getBoolean(PREF_POLICIES_APPLIED, false)) {
+            return;
+        }
+        Log.i(TAG, "Device owner detected but policies not yet applied — running applyPolicies");
+        applyPolicies(app);
+    }
 
     /**
      * Apply MDM device owner policies idempotently.
@@ -51,6 +75,11 @@ public final class DevicePolicyBootstrapper {
         applyDialerPreferredActivity(context, dpm, adminComponent);
         applyOverlayPermission(context);
         applyDefaultDialerPolicy(context);
+
+        context.getApplicationContext()
+                .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(PREF_POLICIES_APPLIED, true).apply();
+        Log.i(TAG, "All device-owner policies applied and flagged");
     }
 
     /**

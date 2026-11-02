@@ -42,7 +42,7 @@ public class PreferenceLogger {
             String logString = preferences.getString(Const.PREFERENCES_LOG_STRING, "");
             logString += sdf.format(new Date()) + " " + message;
             logString += "\n";
-            preferences.edit().putString(Const.PREFERENCES_LOG_STRING, logString).commit();
+            preferences.edit().putString(Const.PREFERENCES_LOG_STRING, logString).apply();
         }
     }
 
@@ -59,7 +59,7 @@ public class PreferenceLogger {
 
     public synchronized static void clearLogString(SharedPreferences preferences) {
         if (DEBUG) {
-            preferences.edit().putString(Const.PREFERENCES_LOG_STRING, "").commit();
+            preferences.edit().putString(Const.PREFERENCES_LOG_STRING, "").apply();
         }
     }
 

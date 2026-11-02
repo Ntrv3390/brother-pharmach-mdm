@@ -48,12 +48,16 @@ import android.app.ActivityManager;
 import com.brother.pharmach.mdm.launcher.helper.SettingsHelper;
 
 import java.util.Calendar;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * These functions are available in Pro-version only
  * In a free version, the class contains stubs
  */
 public class ProUtils {
+
+    private static final ExecutorService DPM_EXECUTOR = Executors.newSingleThreadExecutor();
 
     public static boolean isPro() {
         return true;
@@ -103,33 +107,32 @@ public class ProUtils {
         return WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE;
     }
 
-    private static void applyDevicePolicyStatusBarLock(Activity activity) {
-        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+    private static void applyDevicePolicyStatusBarLock(Context context) {
+        if (context == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
             return;
         }
 
-        DevicePolicyManager dpm = (DevicePolicyManager) activity.getSystemService(Context.DEVICE_POLICY_SERVICE);
-        if (dpm == null) {
-            return;
-        }
-
-        // A call is ringing right now — CallStatusBarLift owns the status bar state until it stops
-        // ringing. Re-locking here would suppress the incoming-call notification.
         if (com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift.isLifted()) {
             return;
         }
 
-        try {
-            ComponentName adminComponent = new ComponentName(activity, AdminReceiver.class);
-            if (dpm.isDeviceOwnerApp(activity.getPackageName())) {
-                dpm.setStatusBarDisabled(adminComponent, true);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_ADJUST_VOLUME);
+        final Context appContext = context.getApplicationContext();
+        final String packageName = context.getPackageName();
+        DPM_EXECUTOR.execute(() -> {
+            try {
+                DevicePolicyManager dpm = (DevicePolicyManager) appContext.getSystemService(Context.DEVICE_POLICY_SERVICE);
+                if (dpm == null) return;
+                ComponentName adminComponent = new ComponentName(appContext, AdminReceiver.class);
+                if (dpm.isDeviceOwnerApp(packageName)) {
+                    dpm.setStatusBarDisabled(adminComponent, true);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_ADJUST_VOLUME);
+                    }
                 }
+            } catch (Exception e) {
+                Log.w("ProUtils", "Unable to disable status bar via device policy", e);
             }
-        } catch (Exception e) {
-            Log.w("ProUtils", "Unable to disable status bar via device policy", e);
-        }
+        });
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -444,20 +447,24 @@ public class ProUtils {
             DevicePolicyManager dpm = (DevicePolicyManager) activity.getSystemService(Context.DEVICE_POLICY_SERVICE);
             ComponentName adminComponent = new ComponentName(activity, AdminReceiver.class);
             if (dpm != null && dpm.isDeviceOwnerApp(activity.getPackageName())) {
-                // Include the phone/dialer/incoming-call packages from the start so a call that
-                // arrives before the first launcher render (which rebuilds the whitelist) can still
-                // bring up the accept/decline screen in lock-task mode.
-                java.util.LinkedHashSet<String> pkgSet = new java.util.LinkedHashSet<>();
-                pkgSet.add(activity.getPackageName());
-                pkgSet.add(kioskApp);
-                pkgSet.addAll(com.brother.pharmach.mdm.launcher.util.Utils.getPhoneCallPackages(activity));
-                String[] packages = pkgSet.toArray(new String[0]);
-                dpm.setLockTaskPackages(adminComponent, packages);
-                updateKioskOptions(activity);
-                // Lock task (screen pinning) is intentionally NOT started any more:
-                // activity.startLockTask();
-                // Belt-and-suspenders for the upgrade path: if this device is still pinned from a
-                // previous build, leave pinning now.
+                // DPM binder calls (setLockTaskPackages, setLockTaskFeatures) are 10-50ms each —
+                // run them off the main thread so the launcher renders immediately.
+                final Context app = activity.getApplicationContext();
+                final String ownPkg = activity.getPackageName();
+                DPM_EXECUTOR.execute(() -> {
+                    try {
+                        java.util.LinkedHashSet<String> pkgSet = new java.util.LinkedHashSet<>();
+                        pkgSet.add(ownPkg);
+                        pkgSet.add(kioskApp);
+                        pkgSet.addAll(com.brother.pharmach.mdm.launcher.util.Utils.getPhoneCallPackages(app));
+                        String[] packages = pkgSet.toArray(new String[0]);
+                        dpm.setLockTaskPackages(adminComponent, packages);
+                        updateKioskOptionsSync(app);
+                    } catch (Exception e) {
+                        Log.e("ProUtils", "Background kiosk DPM setup failed", e);
+                    }
+                });
+
                 ensureNotInLockTask(activity);
 
                 if (!kioskApp.equals(activity.getPackageName())) {
@@ -475,18 +482,19 @@ public class ProUtils {
         return false;
     }
 
-    // Set/update kiosk mode options (lock tack features)
-    public static void updateKioskOptions(Activity activity) {
+    // Set/update kiosk mode options (lock task features).
+    // Safe to call from any thread: DPM work is dispatched to DPM_EXECUTOR.
+    public static void updateKioskOptions(Context context) {
+        final Context app = context.getApplicationContext();
+        DPM_EXECUTOR.execute(() -> updateKioskOptionsSync(app));
+    }
+
+    private static void updateKioskOptionsSync(Context context) {
         try {
-            DevicePolicyManager dpm = (DevicePolicyManager) activity.getSystemService(Context.DEVICE_POLICY_SERVICE);
-            ComponentName adminComponent = new ComponentName(activity, AdminReceiver.class);
-            if (dpm != null && dpm.isDeviceOwnerApp(activity.getPackageName())) {
+            DevicePolicyManager dpm = (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+            ComponentName adminComponent = new ComponentName(context, AdminReceiver.class);
+            if (dpm != null && dpm.isDeviceOwnerApp(context.getPackageName())) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    // Feature set comes from CallStatusBarLift, the single authority: normally it
-                    // omits LOCK_TASK_FEATURE_NOTIFICATIONS (so shade expansion and heads-up alerts
-                    // are blocked) but includes it while a call is ringing. Reading it from there
-                    // means re-applying kiosk options mid-ring cannot clobber the lift.
-                    // SYSTEM_INFO keeps the clock/battery/network icons; OVERVIEW keeps Recents.
                     int flags = com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift
                             .currentLockTaskFeatures();
                     dpm.setLockTaskFeatures(adminComponent, flags);
@@ -507,29 +515,32 @@ public class ProUtils {
     // every app currently visible on the launcher (already filtered by WorkTimeManager at render
     // time), keeping the whitelist in lockstep with what the user can tap.
     public static void updateKioskAllowedApps(String kioskApp, Activity activity, boolean enableSettings) {
-        java.util.List<String> pkgs = new java.util.ArrayList<>();
-        if (kioskApp != null && !kioskApp.trim().isEmpty()) {
-            pkgs.add(kioskApp);
-        }
-        try {
-            for (com.brother.pharmach.mdm.launcher.util.AppInfo info :
-                    com.brother.pharmach.mdm.launcher.ui.AppShortcutManager.getInstance().getInstalledApps(activity, false)) {
-                if (info.type == com.brother.pharmach.mdm.launcher.util.AppInfo.TYPE_APP
-                        && info.packageName != null && !info.packageName.trim().isEmpty()) {
-                    pkgs.add(info.packageName);
-                }
+        final Context appContext = activity.getApplicationContext();
+        DPM_EXECUTOR.execute(() -> {
+            java.util.List<String> pkgs = new java.util.ArrayList<>();
+            if (kioskApp != null && !kioskApp.trim().isEmpty()) {
+                pkgs.add(kioskApp);
             }
-            for (com.brother.pharmach.mdm.launcher.util.AppInfo info :
-                    com.brother.pharmach.mdm.launcher.ui.AppShortcutManager.getInstance().getInstalledApps(activity, true)) {
-                if (info.type == com.brother.pharmach.mdm.launcher.util.AppInfo.TYPE_APP
-                        && info.packageName != null && !info.packageName.trim().isEmpty()) {
-                    pkgs.add(info.packageName);
+            try {
+                for (com.brother.pharmach.mdm.launcher.util.AppInfo info :
+                        com.brother.pharmach.mdm.launcher.ui.AppShortcutManager.getInstance().getInstalledApps(appContext, false)) {
+                    if (info.type == com.brother.pharmach.mdm.launcher.util.AppInfo.TYPE_APP
+                            && info.packageName != null && !info.packageName.trim().isEmpty()) {
+                        pkgs.add(info.packageName);
+                    }
                 }
+                for (com.brother.pharmach.mdm.launcher.util.AppInfo info :
+                        com.brother.pharmach.mdm.launcher.ui.AppShortcutManager.getInstance().getInstalledApps(appContext, true)) {
+                    if (info.type == com.brother.pharmach.mdm.launcher.util.AppInfo.TYPE_APP
+                            && info.packageName != null && !info.packageName.trim().isEmpty()) {
+                        pkgs.add(info.packageName);
+                    }
+                }
+            } catch (Exception e) {
+                Log.w("ProUtils", "updateKioskAllowedApps: failed to enumerate launcher apps", e);
             }
-        } catch (Exception e) {
-            Log.w("ProUtils", "updateKioskAllowedApps: failed to enumerate launcher apps", e);
-        }
-        setKioskLockTaskWhitelist(activity, pkgs);
+            setKioskLockTaskWhitelistSync(appContext, pkgs);
+        });
     }
 
     /**
@@ -538,24 +549,29 @@ public class ProUtils {
      * The launcher package is always included so the home surface itself never gets locked out.
      */
     public static void setKioskLockTaskWhitelist(Activity activity, java.util.Collection<String> allowedPackages) {
+        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            return;
+        }
+        final Context app = activity.getApplicationContext();
+        final java.util.ArrayList<String> pkgSnapshot = allowedPackages != null
+                ? new java.util.ArrayList<>(allowedPackages)
+                : null;
+        DPM_EXECUTOR.execute(() -> setKioskLockTaskWhitelistSync(app, pkgSnapshot));
+    }
+
+    private static void setKioskLockTaskWhitelistSync(Context context, java.util.Collection<String> allowedPackages) {
         try {
-            if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            if (context == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
                 return;
             }
-            DevicePolicyManager dpm = (DevicePolicyManager) activity.getSystemService(Context.DEVICE_POLICY_SERVICE);
-            ComponentName adminComponent = new ComponentName(activity, AdminReceiver.class);
-            if (dpm == null || !dpm.isDeviceOwnerApp(activity.getPackageName())) {
+            DevicePolicyManager dpm = (DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+            ComponentName adminComponent = new ComponentName(context, AdminReceiver.class);
+            if (dpm == null || !dpm.isDeviceOwnerApp(context.getPackageName())) {
                 return;
             }
             java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
-            set.add(activity.getPackageName());   // launcher must always remain launchable
-            // Phone/dialer/incoming-call UI must ALWAYS stay whitelisted, independent of WorkTime.
-            // This rebuild runs on every render and otherwise reflects only the worktime-filtered
-            // launcher apps; without this the incoming-call activity's package drops out of the
-            // lock-task whitelist during work hours and the framework silently refuses it when a
-            // call arrives with the screen already on (the ringtone plays but no accept/decline
-            // screen appears). A call must never be blocked by a work-hours policy.
-            set.addAll(com.brother.pharmach.mdm.launcher.util.Utils.getPhoneCallPackages(activity));
+            set.add(context.getPackageName());
+            set.addAll(com.brother.pharmach.mdm.launcher.util.Utils.getPhoneCallPackages(context));
             if (allowedPackages != null) {
                 for (String p : allowedPackages) {
                     if (p != null && !p.trim().isEmpty()) {
@@ -576,32 +592,36 @@ public class ProUtils {
      * whitelist rebuild hasn't run yet. No-op when not device owner / not in lock-task mode.
      */
     public static void ensureLockTaskWhitelisted(Activity activity, String packageName) {
-        try {
-            if (activity == null || packageName == null || packageName.trim().isEmpty()
-                    || Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-                return;
-            }
-            if (!isKioskModeRunning(activity)) {
-                return;
-            }
-            DevicePolicyManager dpm = (DevicePolicyManager) activity.getSystemService(Context.DEVICE_POLICY_SERVICE);
-            ComponentName adminComponent = new ComponentName(activity, AdminReceiver.class);
-            if (dpm == null || !dpm.isDeviceOwnerApp(activity.getPackageName())) {
-                return;
-            }
-            String[] current = dpm.getLockTaskPackages(adminComponent);
-            java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
-            set.add(activity.getPackageName());
-            if (current != null) {
-                java.util.Collections.addAll(set, current);
-            }
-            if (set.add(packageName)) {
-                dpm.setLockTaskPackages(adminComponent, set.toArray(new String[0]));
-                Log.i("ProUtils", "ensureLockTaskWhitelisted: added " + packageName + " to lock-task whitelist");
-            }
-        } catch (Exception e) {
-            Log.w("ProUtils", "ensureLockTaskWhitelisted failed for " + packageName, e);
+        if (activity == null || packageName == null || packageName.trim().isEmpty()
+                || Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            return;
         }
+        if (!isKioskModeRunning(activity)) {
+            return;
+        }
+        final Context app = activity.getApplicationContext();
+        final String ownPkg = activity.getPackageName();
+        DPM_EXECUTOR.execute(() -> {
+            try {
+                DevicePolicyManager dpm = (DevicePolicyManager) app.getSystemService(Context.DEVICE_POLICY_SERVICE);
+                ComponentName adminComponent = new ComponentName(app, AdminReceiver.class);
+                if (dpm == null || !dpm.isDeviceOwnerApp(ownPkg)) {
+                    return;
+                }
+                String[] current = dpm.getLockTaskPackages(adminComponent);
+                java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+                set.add(ownPkg);
+                if (current != null) {
+                    java.util.Collections.addAll(set, current);
+                }
+                if (set.add(packageName)) {
+                    dpm.setLockTaskPackages(adminComponent, set.toArray(new String[0]));
+                    Log.i("ProUtils", "ensureLockTaskWhitelisted: added " + packageName + " to lock-task whitelist");
+                }
+            } catch (Exception e) {
+                Log.w("ProUtils", "ensureLockTaskWhitelisted failed for " + packageName, e);
+            }
+        });
     }
 
     public static void unlockKiosk(Activity activity) {

@@ -124,7 +124,7 @@ public class InitialSetupActivity extends BaseActivity implements ConfigUpdater.
             boolean deviceOwner = Utils.isDeviceOwner(this);
             Log.d(Const.LOG_TAG, "Device Owner: " + deviceOwner);
             getSharedPreferences( Const.PREFERENCES, MODE_PRIVATE ).edit().putInt(Const.PREFERENCES_DEVICE_OWNER, deviceOwner ?
-                    Const.PREFERENCES_ON : Const.PREFERENCES_OFF).commit();
+                    Const.PREFERENCES_ON : Const.PREFERENCES_OFF).apply();
             if (deviceOwner) {
                 Utils.autoGrantRequestedPermissions(this, getPackageName(), config.getAppPermissions(), true);
                 OemCompatHelper.tryEnableAutostart(this);

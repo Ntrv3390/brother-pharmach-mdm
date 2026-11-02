@@ -610,7 +610,7 @@ public class MainActivity
         if (requestCode == REQUEST_CODE_ACCESSIBILITY_SETTINGS) {
             // User returned from Accessibility settings — check if they enabled our service
             if (ProUtils.checkAccessibilityService(this)) {
-                preferences.edit().putInt(Const.PREFERENCES_ACCESSIBILITY_SERVICE, Const.PREFERENCES_ON).commit();
+                preferences.edit().putInt(Const.PREFERENCES_ACCESSIBILITY_SERVICE, Const.PREFERENCES_ON).apply();
             }
         }
     }
@@ -665,42 +665,32 @@ public class MainActivity
         checkMobileDataViolation();
         enforceOverlayPermission();
 
-        // Call permissions only. REQUIREMENT CHANGE: this app no longer has to be the default phone
-        // app — incoming calls are handled by whatever dialer the device already uses, and
-        // CallStatusBarLift unlocks the status bar while the phone rings so that dialer's
-        // notification gets through. We still grant the call permissions because READ_PHONE_STATE is
-        // what lets us detect the ring and READ_CALL_LOG feeds the call-log upload worker.
-        try {
-            if (settingsHelper != null && settingsHelper.isBaseUrlSet()) {
-                com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
-                        .grantCallPermissions(this);
-                // Default-dialer setup and the blocking gate are intentionally disabled:
-                // com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper.ensureCallSetup(this);
-                // if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                //     com.brother.pharmach.mdm.launcher.phone.DefaultDialerGate.update(this);
-                // }
+        // DPM binder calls (grantCallPermissions = ~6 IPCs, reconcile = ~3 IPCs) moved off the
+        // main thread to keep onResume fast.
+        final Context appCtx = getApplicationContext();
+        final boolean baseUrlSet = settingsHelper != null && settingsHelper.isBaseUrlSet();
+        POLICY_EXECUTOR.execute(() -> {
+            if (baseUrlSet) {
+                try {
+                    com.brother.pharmach.mdm.launcher.helper.DefaultDialerHelper
+                            .grantCallPermissions(appCtx);
+                } catch (Exception e) {
+                    Log.w(Const.LOG_TAG, "grantCallPermissions failed: " + e.getMessage());
+                }
             }
-        } catch (Exception e) {
-            Log.w(Const.LOG_TAG, "grantCallPermissions failed: " + e.getMessage());
-        }
+            try {
+                com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift.reconcile(appCtx);
+            } catch (Exception e) {
+                Log.w(Const.LOG_TAG, "CallStatusBarLift.reconcile failed: " + e.getMessage());
+            }
+        });
 
-        // Lock task (screen pinning) is no longer used at all. A device updating in place from a
-        // build that DID pin stays pinned until told otherwise, so drop out of it here on every
-        // resume — this is also what makes the ringing-call shade lift effective, since the
-        // framework defers setStatusBarDisabled() while lock task is active.
+        // Lock task (screen pinning) is no longer used at all. Must stay on UI thread
+        // (stopLockTask requires it).
         try {
             ProUtils.ensureNotInLockTask(this);
         } catch (Exception e) {
             Log.w(Const.LOG_TAG, "ensureNotInLockTask failed: " + e.getMessage());
-        }
-
-        // Status-bar lockdown recovery: if the process was killed while the shade was lifted for a
-        // ringing call, the lift is still recorded — re-lock now (or re-lift if a call is ringing
-        // right now, e.g. the launcher resumed behind an incoming call).
-        try {
-            com.brother.pharmach.mdm.launcher.helper.CallStatusBarLift.reconcile(this);
-        } catch (Exception e) {
-            Log.w(Const.LOG_TAG, "CallStatusBarLift.reconcile failed: " + e.getMessage());
         }
 
         // The default-dialer enforce state no longer gates the launcher grid, so there is nothing to
@@ -971,7 +961,7 @@ public class MainActivity
                 if (permissions[n].equals(Manifest.permission.ACCESS_FINE_LOCATION)) {
                     if (grantResults[n] != PackageManager.PERMISSION_GRANTED) {
                         // The user didn't allow to determine location, this is not critical, just ignore it
-                        preferences.edit().putInt(Const.PREFERENCES_DISABLE_LOCATION, Const.PREFERENCES_ON).commit();
+                        preferences.edit().putInt(Const.PREFERENCES_DISABLE_LOCATION, Const.PREFERENCES_ON).apply();
                         locationDisabled = true;
                     }
                 }
@@ -1067,14 +1057,14 @@ public class MainActivity
 
         boolean deviceOwner = Utils.isDeviceOwner(this);
         preferences.edit().putInt(Const.PREFERENCES_DEVICE_OWNER, deviceOwner ?
-            Const.PREFERENCES_ON : Const.PREFERENCES_OFF).commit();
+            Const.PREFERENCES_ON : Const.PREFERENCES_OFF).apply();
 
         int miuiPermissionMode = preferences.getInt(Const.PREFERENCES_MIUI_PERMISSIONS, -1);
         if (miuiPermissionMode == -1) {
             preferences.
                     edit().
                     putInt( Const.PREFERENCES_MIUI_PERMISSIONS, Const.PREFERENCES_ON ).
-                    commit();
+                    apply();
             if (checkMiuiPermissions(Const.MIUI_PERMISSIONS)) {
                 // Permissions dialog opened, break the flow!
                 return;
@@ -1086,7 +1076,7 @@ public class MainActivity
             preferences.
                     edit().
                     putInt( Const.PREFERENCES_MIUI_DEVELOPER, Const.PREFERENCES_ON ).
-                    commit();
+                    apply();
             if (checkMiuiPermissions(Const.MIUI_DEVELOPER)) {
                 // Permissions dialog opened, break the flow!
                 return;
@@ -1125,7 +1115,7 @@ public class MainActivity
                 preferences.
                         edit().
                         putInt( Const.PREFERENCES_ADMINISTRATOR, Const.PREFERENCES_ON ).
-                        commit();
+                        apply();
             } else {
                 return;
             }
@@ -1137,7 +1127,7 @@ public class MainActivity
                 preferences.
                         edit().
                         putInt( Const.PREFERENCES_OVERLAY, Const.PREFERENCES_ON ).
-                        commit();
+                        apply();
             } else {
                 return;
             }
@@ -1149,13 +1139,13 @@ public class MainActivity
                 preferences.
                         edit().
                         putInt( Const.PREFERENCES_USAGE_STATISTICS, Const.PREFERENCES_ON ).
-                        commit();
+                        apply();
 
                 // If usage statistics is on, there's no need to turn on accessibility services
                 preferences.
                         edit().
                         putInt( Const.PREFERENCES_ACCESSIBILITY_SERVICE, Const.PREFERENCES_OFF ).
-                        commit();
+                        apply();
             } else {
                 return;
             }
@@ -1168,7 +1158,7 @@ public class MainActivity
                     preferences.
                             edit().
                             putInt(Const.PREFERENCES_MANAGE_STORAGE, Const.PREFERENCES_ON).
-                            commit();
+                            apply();
                 } else {
                     return;
                 }
@@ -1183,7 +1173,7 @@ public class MainActivity
                 preferences.
                         edit().
                         putInt( Const.PREFERENCES_ACCESSIBILITY_SERVICE, Const.PREFERENCES_ON ).
-                        commit();
+                        apply();
             } else if (Utils.isDeviceOwner(this)) {
                 // Device owners can auto-enable the accessibility service via Settings.Secure
                 try {
@@ -1209,7 +1199,7 @@ public class MainActivity
                     preferences.
                             edit().
                             putInt( Const.PREFERENCES_ACCESSIBILITY_SERVICE, Const.PREFERENCES_ON ).
-                            commit();
+                            apply();
                     startService(new Intent(MainActivity.this, CheckForegroundAppAccessibilityService.class));
                     Log.d(Const.LOG_TAG, "WorkTime accessibility service auto-enabled for device owner");
                 } catch (Exception e) {
@@ -3391,7 +3381,7 @@ public class MainActivity
                                             Uri.fromParts("package", getPackageName(), null)));
                                 })
                                 .setNegativeButton(R.string.location_disable, (dialog, which) -> {
-                                    preferences.edit().putInt(Const.PREFERENCES_DISABLE_LOCATION, Const.PREFERENCES_ON).commit();
+                                    preferences.edit().putInt(Const.PREFERENCES_DISABLE_LOCATION, Const.PREFERENCES_ON).apply();
                                     // Continue the main flow!
                                     startLauncher();
                                 })
